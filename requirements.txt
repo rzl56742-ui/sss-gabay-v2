@@ -1,0 +1,7 @@
+streamlit
+pandas
+plotly
+qrcode
+gspread
+oauth2client
+fpdf
