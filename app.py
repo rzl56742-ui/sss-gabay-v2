@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v10.0 - BRANCH OPERATING SYSTEM (PLATINUM EDITION)
+# SSS G-ABAY v11.0 - BRANCH OPERATING SYSTEM (FINAL CORRECTED)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -14,9 +14,9 @@ import base64
 # ==========================================
 # 1. SYSTEM CONFIGURATION & GLOBAL STATE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v10.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v11.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
-# --- SINGLETON DATABASE (The "Glue" that connects all tabs) ---
+# --- SINGLETON DATABASE (The "Glue") ---
 @st.cache_resource
 class SystemState:
     def __init__(self):
@@ -33,7 +33,6 @@ class SystemState:
                 "E": {"name": "eCenter", "desc": "Online Services"},
                 "F": {"name": "Fast Lane", "desc": "Simple Trans"}
             },
-            # Defines which lanes a counter type pulls from
             "assignments": {
                 "Counter": ["C", "E", "F"],
                 "Teller": ["T"],
@@ -51,16 +50,14 @@ class SystemState:
         }
         self.announcements = ["Welcome to SSS Gingoog. Operating Hours: 8:00 AM - 5:00 PM."]
 
-# Initialize once
 if 'system' not in st.session_state:
     st.session_state.system = SystemState()
 
 db = st.session_state.system
 
-# --- INDUSTRIAL CSS & JS INJECTION ---
+# --- INDUSTRIAL CSS & JS ---
 st.markdown("""
 <script>
-// REAL-TIME TIMER FOR PARKED TICKETS
 function startTimer(duration, display) {
     var timer = duration, minutes, seconds;
     setInterval(function () {
@@ -74,7 +71,6 @@ function startTimer(duration, display) {
 }
 </script>
 <style>
-    /* Global */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     [data-testid="stSidebar"][aria-expanded="false"] { display: none; }
@@ -113,11 +109,29 @@ function startTimer(duration, display) {
     }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
     
+    .ref-badge {
+        background-color: #e0f2fe; color: #0369a1; padding: 5px 10px; border-radius: 5px;
+        border: 1px solid #0369a1; font-size: 14px; font-weight: bold; margin-bottom: 10px; display: inline-block;
+    }
+    
+    /* PRINT STYLES */
+    @media print {
+        @page { size: 4in 2in landscape; margin: 0; }
+        body * { visibility: hidden; }
+        .printable-ticket, .printable-ticket * { visibility: visible; }
+        .printable-ticket {
+            position: fixed; left: 0; top: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: white; color: black; font-family: sans-serif;
+            border: 5px solid black; padding: 10px;
+        }
+        .no-print { display: none !important; }
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 3. LOGIC CORE
+# 3. CORE LOGIC
 # ==========================================
 def generate_ticket(service, lane_code, is_priority, is_appt=False):
     prefix = "A" if is_appt else ("P" if is_priority else "R")
@@ -243,7 +257,7 @@ def render_kiosk():
         bg = "#FFC107" if t['type'] == 'PRIORITY' else "#2563EB"
         col = "#0038A8" if t['type'] == 'PRIORITY' else "white"
         st.markdown(f"""
-        <div style='background:{bg}; color:{col}; padding:40px; border-radius:20px; text-align:center; margin:20px 0;'>
+        <div class="ticket-card no-print" style='background:{bg}; color:{col}; padding:40px; border-radius:20px; text-align:center; margin:20px 0;'>
             <h1>{t['number']}</h1><h3>{t['service']}</h3><p>Please wait for the voice call.</p>
         </div>
         """, unsafe_allow_html=True)
@@ -277,7 +291,7 @@ def render_display():
         st.video("https://www.youtube.com/watch?v=DummyVideo") 
         parked = [t for t in db.tickets if t["status"] == "PARKED"]
         if parked:
-            p = parked[0] # Show latest parked
+            p = parked[0]
             st.markdown(f"""
             <div class="recall-box">
                 <h1 style='margin:0; font-size: 50px;'>⚠ {p['number']}</h1>
@@ -290,75 +304,73 @@ def render_display():
     st.markdown(f"<div style='background: #FFD700; color: black; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%; font-size:20px;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
     time.sleep(3); st.rerun()
 
-# --- MODULE C: COUNTER (With Back Button) ---
+# --- MODULE C: COUNTER ---
 def render_counter(user):
-    # 1. STATION SELECTION
     if 'my_station' not in st.session_state: st.session_state['my_station'] = db.config["counters"][0]
     
     st.sidebar.title(f"👮 {user['name']}")
-    if st.sidebar.button("⬅ LOGOUT / SWITCH STATION"):
-        del st.session_state['user']
-        st.rerun()
+    if st.sidebar.button("⬅ LOGOUT"): del st.session_state['user']; st.rerun()
+    
+    on_break = st.sidebar.toggle("☕ Break Mode", value=user.get('break', False))
+    if on_break != user.get('break', False): user['break'] = on_break; st.rerun()
+    if on_break: st.warning("⛔ You are on break."); return
 
-    c_head = st.columns([3, 1])
-    with c_head[0]:
-        st.markdown(f"### Station: {st.session_state['my_station']}")
-    with c_head[1]:
-        st.session_state['my_station'] = st.selectbox("Switch Station", db.config["counters"], index=0)
-
+    st.markdown(f"### Station: {st.session_state['my_station']}")
+    st.session_state['my_station'] = st.selectbox("Switch Station", db.config["counters"], index=0)
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    # 2. AUTOMATIC LANE MAPPING
-    station_type = st.session_state['my_station'].split()[0] # e.g. "Counter" from "Counter 1"
-    my_lanes = db.config["assignments"].get(station_type, ["C"]) # Default to "C" if unknown
+    station_type = st.session_state['my_station'].split()[0]
+    my_lanes = db.config["assignments"].get(station_type, ["C"])
     
-    # Queue Logic
     queue = [t for t in db.tickets if t["status"] == "WAITING" and t["lane"] in my_lanes]
     queue.sort(key=get_prio_score)
     current = next((t for t in db.tickets if t["status"] == "SERVING" and t.get("served_by") == st.session_state['my_station']), None)
     
     if 'refer_modal' not in st.session_state: st.session_state['refer_modal'] = False
 
-    if current:
-        st.info(f"Serving: {current['number']}")
-        if current.get("ref_from"): st.warning(f"Referred from: {current['ref_from']}")
-        
-        if st.session_state['refer_modal']:
-            with st.form("referral"):
-                target = st.selectbox("Transfer To", ["Teller", "Employer", "eCenter", "Counter"])
-                reason = st.text_input("Reason")
-                if st.form_submit_button("CONFIRM TRANSFER"):
-                    lane_map = {"Teller": "T", "Employer": "A", "eCenter": "E", "Counter": "C"}
-                    current["lane"] = lane_map[target]
-                    current["status"] = "WAITING"
-                    current["served_by"] = None
-                    current["ref_from"] = st.session_state['my_station']
-                    st.session_state['refer_modal'] = False; st.rerun()
-        else:
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                if st.button("✅ COMPLETE", type="primary", use_container_width=True):
+    c1, c2 = st.columns([2,1])
+    with c1:
+        if current:
+            st.markdown(f"""<div style='padding:30px; background:#e0f2fe; border-radius:15px; border-left:10px solid #0369a1;'>
+            <h1 style='margin:0; color:#0369a1; font-size: 80px;'>{current['number']}</h1>
+            <h3>{current['service']}</h3></div>""", unsafe_allow_html=True)
+            if current.get("ref_from"): st.markdown(f'<div class="ref-badge">↩ REFERRED FROM: {current["ref_from"]}</div>', unsafe_allow_html=True)
+            
+            if st.session_state['refer_modal']:
+                with st.form("referral"):
+                    target = st.selectbox("Transfer To", ["Teller", "Employer", "eCenter", "Counter"])
+                    reason = st.text_input("Reason")
+                    if st.form_submit_button("CONFIRM"):
+                        lane_map = {"Teller": "T", "Employer": "A", "eCenter": "E", "Counter": "C"}
+                        current["lane"] = lane_map[target]
+                        current["status"] = "WAITING"
+                        current["served_by"] = None
+                        current["ref_from"] = st.session_state['my_station']
+                        st.session_state['refer_modal'] = False; st.rerun()
+            else:
+                st.markdown("<br>", unsafe_allow_html=True)
+                b1, b2, b3 = st.columns(3)
+                if b1.button("✅ COMPLETE", use_container_width=True): 
                     current["status"] = "COMPLETED"; current["end_time"] = datetime.datetime.now()
                     db.history.append(current); st.rerun()
-            with c2:
-                if st.button("🅿️ PARK", use_container_width=True):
+                if b2.button("🅿️ PARK", use_container_width=True): 
                     current["status"] = "PARKED"; current["park_timestamp"] = datetime.datetime.now(); st.rerun()
-            with c3:
-                if st.button("🔄 REFER", use_container_width=True): st.session_state['refer_modal'] = True; st.rerun()
-    else:
-        if st.button("🔊 CALL NEXT", type="primary", use_container_width=True):
-            if queue:
-                nxt = queue[0]; nxt["status"] = "SERVING"; nxt["served_by"] = st.session_state['my_station']
-                nxt["start_time"] = datetime.datetime.now(); st.rerun()
-            else: st.warning(f"No tickets for {station_type}.")
-            
-    # 3. FOOTER
-    st.markdown("---")
-    st.write("🅿️ Parked Tickets (Click to Recall)")
-    parked = [t for t in db.tickets if t["status"] == "PARKED"]
-    for p in parked:
-        if st.button(f"🔊 {p['number']} ({p.get('served_by')})", key=p['id']):
-            p["status"] = "SERVING"; p["served_by"] = st.session_state['my_station']; st.rerun()
+                if b3.button("🔄 REFER", use_container_width=True): st.session_state['refer_modal'] = True; st.rerun()
+        else:
+            if st.button("🔊 CALL NEXT", type="primary", use_container_width=True):
+                if queue:
+                    nxt = queue[0]; nxt["status"] = "SERVING"; nxt["served_by"] = st.session_state['my_station']
+                    nxt["start_time"] = datetime.datetime.now(); st.rerun()
+                else: st.warning(f"No tickets for {station_type}.")
+    with c2:
+        count, avg_time = get_staff_efficiency(user['name'])
+        st.metric("Performance", count, delta=avg_time + " avg/txn")
+        st.divider()
+        st.write("🅿️ Parked Tickets")
+        parked = [t for t in db.tickets if t["status"] == "PARKED"]
+        for p in parked:
+            if st.button(f"🔊 {p['number']}", key=p['id']):
+                p["status"] = "SERVING"; p["served_by"] = st.session_state['my_station']; st.rerun()
 
 # --- MODULE D: ADMIN ---
 def render_admin_panel(user):
@@ -372,11 +384,10 @@ def render_admin_panel(user):
             u_id = st.text_input("User ID"); u_name = st.text_input("Name"); u_role = st.selectbox("Role", ["MSR", "TELLER", "ADMIN"])
             if st.form_submit_button("Save"):
                 db.staff[u_id] = {"pass": "123", "role": u_role, "name": u_name}
-                st.success("User Added/Updated!")
-                
+                st.success("User Added!")
     with tab2:
         st.write("Lane Configuration")
-        new_lane = st.text_input("Add Lane Code (e.g., S for Senior)")
+        new_lane = st.text_input("Add Lane Code (e.g., S)")
         new_desc = st.text_input("Description")
         if st.button("Add Lane"):
             db.config["lanes"][new_lane] = {"name": new_desc, "desc": new_desc}
@@ -403,13 +414,12 @@ elif mode == "staff":
         else: render_counter(user)
 elif mode == "display": render_display()
 else:
-    # PUBLIC MOBILE (RESTORED FEATURES)
+    # MOBILE DEFAULT
     if db.config["logo_url"].startswith("http"): st.image(db.config["logo_url"], width=50)
     else: st.markdown(f'<img src="data:image/png;base64,{db.config["logo_url"]}" width="50">', unsafe_allow_html=True)
     st.title("G-ABAY Mobile Tracker")
     
     t1, t2, t3 = st.tabs(["🎫 Tracker", "💬 Ask G-ABAY", "⭐ Rate Us"])
-    
     with t1:
         tn = st.text_input("Enter Ticket #")
         if tn:
@@ -419,8 +429,7 @@ else:
                 if t['status'] == "WAITING":
                     est = calculate_real_wait_time(t['lane'])
                     st.metric("Est. Wait", f"{est} mins")
-        else: st.error("Not Found")
-        
+            else: st.error("Not Found")
     with t2:
         st.markdown("### 🤖 Chatbot")
         if "messages" not in st.session_state: st.session_state.messages = []
@@ -429,12 +438,13 @@ else:
         if prompt := st.chat_input("Ask me..."):
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"): st.markdown(prompt)
-            st.session_state.messages.append({"role": "assistant", "content": "I am a demo bot. Please ask PACD."})
-            
+            st.session_state.messages.append({"role": "assistant", "content": "Please proceed to PACD."})
     with t3:
         st.markdown("### Feedback")
         with st.form("rev"):
             rate = st.slider("Rating", 1, 5)
+            pers = st.text_input("Name of Personnel")
+            comm = st.text_area("Comments / Suggestions")
             if st.form_submit_button("Submit"):
-                db.reviews.append({"rating": rate})
+                db.reviews.append({"rating": rate, "personnel": pers, "comment": comm})
                 st.success("Thanks!")
