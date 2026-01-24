@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v9.0 - BRANCH OPERATING SYSTEM (BENCHMARK EDITION)
+# SSS G-ABAY v10.0 - BRANCH OPERATING SYSTEM (PLATINUM EDITION)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -14,7 +14,7 @@ import base64
 # ==========================================
 # 1. SYSTEM CONFIGURATION & GLOBAL STATE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v9.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v10.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 # --- SINGLETON DATABASE (The "Glue" that connects all tabs) ---
 @st.cache_resource
@@ -33,7 +33,7 @@ class SystemState:
                 "E": {"name": "eCenter", "desc": "Online Services"},
                 "F": {"name": "Fast Lane", "desc": "Simple Trans"}
             },
-            # Defines which lanes a counter type pulls from (The "Generalist" Logic)
+            # Defines which lanes a counter type pulls from
             "assignments": {
                 "Counter": ["C", "E", "F"],
                 "Teller": ["T"],
@@ -113,11 +113,6 @@ function startTimer(duration, display) {
     }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
     
-    /* COUNTER MODULE STYLES */
-    .counter-header {
-        font-size: 24px; font-weight: bold; padding: 10px;
-        background: #f0f9ff; border-radius: 10px; margin-bottom: 20px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -153,11 +148,18 @@ def calculate_real_wait_time(lane_code):
     queue_len = len([t for t in db.tickets if t['lane'] == lane_code and t['status'] == "WAITING"])
     return round(queue_len * avg_txn_time)
 
+def get_staff_efficiency(staff_name):
+    my_txns = [t for t in db.history if t.get("served_by") == staff_name and t.get("start_time") and t.get("end_time")]
+    if not my_txns: return 0, "0m"
+    total_sec = sum([(t["end_time"] - t["start_time"]).total_seconds() for t in my_txns])
+    avg_min = round((total_sec / len(my_txns)) / 60, 1)
+    return len(my_txns), f"{avg_min}m"
+
 # ==========================================
 # 4. MODULES
 # ==========================================
 
-# --- MODULE A: KIOSK (Fixed Layout) ---
+# --- MODULE A: KIOSK ---
 def render_kiosk():
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
@@ -196,6 +198,7 @@ def render_kiosk():
             if st.button("👤 MEMBER SERVICES\n(Claims, ID, Records)"):
                 st.session_state['kiosk_step'] = 'mss'; st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
+        
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("⬅ GO BACK", type="secondary", use_container_width=True): del st.session_state['kiosk_step']; st.rerun()
 
@@ -220,197 +223,4 @@ def render_kiosk():
             if st.button("My.SSS Reset"): generate_ticket("eSvc-Reset", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
             if st.button("SS Number"): generate_ticket("eSvc-SSNum", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
             if st.button("Status Inquiry"): generate_ticket("eSvc-Status", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-            if st.button("DAEM/ACOP"): generate_ticket("eSvc-DAEM/ACOP", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("⬅ GO BACK", type="secondary", use_container_width=True): st.session_state['kiosk_step'] = 'menu'; st.rerun()
-
-    elif st.session_state['kiosk_step'] == 'gate_rd':
-        st.warning("Pre-Qualification: Do you have pending cases/portability issues?")
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("YES (Complex)", type="primary", use_container_width=True): generate_ticket("Ben-Ret(C)", "C", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-        with c2:
-            if st.button("NO (Regular)", type="primary", use_container_width=True): generate_ticket("Ben-Ret(S)", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-        st.button("⬅ CANCEL", on_click=lambda: st.session_state.update({'kiosk_step': 'mss'}))
-
-    elif st.session_state['kiosk_step'] == 'ticket':
-        t = st.session_state['last_ticket']
-        bg = "#FFC107" if t['type'] == 'PRIORITY' else "#2563EB"
-        col = "#0038A8" if t['type'] == 'PRIORITY' else "white"
-        st.markdown(f"""
-        <div style='background:{bg}; color:{col}; padding:40px; border-radius:20px; text-align:center; margin:20px 0;'>
-            <h1>{t['number']}</h1><h3>{t['service']}</h3><p>Please wait for the voice call.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        with c1: 
-            if st.button("❌ CANCEL", use_container_width=True): db.tickets.remove(t); del st.session_state['last_ticket']; st.session_state['kiosk_step']='menu'; st.rerun()
-        with c2:
-            if st.button("✅ DONE", type="primary", use_container_width=True): del st.session_state['last_ticket']; st.session_state['kiosk_step']='menu'; st.rerun()
-        with c3:
-            if st.button("🖨️ PRINT", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
-
-# --- MODULE B: DISPLAY (Fixed Queue View) ---
-def render_display():
-    st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
-    col_q, col_v = st.columns([2, 3])
-    with col_q:
-        serving = [t for t in db.tickets if t["status"] == "SERVING"]
-        if not serving: st.info("Waiting for counters...")
-        for t in serving:
-            b_col = "#2563EB" if t['lane'] == "E" else ("#DC2626" if t['lane'] == "T" else "#4B5563")
-            ref = f" (Ref: {t['ref_from']})" if t.get('ref_from') else ""
-            st.markdown(f"""
-            <div class="serving-card">
-                <div style='font-size: 60px; font-weight: 900; color:{b_col};'>{t['number']}</div>
-                <div style='text-align: right;'>
-                    <div style='font-size: 30px; font-weight:bold;'>{t.get('served_by','Counter')}</div>
-                    <div style='font-size: 18px; color:gray;'>{t['service']}{ref}</div>
-                </div>
-            </div>""", unsafe_allow_html=True)
-    with col_v:
-        # Video Placeholder
-        st.video("https://www.youtube.com/watch?v=DummyVideo") 
-        parked = [t for t in db.tickets if t["status"] == "PARKED"]
-        if parked:
-            p = parked[0] # Show latest parked
-            # JS Timer Injection
-            st.markdown(f"""
-            <div class="recall-box">
-                <h1 style='margin:0; font-size: 50px;'>⚠ {p['number']}</h1>
-                <h3>PLEASE PROCEED TO COUNTER</h3>
-                <div id="timer_{p['id']}" style="font-size:30px;">30:00</div>
-                <script>startTimer(1800, document.querySelector('#timer_{p['id']}'));</script>
-            </div>""", unsafe_allow_html=True)
-            
-    txt = " | ".join(db.announcements)
-    st.markdown(f"<div style='background: #FFD700; color: black; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%; font-size:20px;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
-    time.sleep(3); st.rerun()
-
-# --- MODULE C: COUNTER (Benchmark Matched) ---
-def render_counter(user):
-    # 1. STATION SELECTION (Benchmark Feature)
-    if 'my_station' not in st.session_state: st.session_state['my_station'] = db.config["counters"][0]
-    
-    c_head = st.columns([3, 1])
-    with c_head[0]:
-        st.markdown(f"### 👮 {user['name']}")
-    with c_head[1]:
-        # Dropdown allows staff to SWITCH stations anytime
-        st.session_state['my_station'] = st.selectbox("My Station", db.config["counters"], index=0)
-
-    st.markdown("<hr>", unsafe_allow_html=True)
-
-    # 2. AUTOMATIC LANE MAPPING
-    # System determines which lanes to pull based on the selected station name
-    station_type = st.session_state['my_station'].split()[0] # e.g. "Counter" from "Counter 1"
-    my_lanes = db.config["assignments"].get(station_type, ["C"]) # Default to "C" if unknown
-    
-    # Queue Logic
-    queue = [t for t in db.tickets if t["status"] == "WAITING" and t["lane"] in my_lanes]
-    queue.sort(key=get_prio_score)
-    current = next((t for t in db.tickets if t["status"] == "SERVING" and t.get("served_by") == st.session_state['my_station']), None)
-    
-    if 'refer_modal' not in st.session_state: st.session_state['refer_modal'] = False
-
-    if current:
-        st.info(f"Serving: {current['number']}")
-        if current.get("ref_from"): st.warning(f"Referred from: {current['ref_from']}")
-        
-        if st.session_state['refer_modal']:
-            with st.form("referral"):
-                target = st.selectbox("Transfer To", ["Teller", "Employer", "eCenter", "Counter"])
-                reason = st.text_input("Reason")
-                if st.form_submit_button("CONFIRM TRANSFER"):
-                    # Broadcast logic: Ticket moves to new lane, status waiting, high priority
-                    lane_map = {"Teller": "T", "Employer": "A", "eCenter": "E", "Counter": "C"}
-                    current["lane"] = lane_map[target]
-                    current["status"] = "WAITING"
-                    current["served_by"] = None
-                    current["ref_from"] = st.session_state['my_station']
-                    st.session_state['refer_modal'] = False; st.rerun()
-        else:
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                if st.button("✅ COMPLETE", type="primary", use_container_width=True):
-                    current["status"] = "COMPLETED"; current["end_time"] = datetime.datetime.now()
-                    db.history.append(current); st.rerun()
-            with c2:
-                if st.button("🅿️ PARK", use_container_width=True):
-                    current["status"] = "PARKED"; current["park_timestamp"] = datetime.datetime.now(); st.rerun()
-            with c3:
-                if st.button("🔄 REFER", use_container_width=True): st.session_state['refer_modal'] = True; st.rerun()
-    else:
-        # BENCHMARK: Simple "NEXT"
-        if st.button("🔊 CALL NEXT", type="primary", use_container_width=True):
-            if queue:
-                nxt = queue[0]; nxt["status"] = "SERVING"; nxt["served_by"] = st.session_state['my_station']
-                nxt["start_time"] = datetime.datetime.now(); st.rerun()
-            else: st.warning(f"No tickets for {station_type}.")
-            
-    # 3. FOOTER (Parked List)
-    st.markdown("---")
-    st.write("🅿️ Parked Tickets (Click to Recall)")
-    parked = [t for t in db.tickets if t["status"] == "PARKED"]
-    for p in parked:
-        if st.button(f"🔊 {p['number']} ({p.get('served_by')})", key=p['id']):
-            p["status"] = "SERVING"; p["served_by"] = st.session_state['my_station']; st.rerun()
-
-# --- MODULE D: ADMIN (Persistent) ---
-def render_admin_panel(user):
-    st.title("🛠 Admin Console")
-    tab1, tab2 = st.tabs(["Users", "Config"])
-    
-    with tab1:
-        st.dataframe(pd.DataFrame.from_dict(db.staff, orient='index'))
-        with st.form("add_user"):
-            u_id = st.text_input("User ID"); u_name = st.text_input("Name"); u_role = st.selectbox("Role", ["MSR", "TELLER", "ADMIN"])
-            if st.form_submit_button("Save"):
-                db.staff[u_id] = {"pass": "123", "role": u_role, "name": u_name}
-                st.success("User Added/Updated!")
-                
-    with tab2:
-        st.write("Lane Configuration")
-        # Direct edit of lane config dictionary
-        new_lane = st.text_input("Add Lane Code (e.g., S for Senior)")
-        new_desc = st.text_input("Description")
-        if st.button("Add Lane"):
-            db.config["lanes"][new_lane] = {"name": new_desc, "desc": new_desc}
-            st.success("Lane Added")
-
-# ==========================================
-# 5. ROUTER
-# ==========================================
-params = st.query_params
-mode = params.get("mode")
-
-if mode == "kiosk": render_kiosk()
-elif mode == "staff":
-    if 'user' not in st.session_state:
-        st.title("Staff Login")
-        u = st.text_input("Username"); p = st.text_input("Password", type="password")
-        if st.button("Login"):
-            # Check global DB
-            acct = next((v for k,v in db.staff.items() if v["name"] == u or k == u), None)
-            if acct: st.session_state['user'] = acct; st.rerun()
-            else: st.error("Invalid")
-    else:
-        user = st.session_state['user']
-        if user['role'] == "ADMIN": render_admin_panel(user)
-        else: render_counter(user)
-elif mode == "display": render_display()
-else:
-    # MOBILE DEFAULT
-    if db.config["logo_url"].startswith("http"): st.image(db.config["logo_url"], width=50)
-    else: st.markdown(f'<img src="data:image/png;base64,{db.config["logo_url"]}" width="50">', unsafe_allow_html=True)
-    st.title("G-ABAY Mobile Tracker")
-    tn = st.text_input("Enter Ticket #")
-    if tn:
-        t = next((x for x in db.tickets if x["number"] == tn), None)
-        if t:
-            st.info(f"Status: {t['status']}")
-            if t['status'] == "WAITING":
-                est = calculate_real_wait_time(t['lane'])
-                st.metric("Est. Wait", f"{est} mins")
-        else: st.error("Not Found")
+            if st.button("DAEM/ACOP"): generate_ticket("eSvc-DAEM/ACOP", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['k
