@@ -99,11 +99,11 @@ function startTimer(duration, display) {
     
     /* VERTICAL MENU BUTTONS (BARS) */
     .vert-btn > button {
-        height: 120px !important; width: 100% !important;
-        font-size: 24px !important; font-weight: 700 !important;
+        height: 100px !important; width: 100% !important;
+        font-size: 22px !important; font-weight: 700 !important;
         border-radius: 15px !important; border: 2px solid #ddd !important;
         background-color: white !important; color: #333 !important;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 10px;
         text-align: left !important; padding-left: 30px !important;
     }
     .vert-btn > button:hover { transform: scale(1.01); background-color: #f8fafc !important; }
@@ -116,8 +116,8 @@ function startTimer(duration, display) {
 
     /* SECTION HEADERS */
     .section-header {
-        font-size: 28px; font-weight: 900; color: #444;
-        margin-top: 30px; margin-bottom: 15px; border-bottom: 4px solid #eee; padding-bottom: 5px;
+        font-size: 26px; font-weight: 800; color: #444;
+        margin-top: 30px; margin-bottom: 10px; border-bottom: 3px solid #eee; padding-bottom: 5px;
     }
 
     /* DISPLAY MODULE STYLES */
@@ -133,6 +133,11 @@ function startTimer(duration, display) {
     .queue-item {
         font-size: 24px; border-bottom: 1px solid #ccc; padding: 10px;
         display: flex; justify-content: space-between;
+    }
+    
+    .ref-badge {
+        background-color: #e0f2fe; color: #0369a1; padding: 5px 10px; border-radius: 5px;
+        border: 1px solid #0369a1; font-size: 14px; font-weight: bold; margin-bottom: 10px; display: inline-block;
     }
     
     /* PRINT STYLES */
@@ -316,7 +321,7 @@ def render_kiosk():
                 st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); 
                 del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
 
-# --- MODULE B: DISPLAY ---
+# --- MODULE B: DISPLAY (RESTORED QUEUE LIST) ---
 def render_display():
     st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
     
@@ -479,7 +484,7 @@ elif mode == "staff":
         else: render_counter(user)
 elif mode == "display": render_display()
 else:
-    # PUBLIC MOBILE (RESTORED COMPLETE FEATURES)
+    # MOBILE DEFAULT (RESTORED COMPLETE FEATURES)
     if db.config["logo_url"].startswith("http"): st.image(db.config["logo_url"], width=50)
     else: st.markdown(f'<img src="data:image/png;base64,{db.config["logo_url"]}" width="50">', unsafe_allow_html=True)
     st.title("G-ABAY Mobile Tracker")
