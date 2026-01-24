@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v11.0 - BRANCH OPERATING SYSTEM (FINAL CORRECTED)
+# SSS G-ABAY v12.0 - BRANCH OPERATING SYSTEM (RESTORED MASTER)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -9,12 +9,11 @@ import pandas as pd
 import datetime
 import time
 import uuid
-import base64
 
 # ==========================================
 # 1. SYSTEM CONFIGURATION & GLOBAL STATE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v11.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v12.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 # --- SINGLETON DATABASE (The "Glue") ---
 @st.cache_resource
@@ -24,7 +23,8 @@ class SystemState:
         self.history = []
         self.reviews = []
         self.config = {
-            "branch_name": "GINGOOG BRANCH",
+            "branch_name": "BRANCH GINGOOG",
+            # FIXED: Reliable Wikipedia URL for SSS Logo to prevent broken images
             "logo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Social_Security_System_%28SSS%29.svg/1200px-Social_Security_System_%28SSS%29.svg.png",
             "lanes": {
                 "T": {"name": "Teller", "desc": "Payments"},
@@ -38,7 +38,7 @@ class SystemState:
                 "Teller": ["T"],
                 "Employer": ["A"],
                 "eCenter": ["E"],
-                "Help Desk": ["F", "E"]
+                "Help": ["F", "E"]
             },
             "counters": ["Counter 1", "Counter 2", "Counter 3", "Teller 1", "Teller 2", "Employer Desk", "eCenter", "Help Desk"]
         }
@@ -75,39 +75,49 @@ function startTimer(duration, display) {
     footer {visibility: hidden;}
     [data-testid="stSidebar"][aria-expanded="false"] { display: none; }
     
+    /* HEADER STYLES */
+    .header-text { text-align: center; font-family: sans-serif; }
+    .header-top { font-size: 14px; color: #555; text-transform: uppercase; letter-spacing: 2px; }
+    .header-main { font-size: 40px; font-weight: 900; color: #0038A8; margin: 0; padding: 0; text-transform: uppercase; font-style: italic; }
+    .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
+    
     /* KIOSK BUTTONS */
     .reg-card > button {
         background-color: #2563EB !important; color: white !important;
-        height: 350px !important; width: 100% !important;
+        height: 400px !important; width: 100% !important; /* 400px Height for Massive Size */
         border-radius: 30px !important; font-size: 40px !important;
-        font-weight: 900 !important; border: 6px solid #1E40AF !important;
-        text-transform: uppercase;
+        font-weight: 900 !important; border: 8px solid #1E40AF !important;
+        text-transform: uppercase; box-shadow: 0 10px 20px rgba(0,0,0,0.2);
     }
     .prio-card > button {
         background-color: #FFC107 !important; color: #1E3A8A !important;
-        height: 350px !important; width: 100% !important;
+        height: 400px !important; width: 100% !important;
         border-radius: 30px !important; font-size: 40px !important;
-        font-weight: 900 !important; border: 6px solid #B45309 !important;
-        text-transform: uppercase;
+        font-weight: 900 !important; border: 8px solid #B45309 !important;
+        text-transform: uppercase; box-shadow: 0 10px 20px rgba(0,0,0,0.2);
     }
     .grid-card > button {
         height: 150px !important; width: 100% !important;
         font-size: 20px !important; font-weight: 700 !important;
         border-radius: 15px !important; border: 2px solid #ddd !important;
         background-color: white !important; color: #333 !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
 
     /* DISPLAY MODULE STYLES */
     .serving-card {
-        background-color: white; border-left: 15px solid #2563EB;
-        padding: 20px; margin-bottom: 20px; border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; justify-content: space-between;
+        background-color: white; border-left: 20px solid #2563EB;
+        padding: 40px; margin-bottom: 20px; border-radius: 15px;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1); text-align: center;
     }
-    .recall-box {
-        background-color: #DC2626; color: white; padding: 30px;
-        border-radius: 15px; text-align: center; animation: pulse 2s infinite;
+    .queue-list {
+        background-color: #f8f9fa; padding: 20px; border-radius: 15px;
+        border: 2px solid #ddd; height: 100%;
     }
-    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+    .queue-item {
+        font-size: 24px; border-bottom: 1px solid #ccc; padding: 10px;
+        display: flex; justify-content: space-between;
+    }
     
     .ref-badge {
         background-color: #e0f2fe; color: #0369a1; padding: 5px 10px; border-radius: 5px;
@@ -173,25 +183,33 @@ def get_staff_efficiency(staff_name):
 # 4. MODULES
 # ==========================================
 
-# --- MODULE A: KIOSK ---
+# --- MODULE A: KIOSK (Fixed Headers & Buttons) ---
 def render_kiosk():
-    c1, c2, c3 = st.columns([1,2,1])
+    # RESTORED HEADERS
+    st.markdown("""
+        <div class='header-text'>
+            <div class='header-top'>Republic of the Philippines</div>
+            <div class='header-main'>SOCIAL SECURITY SYSTEM</div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    c1, c2, c3 = st.columns([1,3,1])
     with c2:
-        if db.config["logo_url"].startswith("http"): st.image(db.config["logo_url"], width=100)
-        else: st.markdown(f'<img src="data:image/png;base64,{db.config["logo_url"]}" width="100">', unsafe_allow_html=True)
-        st.markdown(f"<h1 style='text-align: center; color:#0038A8; margin:0;'>SSS {db.config['branch_name']}</h1>", unsafe_allow_html=True)
+        # Use HTML img tag for reliable logo rendering
+        st.markdown(f"<div style='text-align:center'><img src='{db.config['logo_url']}' width='100'></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='header-text header-branch'>{db.config['branch_name']}</div>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align:center; color:#555;'>Gabay sa bawat miyembro. Mangyaring pumili ng uri ng serbisyo.</div><br>", unsafe_allow_html=True)
 
     if 'kiosk_step' not in st.session_state:
-        st.markdown("<br>", unsafe_allow_html=True)
         col_reg, col_prio = st.columns([1, 1], gap="large")
         with col_reg:
             st.markdown('<div class="reg-card">', unsafe_allow_html=True)
-            if st.button("👤 REGULAR LANE\n\nStandard Access"):
+            if st.button("👤 REGULAR\n\nStandard Access"):
                 st.session_state['is_prio'] = False; st.session_state['kiosk_step'] = 'menu'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         with col_prio:
             st.markdown('<div class="prio-card">', unsafe_allow_html=True)
-            if st.button("❤️ PRIORITY LANE\n\nSenior, PWD, Pregnant"):
+            if st.button("❤️ PRIORITY\n\nSenior, PWD, Pregnant"):
                 st.session_state['is_prio'] = True; st.session_state['kiosk_step'] = 'menu'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
             st.warning("⚠ NOTICE: Non-priority users will be transferred to end of line.")
@@ -269,37 +287,55 @@ def render_kiosk():
         with c3:
             if st.button("🖨️ PRINT", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
 
-# --- MODULE B: DISPLAY ---
+# --- MODULE B: DISPLAY (RESTORED QUEUE LIST) ---
 def render_display():
     st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
-    col_q, col_v = st.columns([2, 3])
-    with col_q:
+    
+    col_serve, col_queue = st.columns([3, 2])
+    
+    with col_serve:
+        # SERVING CARD
         serving = [t for t in db.tickets if t["status"] == "SERVING"]
-        if not serving: st.info("Waiting for counters...")
-        for t in serving:
-            b_col = "#2563EB" if t['lane'] == "E" else ("#DC2626" if t['lane'] == "T" else "#4B5563")
-            ref = f" (Ref: {t['ref_from']})" if t.get('ref_from') else ""
-            st.markdown(f"""
-            <div class="serving-card">
-                <div style='font-size: 60px; font-weight: 900; color:{b_col};'>{t['number']}</div>
-                <div style='text-align: right;'>
-                    <div style='font-size: 30px; font-weight:bold;'>{t.get('served_by','Counter')}</div>
-                    <div style='font-size: 18px; color:gray;'>{t['service']}{ref}</div>
-                </div>
-            </div>""", unsafe_allow_html=True)
-    with col_v:
-        st.video("https://www.youtube.com/watch?v=DummyVideo") 
+        if serving:
+            for t in serving:
+                b_col = "#2563EB" if t['lane'] == "E" else ("#DC2626" if t['lane'] == "T" else "#4B5563")
+                ref = f" (Ref: {t['ref_from']})" if t.get('ref_from') else ""
+                st.markdown(f"""
+                <div class="serving-card">
+                    <div style='font-size: 80px; font-weight: 900; color:{b_col};'>{t['number']}</div>
+                    <div style='font-size: 40px; font-weight:bold;'>{t.get('served_by','Counter')}</div>
+                    <div style='font-size: 20px; color:gray;'>{t['service']}{ref}</div>
+                </div>""", unsafe_allow_html=True)
+        else:
+            st.info("Waiting for next number...")
+            
+        # PARKED SECTION
         parked = [t for t in db.tickets if t["status"] == "PARKED"]
         if parked:
             p = parked[0]
             st.markdown(f"""
             <div class="recall-box">
-                <h1 style='margin:0; font-size: 50px;'>⚠ {p['number']}</h1>
+                <h1 style='margin:0; font-size: 50px;'>⚠ RECALL: {p['number']}</h1>
                 <h3>PLEASE PROCEED TO COUNTER</h3>
                 <div id="timer_{p['id']}" style="font-size:30px;">30:00</div>
                 <script>startTimer(1800, document.querySelector('#timer_{p['id']}'));</script>
             </div>""", unsafe_allow_html=True)
-            
+
+    with col_queue:
+        st.markdown("### 🕒 NEXT IN QUEUE")
+        waiting = [t for t in db.tickets if t["status"] == "WAITING"]
+        # Sort by priority
+        waiting.sort(key=get_prio_score)
+        
+        st.markdown('<div class="queue-list">', unsafe_allow_html=True)
+        if waiting:
+            for t in waiting[:7]: # Show top 7
+                icon = "♿" if t['type'] == 'PRIORITY' else "👤"
+                st.markdown(f"<div class='queue-item'><span>{icon} <b>{t['number']}</b></span> <span>{t['lane']} Lane</span></div>", unsafe_allow_html=True)
+        else:
+            st.write("Queue is empty.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
     txt = " | ".join(db.announcements)
     st.markdown(f"<div style='background: #FFD700; color: black; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%; font-size:20px;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
     time.sleep(3); st.rerun()
@@ -309,7 +345,7 @@ def render_counter(user):
     if 'my_station' not in st.session_state: st.session_state['my_station'] = db.config["counters"][0]
     
     st.sidebar.title(f"👮 {user['name']}")
-    if st.sidebar.button("⬅ LOGOUT"): del st.session_state['user']; st.rerun()
+    if st.sidebar.button("⬅ LOGOUT / SWITCH STATION"): del st.session_state['user']; st.rerun()
     
     on_break = st.sidebar.toggle("☕ Break Mode", value=user.get('break', False))
     if on_break != user.get('break', False): user['break'] = on_break; st.rerun()
@@ -414,7 +450,7 @@ elif mode == "staff":
         else: render_counter(user)
 elif mode == "display": render_display()
 else:
-    # MOBILE DEFAULT
+    # PUBLIC MOBILE (RESTORED COMPLETE FEATURES)
     if db.config["logo_url"].startswith("http"): st.image(db.config["logo_url"], width=50)
     else: st.markdown(f'<img src="data:image/png;base64,{db.config["logo_url"]}" width="50">', unsafe_allow_html=True)
     st.title("G-ABAY Mobile Tracker")
