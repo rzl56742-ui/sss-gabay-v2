@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v12.0 - BRANCH OPERATING SYSTEM (RESTORED MASTER)
+# SSS G-ABAY v13.0 - BRANCH OPERATING SYSTEM (DIAMOND EDITION)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -13,7 +13,7 @@ import uuid
 # ==========================================
 # 1. SYSTEM CONFIGURATION & GLOBAL STATE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v12.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v13.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 # --- SINGLETON DATABASE (The "Glue") ---
 @st.cache_resource
@@ -24,7 +24,6 @@ class SystemState:
         self.reviews = []
         self.config = {
             "branch_name": "BRANCH GINGOOG",
-            # FIXED: Reliable Wikipedia URL for SSS Logo to prevent broken images
             "logo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Social_Security_System_%28SSS%29.svg/1200px-Social_Security_System_%28SSS%29.svg.png",
             "lanes": {
                 "T": {"name": "Teller", "desc": "Payments"},
@@ -84,7 +83,7 @@ function startTimer(duration, display) {
     /* KIOSK BUTTONS */
     .reg-card > button {
         background-color: #2563EB !important; color: white !important;
-        height: 400px !important; width: 100% !important; /* 400px Height for Massive Size */
+        height: 400px !important; width: 100% !important;
         border-radius: 30px !important; font-size: 40px !important;
         font-weight: 900 !important; border: 8px solid #1E40AF !important;
         text-transform: uppercase; box-shadow: 0 10px 20px rgba(0,0,0,0.2);
@@ -103,6 +102,12 @@ function startTimer(duration, display) {
         background-color: white !important; color: #333 !important;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
+    
+    /* COLOR CODED SUB-MENUS */
+    .btn-red > button { border-top: 10px solid #DC2626 !important; }
+    .btn-orange > button { border-top: 10px solid #EA580C !important; }
+    .btn-green > button { border-top: 10px solid #16A34A !important; }
+    .btn-blue > button { border-top: 10px solid #2563EB !important; }
 
     /* DISPLAY MODULE STYLES */
     .serving-card {
@@ -195,7 +200,6 @@ def render_kiosk():
     
     c1, c2, c3 = st.columns([1,3,1])
     with c2:
-        # Use HTML img tag for reliable logo rendering
         st.markdown(f"<div style='text-align:center'><img src='{db.config['logo_url']}' width='100'></div>", unsafe_allow_html=True)
         st.markdown(f"<div class='header-text header-branch'>{db.config['branch_name']}</div>", unsafe_allow_html=True)
         st.markdown("<div style='text-align:center; color:#555;'>Gabay sa bawat miyembro. Mangyaring pumili ng uri ng serbisyo.</div><br>", unsafe_allow_html=True)
@@ -235,26 +239,58 @@ def render_kiosk():
         if st.button("⬅ GO BACK", type="secondary", use_container_width=True): del st.session_state['kiosk_step']; st.rerun()
 
     elif st.session_state['kiosk_step'] == 'mss':
+        # RESTORED CATEGORY HEADERS & COLOR CODING
         st.markdown("### 👤 Member Services")
-        st.markdown('<div class="grid-card">', unsafe_allow_html=True)
-        g1, g2, g3, g4 = st.columns(4)
+        
+        # CATEGORY 1: BENEFITS (RED)
+        st.markdown("##### 🏥 Benefit Claims")
+        st.markdown('<div class="grid-card btn-red">', unsafe_allow_html=True)
+        g1, g2, g3 = st.columns(3)
         with g1:
             if st.button("Maternity/Sickness"): generate_ticket("Ben-Mat/Sick", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-            if st.button("Retirement/Death"): st.session_state['kiosk_step'] = 'gate_rd'; st.rerun()
-            if st.button("Disability/Unemp."): generate_ticket("Ben-Dis/Unemp", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
         with g2:
-            if st.button("Salary/Conso"): generate_ticket("Ln-Sal/Conso", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-            if st.button("Calamity/Emergency"): generate_ticket("Ln-Cal/Emerg", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-            if st.button("Pension Loan"): generate_ticket("Ln-Pension", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("Retirement/Death"): st.session_state['kiosk_step'] = 'gate_rd'; st.rerun()
         with g3:
+            if st.button("Disability/Unemp."): generate_ticket("Ben-Dis/Unemp", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # CATEGORY 2: LOANS (ORANGE)
+        st.markdown("##### 💰 Loans")
+        st.markdown('<div class="grid-card btn-orange">', unsafe_allow_html=True)
+        l1, l2, l3 = st.columns(3)
+        with l1:
+            if st.button("Salary/Conso"): generate_ticket("Ln-Sal/Conso", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+        with l2:
+            if st.button("Calamity/Emergency"): generate_ticket("Ln-Cal/Emerg", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+        with l3:
+            if st.button("Pension Loan"): generate_ticket("Ln-Pension", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # CATEGORY 3: RECORDS (GREEN)
+        st.markdown("##### 📝 Member Data Change")
+        st.markdown('<div class="grid-card btn-green">', unsafe_allow_html=True)
+        r1, r2, r3, r4 = st.columns(4)
+        with r1:
             if st.button("Contact Update"): generate_ticket("Rec-Contact", "F", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-            if st.button("Simple Corrections"): generate_ticket("Rec-Simple", "F", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+        with r2:
+            if st.button("Simple Correct."): generate_ticket("Rec-Simple", "F", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+        with r3:
             if st.button("Complex Correct."): generate_ticket("Rec-Complex", "C", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+        with r4:
             if st.button("Req. Verification"): generate_ticket("Rec-Verify", "C", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-        with g4:
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # CATEGORY 4: eSERVICES (BLUE)
+        st.markdown("##### 💻 eServices")
+        st.markdown('<div class="grid-card btn-blue">', unsafe_allow_html=True)
+        e1, e2, e3, e4 = st.columns(4)
+        with e1:
             if st.button("My.SSS Reset"): generate_ticket("eSvc-Reset", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+        with e2:
             if st.button("SS Number"): generate_ticket("eSvc-SSNum", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+        with e3:
             if st.button("Status Inquiry"): generate_ticket("eSvc-Status", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+        with e4:
             if st.button("DAEM/ACOP"): generate_ticket("eSvc-DAEM/ACOP", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
         
