@@ -10,6 +10,7 @@ import datetime
 import time
 import uuid
 import qrcode
+import base64
 from io import BytesIO
 
 # ==========================================
@@ -58,6 +59,18 @@ st.markdown("""
     
     /* HIDE SIDEBAR IN DISPLAY MODE ONLY */
     [data-testid="stSidebar"][aria-expanded="false"] { display: none; }
+    
+    /* PRIORITY WARNING BOX */
+    .prio-warning {
+        background-color: #ffcccc;
+        color: #cc0000;
+        padding: 10px;
+        border-radius: 5px;
+        font-size: 12px;
+        text-align: center;
+        margin-top: 5px;
+        border: 1px solid #cc0000;
+    }
 </style>
 <div class="watermark">© 2026 rpt/sssgingoog | v2.0.1</div>
 """, unsafe_allow_html=True)
@@ -69,6 +82,7 @@ if 'db' not in st.session_state:
     st.session_state['db'] = {
         "tickets": [],
         "history": [],
+        "appointments": [], # Format: {name, time, service, lane}
         "config": {
             "branch_name": "GINGOOG BRANCH",
             "logo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Social_Security_System_%28SSS%29.svg/1200px-Social_Security_System_%28SSS%29.svg.png",
@@ -86,36 +100,56 @@ db = st.session_state['db']
 # ==========================================
 # 3. HELPER FUNCTIONS (Logic Core)
 # ==========================================
-def generate_ticket(service, lane_code, is_priority, is_appt=False):
+def generate_ticket(service, lane_code, is_priority, is_appt=False, appt_name=None):
     prefix = "A" if is_appt else ("P" if is_priority else "R")
     count = len([t for t in db["tickets"] if t["lane"] == lane_code]) + 1
     ticket_num = f"{lane_code}{prefix}-{count:03d}"
     
+    # "Virtual Injection" Logic: Appointments get inserted at top
     new_t = {
-        "id": str(uuid.uuid4()), "number": ticket_num, "lane": lane_code,
-        "service": service, "type": "PRIORITY" if is_priority else "REGULAR",
-        "status": "WAITING", "timestamp": datetime.datetime.now(),
-        "park_timestamp": None, "history": []
+        "id": str(uuid.uuid4()), 
+        "number": ticket_num, 
+        "lane": lane_code,
+        "service": service, 
+        "type": "APPOINTMENT" if is_appt else ("PRIORITY" if is_priority else "REGULAR"),
+        "status": "WAITING", 
+        "timestamp": datetime.datetime.now(),
+        "park_timestamp": None, 
+        "history": [],
+        "appt_name": appt_name # Store name for display
     }
     db["tickets"].append(new_t)
     return new_t
 
 def get_prio_score(t):
     # LOWER SCORE = HIGHER PRIORITY
+    # Appointments get massive bonus (-3600s = 1 hour head start)
     base = t["timestamp"].timestamp()
-    bonus = 3600 if t.get("is_appt") else (2700 if t.get("is_referral") else (1800 if t["type"] == "PRIORITY" else 0))
+    bonus = 3600 if t["type"] == "APPOINTMENT" else (2700 if t.get("is_referral") else (1800 if t["type"] == "PRIORITY" else 0))
     return base - bonus
+
+def inject_appointments():
+    # Check for pending appointments and inject them 15 mins before
+    now_str = datetime.datetime.now().strftime("%H:%M")
+    # (Simplified for demo: Manual injection button provided in Admin)
+    pass
 
 # ==========================================
 # 4. MODULES
 # ==========================================
 
-# --- MODULE A: THE KIOSK (Corrected Design) ---
+# --- MODULE A: THE KIOSK (Split View & Hardcoded Menus) ---
 def render_kiosk():
     # HEADER
     c1, c2, c3 = st.columns([1,2,1])
     with c2:
-        st.image(db["config"]["logo_url"], width=80)
+        # Dynamic Logo Handling
+        if db["config"]["logo_url"].startswith("http"):
+            st.image(db["config"]["logo_url"], width=80)
+        else:
+            # Render Base64 Image
+            st.markdown(f'<img src="data:image/png;base64,{db["config"]["logo_url"]}" width="80">', unsafe_allow_html=True)
+            
         st.markdown(f"<h2 style='text-align: center; color:#0038A8; margin:0;'>SSS {db['config']['branch_name']}</h2>", unsafe_allow_html=True)
 
     # PAGE 1: THE GATE (Split Screen)
@@ -136,7 +170,7 @@ def render_kiosk():
                 st.session_state['is_prio'] = True
                 st.session_state['kiosk_step'] = 'menu'
                 st.rerun()
-            st.error("⚠ WARNING: Strictly for qualified members only. Non-qualified users will be transferred.")
+            st.markdown('<div class="prio-warning">⚠ WARNING: Strictly for qualified members only.<br>Non-qualified users will be transferred.</div>', unsafe_allow_html=True)
 
     # PAGE 2: MAIN MENU (Big Cards)
     elif st.session_state['kiosk_step'] == 'menu':
@@ -169,21 +203,26 @@ def render_kiosk():
             st.error("🏥 BENEFITS")
             if st.button("Maternity/Sickness"): generate_ticket("Ben-Mat/Sick", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db["tickets"][-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
             if st.button("Retirement/Death"): st.session_state['kiosk_step'] = 'gate_rd'; st.rerun()
+            if st.button("Disability/Unemp."): generate_ticket("Ben-Dis/Unemp", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db["tickets"][-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
             
         with g2:
             st.warning("💰 LOANS")
             if st.button("Salary/Calamity"): generate_ticket("Ln-Sal/Cal", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db["tickets"][-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
             if st.button("Pension Loan"): generate_ticket("Ln-Pension", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db["tickets"][-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("Emergency Loan"): generate_ticket("Ln-Emerg", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db["tickets"][-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
 
         with g3:
             st.success("📝 RECORDS")
             if st.button("Simple Correction"): generate_ticket("Rec-Simple", "F", st.session_state['is_prio']); st.session_state['last_ticket'] = db["tickets"][-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
             if st.button("Req. Verification"): generate_ticket("Rec-Verify", "C", st.session_state['is_prio']); st.session_state['last_ticket'] = db["tickets"][-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("Contact Update"): generate_ticket("Rec-Contact", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db["tickets"][-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
 
         with g4:
             st.info("💻 eSERVICES")
             if st.button("My.SSS Reset"): generate_ticket("eSvc-Reset", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db["tickets"][-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
             if st.button("SS Number"): generate_ticket("eSvc-SSNum", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db["tickets"][-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("Status Inquiry"): generate_ticket("eSvc-Status", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db["tickets"][-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("DAEM Enroll"): generate_ticket("eSvc-DAEM", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db["tickets"][-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
 
         if st.button("⬅ Back"): st.session_state['kiosk_step'] = 'menu'; st.rerun()
 
@@ -229,9 +268,14 @@ def render_display():
         for t in serving:
             # COLOR CODING LANES
             b_col = "#de350b" if t['lane'] == "T" else ("#0052cc" if t['lane'] == "E" else "#6554c0")
+            
+            # Special Appointment Styling
+            extra_style = "border: 5px solid gold;" if t.get("appt_name") else ""
+            display_name = t.get("appt_name") if t.get("appt_name") else t['number']
+            
             st.markdown(f"""
-            <div style='background-color: {b_col}; color: white; padding: 15px; margin-bottom: 10px; border-radius: 10px; display: flex; justify-content: space-between;'>
-                <div style='font-size: 50px; font-weight: bold;'>{t['number']}</div>
+            <div style='background-color: {b_col}; color: white; padding: 15px; margin-bottom: 10px; border-radius: 10px; display: flex; justify-content: space-between; {extra_style}'>
+                <div style='font-size: 50px; font-weight: bold;'>{display_name}</div>
                 <div style='text-align: right;'>
                     <div style='font-size: 25px;'>{t.get('served_by','Counter')}</div>
                     <div style='font-size: 15px;'>{t['service']}</div>
@@ -267,7 +311,6 @@ def render_admin_panel(user):
     
     # VISIBILITY LOGIC
     opts = ["Counter Mode", "Analytics/Admin", "Kiosk Mode", "Display Mode"]
-    # If MSR, only show Counter. If Admin, show All.
     if user['role'] not in ["ADMIN", "BRANCH_HEAD"]:
         opts = ["Counter Mode"]
         
@@ -288,6 +331,8 @@ def render_admin_panel(user):
         with c1:
             if current:
                 st.success(f"SERVING: {current['number']} - {current['service']}")
+                if current.get("appt_name"): st.info(f"APPOINTMENT: {current['appt_name']}")
+                
                 b1, b2, b3 = st.columns(3)
                 if b1.button("✅ COMPLETE"): current["status"] = "COMPLETED"; db["history"].append(current); st.rerun()
                 if b2.button("🅿️ PARK"): current["status"] = "PARKED"; current["park_timestamp"] = datetime.datetime.now(); st.rerun()
@@ -304,7 +349,9 @@ def render_admin_panel(user):
         with c2:
             st.metric("Waiting", len(queue))
             st.write("Up Next:")
-            for t in queue[:3]: st.write(f"**{t['number']}** ({t['type']})")
+            for t in queue[:3]: 
+                icon = "📅" if t['type'] == 'APPOINTMENT' else ("⭐" if t['type'] == 'PRIORITY' else "👤")
+                st.write(f"**{t['number']}** {icon}")
 
     # 2. ANALYTICS / ADMIN
     elif mode == "Analytics/Admin":
@@ -317,15 +364,27 @@ def render_admin_panel(user):
             st.metric("Pending Tickets", len([t for t in db["tickets"] if t["status"] == "WAITING"]))
             
         with t2:
+            st.subheader("Visual Identity")
             st.text_input("Branch Name", value=db["config"]["branch_name"])
+            
+            # LOGO UPLOAD ENGINE
+            uploaded_logo = st.file_uploader("Upload New Logo (PNG/JPG)", type=['png', 'jpg'])
+            if uploaded_logo:
+                bytes_data = uploaded_logo.getvalue()
+                base64_str = base64.b64encode(bytes_data).decode()
+                db["config"]["logo_url"] = base64_str
+                st.success("Logo Updated! Refresh to see changes.")
+            
             if st.button("Save Config"): st.success("Saved!")
             
         with t3:
+            st.subheader("Appointment Manager (Virtual Injection)")
             with st.form("appt"):
-                nm = st.text_input("Name")
-                if st.form_submit_button("Add Appointment"):
-                    generate_ticket("Appointment", "C", True, is_appt=True)
-                    st.success(f"Added {nm} to top of queue.")
+                nm = st.text_input("Member Name (e.g., Juan Cruz)")
+                svc = st.selectbox("Service", ["Death Claim", "Pension", "Salary Loan"])
+                if st.form_submit_button("Inject Appointment"):
+                    generate_ticket(svc, "C", True, is_appt=True, appt_name=nm)
+                    st.success(f"Added {nm} to Top of Queue (APT-XXX)")
 
     elif mode == "Kiosk Mode": render_kiosk()
     elif mode == "Display Mode": render_display()
@@ -333,8 +392,15 @@ def render_admin_panel(user):
 # ==========================================
 # 5. MAIN ROUTER
 # ==========================================
+# SAFETY NET: Always show Sidebar with Login Option if URL fails
+st.sidebar.title("🔧 Dev Tools")
+st.sidebar.info("Use this if 'access=staff' link fails.")
+sim_mode = st.sidebar.radio("View Mode", ["Public (Mobile)", "Staff Login", "Simulate Kiosk"])
+
 params = st.query_params
-if params.get("access") == "staff":
+access_code = params.get("access")
+
+if access_code == "staff" or sim_mode == "Staff Login":
     # LOGIN SCREEN
     if 'user' not in st.session_state:
         st.title("Staff Login")
@@ -349,24 +415,29 @@ if params.get("access") == "staff":
             else: st.error("Invalid")
     else:
         render_admin_panel(st.session_state['user'])
+
+elif sim_mode == "Simulate Kiosk":
+    render_kiosk()
+
 else:
-    # PUBLIC ACCESS (Mobile / Kiosk)
-    # Check if Mobile or Kiosk based on Sidebar Toggle (Simulated)
-    st.sidebar.title("Dev Tools")
-    st.sidebar.info("Use this to test Kiosk Mode without logging in.")
-    
-    if st.sidebar.checkbox("Simulate Kiosk Mode"):
-        render_kiosk()
-    else:
-        # MOBILE TRACKER
+    # PUBLIC ACCESS (Mobile Tracker)
+    # Header
+    if db["config"]["logo_url"].startswith("http"):
         st.image(db["config"]["logo_url"], width=50)
-        st.markdown("### G-ABAY Mobile Tracker")
-        tn = st.text_input("Enter Ticket #")
-        if tn:
-            t = next((x for x in db["tickets"] if x["number"] == tn), None)
-            if t:
-                st.info(f"Status: {t['status']}")
-                if t['status'] == "WAITING":
-                    pos = len([x for x in db["tickets"] if x['lane'] == t['lane'] and x['status'] == 'WAITING' and x['timestamp'] < t['timestamp']])
-                    st.metric("People Ahead", pos)
-            else: st.error("Not Found")
+    else:
+        st.markdown(f'<img src="data:image/png;base64,{db["config"]["logo_url"]}" width="50">', unsafe_allow_html=True)
+        
+    st.markdown("### G-ABAY Mobile Tracker")
+    tn = st.text_input("Enter Ticket # (e.g. TC-001)")
+    
+    if tn:
+        t = next((x for x in db["tickets"] if x["number"] == tn), None)
+        if t:
+            st.info(f"Status: {t['status']}")
+            if t['status'] == "WAITING":
+                pos = len([x for x in db["tickets"] if x['lane'] == t['lane'] and x['status'] == 'WAITING' and x['timestamp'] < t['timestamp']])
+                st.metric("People Ahead", pos)
+                st.caption("Estimated Wait: ~15 mins")
+            elif t['status'] == "PARKED":
+                 st.error("URGENT: YOU WERE CALLED! PLEASE GO TO COUNTER.")
+        else: st.error("Ticket Not Found")
