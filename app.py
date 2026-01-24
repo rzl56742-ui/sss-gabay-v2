@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v5.1 - BRANCH OPERATING SYSTEM
+# SSS G-ABAY v6.0 - BRANCH OPERATING SYSTEM (GOLDEN MASTER)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -9,16 +9,14 @@ import pandas as pd
 import datetime
 import time
 import uuid
-import qrcode
 import base64
-from io import BytesIO
 
 # ==========================================
 # 1. SYSTEM CONFIGURATION & CSS
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v5.1", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v6.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
-# CSS: WORLD-CLASS VISUALS, BIG BUTTONS, & PRINT
+# CSS: INDUSTRIAL GRADE UI (Touch-Friendly & Print Ready)
 st.markdown("""
 <style>
     /* Global Watermark */
@@ -28,23 +26,23 @@ st.markdown("""
         z-index: 99999; pointer-events: none;
     }
     
-    /* HIDE STREAMLIT UI */
+    /* HIDE DEFAULT UI */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* --- KIOSK: MASSIVE BUTTONS --- */
+    /* --- KIOSK: GIGANTIC BUTTONS --- */
     .huge-btn > button {
         width: 100%;
-        border-radius: 15px;
-        height: 8em !important; /* 2x Bigger */
+        border-radius: 20px;
+        height: 8em !important; /* Massive click area */
         font-weight: 900 !important;
         font-size: 28px !important;
         text-transform: uppercase;
-        box-shadow: 0 8px 12px rgba(0,0,0,0.15);
-        border: 3px solid rgba(0,0,0,0.1);
+        box-shadow: 0 10px 15px rgba(0,0,0,0.2);
+        border: 4px solid rgba(0,0,0,0.05);
         transition: transform 0.1s;
     }
-    .huge-btn > button:active { transform: scale(0.98); }
+    .huge-btn > button:active { transform: scale(0.95); }
     
     /* SUB-MENU GRID BUTTONS */
     .grid-btn > button {
@@ -52,6 +50,7 @@ st.markdown("""
         font-size: 18px !important;
         font-weight: 700 !important;
         border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
 
     /* PRIORITY WARNING BOX */
@@ -66,6 +65,12 @@ st.markdown("""
         border: 1px solid #0369a1; font-size: 14px; font-weight: bold; margin-bottom: 10px; display: inline-block;
     }
 
+    /* TICKET CARD (SCREEN) */
+    .ticket-card {
+        padding: 40px; border-radius: 20px; text-align: center; margin: 30px 0;
+        border: 4px solid white; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+    }
+
     /* HIDE SIDEBAR IN DISPLAY MODE */
     [data-testid="stSidebar"][aria-expanded="false"] { display: none; }
 
@@ -78,16 +83,16 @@ st.markdown("""
             position: fixed; left: 0; top: 0; width: 100%; height: 100%;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             background: white; color: black; font-family: sans-serif;
-            border: 2px solid black; padding: 10px;
+            border: 5px solid black; padding: 10px;
         }
         .no-print { display: none !important; }
     }
 </style>
-<div class="watermark no-print">© 2026 rpt/sssgingoog | v5.1.0</div>
+<div class="watermark no-print">© 2026 rpt/sssgingoog | v6.0.0</div>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. DATABASE (THE BRAIN)
+# 2. SHARED DATABASE (THE BRAIN)
 # ==========================================
 if 'db' not in st.session_state:
     st.session_state['db'] = {
@@ -100,7 +105,7 @@ if 'db' not in st.session_state:
             # CONFIGURABLE LANES
             "lanes": {
                 "T": {"name": "Teller", "desc": "Payments"},
-                "A": {"name": "Employer", "desc": "Account Mgmt"},
+                "A": {"name": "Employers", "desc": "Account Mgmt"},
                 "C": {"name": "Counter", "desc": "Complex Trans"},
                 "E": {"name": "eCenter", "desc": "Online Services"},
                 "F": {"name": "Fast Lane", "desc": "Simple Trans"}
@@ -110,8 +115,8 @@ if 'db' not in st.session_state:
             "admin": {"pass": "sss2026", "role": "ADMIN", "name": "System Admin"},
             "head": {"pass": "head123", "role": "BRANCH_HEAD", "name": "Branch Head"},
             "section": {"pass": "sec123", "role": "SECTION_HEAD", "name": "Section Head"},
-            "c1": {"pass": "123", "role": "MSR", "name": "Maria Santos", "station": "Counter 1", "break": False, "break_log": []},
-            "c2": {"pass": "123", "role": "TELLER", "name": "Juan Cruz", "station": "Teller 1", "break": False, "break_log": []}
+            "c1": {"pass": "123", "role": "MSR", "name": "Maria Santos", "station": "Counter 1", "break": False},
+            "c2": {"pass": "123", "role": "TELLER", "name": "Juan Cruz", "station": "Teller 1", "break": False}
         },
         "announcements": ["Welcome to SSS Gingoog. Operating Hours: 8:00 AM - 5:00 PM."]
     }
@@ -119,7 +124,7 @@ if 'db' not in st.session_state:
 db = st.session_state['db']
 
 # ==========================================
-# 3. CORE LOGIC & METRICS
+# 3. CORE LOGIC (WAIT TIMES & PRIORITY)
 # ==========================================
 def generate_ticket(service, lane_code, is_priority, is_appt=False, appt_name=None):
     prefix = "A" if is_appt else ("P" if is_priority else "R")
@@ -147,30 +152,39 @@ def generate_ticket(service, lane_code, is_priority, is_appt=False, appt_name=No
 
 def get_prio_score(t):
     base = t["timestamp"].timestamp()
+    # Logic: Appointments > Referrals > Priority > Regular
     bonus = 3600 if t.get("appt_name") else (2700 if t.get("ref_from") else (1800 if t["type"] == "PRIORITY" else 0))
     return base - bonus
 
 def calculate_real_wait_time(lane_code):
-    # 1. Get recent history for this lane
+    # 1. Get recent completed txns for this lane
     recent = [t for t in db["history"] if t['lane'] == lane_code and t['end_time']]
-    if not recent: return 15 # Default 15 mins if no data
+    # Default to 15 mins if no history yet
+    if not recent: return 15 
     
     # 2. Calculate Avg Transaction Time (last 10)
     recent = recent[-10:]
     total_sec = sum([(t["end_time"] - t["start_time"]).total_seconds() for t in recent])
-    avg_txn_time = (total_sec / len(recent)) / 60 # in Minutes
+    avg_txn_time = (total_sec / len(recent)) / 60 # Minutes
     
     # 3. Count people ahead
     queue_len = len([t for t in db["tickets"] if t['lane'] == lane_code and t['status'] == "WAITING"])
     
-    # 4. Total Wait = Queue * Avg Time
+    # 4. Total Wait
     return round(queue_len * avg_txn_time)
+
+def get_staff_efficiency(staff_name):
+    my_txns = [t for t in db["history"] if t.get("served_by") == staff_name and t.get("start_time") and t.get("end_time")]
+    if not my_txns: return 0, "0m"
+    total_sec = sum([(t["end_time"] - t["start_time"]).total_seconds() for t in my_txns])
+    avg_min = round((total_sec / len(my_txns)) / 60, 1)
+    return len(my_txns), f"{avg_min}m"
 
 # ==========================================
 # 4. MODULES
 # ==========================================
 
-# --- MODULE A: THE KIOSK (Massive Buttons) ---
+# --- MODULE A: THE KIOSK (Corrected Layout) ---
 def render_kiosk():
     # HEADER
     c1, c2, c3 = st.columns([1,2,1])
@@ -221,7 +235,7 @@ def render_kiosk():
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("⬅ START OVER"): del st.session_state['kiosk_step']; st.rerun()
 
-    # PAGE 3: MSS SUB-MENU
+    # PAGE 3: MSS SUB-MENU (Corrected Buttons)
     elif st.session_state['kiosk_step'] == 'mss':
         st.markdown("### 👤 Member Services")
         st.markdown('<div class="grid-btn">', unsafe_allow_html=True)
@@ -263,7 +277,7 @@ def render_kiosk():
         with c2:
             if st.button("NO (Regular Claim)"): generate_ticket("Ben-Ret(S)", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db["tickets"][-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
 
-    # PAGE 5: TICKET DISPLAY
+    # PAGE 5: TICKET DISPLAY (Print Ready)
     elif st.session_state['kiosk_step'] == 'ticket':
         t = st.session_state['last_ticket']
         bg_col = "#FFD700" if t['type'] == 'PRIORITY' else "#0038A8"
@@ -329,25 +343,19 @@ def render_display():
     st.markdown(f"<div style='background: #FFD700; color: black; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
     time.sleep(3); st.rerun()
 
-# --- MODULE C: COUNTER ---
+# --- MODULE C: COUNTER (Auto-Next Only) ---
 def render_counter(user):
     st.sidebar.title(f"👮 {user['name']}")
     
-    # BREAK MODE
     on_break = st.sidebar.toggle("☕ Break Mode", value=user.get('break', False))
     if on_break != user.get('break', False): 
         user['break'] = on_break
-        if on_break: 
-            user.setdefault('break_log', []).append({'start': datetime.datetime.now(), 'end': None})
-        else:
-            if user.get('break_log'): user['break_log'][-1]['end'] = datetime.datetime.now()
         st.rerun()
     if on_break: st.warning("⛔ You are on break."); return
 
     st.title(f"Station: {user.get('station', 'General')}")
     
-    # Configurable Lanes
-    my_lanes = ["C", "E", "F"] 
+    my_lanes = ["C", "E", "F"] # Demo config
     queue = [t for t in db["tickets"] if t["status"] == "WAITING" and t["lane"] in my_lanes]
     queue.sort(key=get_prio_score)
     current = next((t for t in db["tickets"] if t["status"] == "SERVING" and t.get("served_by") == user['name']), None)
@@ -366,9 +374,7 @@ def render_counter(user):
             if st.session_state['refer_modal']:
                 with st.form("referral_form"):
                     st.write("🔄 Transfer Details")
-                    # DYNAMIC LANES
-                    opts = [f"{k} ({v['name']})" for k,v in db["config"]["lanes"].items()]
-                    target = st.selectbox("To Lane", opts)
+                    target = st.selectbox("To Lane", [f"{k} ({v['name']})" for k,v in db["config"]["lanes"].items()])
                     reason = st.text_input("Reason")
                     if st.form_submit_button("Confirm Transfer"):
                         current["lane"] = target.split()[0]; current["status"] = "WAITING"; current["served_by"] = None
@@ -401,7 +407,7 @@ def render_counter(user):
             if st.button(f"🔊 {p['number']}", key=p['id']):
                 p["status"] = "SERVING"; p["served_by"] = user["name"]; st.rerun()
 
-# --- MODULE D: ADMIN (Configuration) ---
+# --- MODULE D: ADMIN (Corrected String Syntax) ---
 def render_admin_panel(user):
     st.sidebar.title("🛠 Admin Menu")
     
@@ -432,7 +438,6 @@ def render_admin_panel(user):
             db["config"]["branch_name"] = st.text_input("Branch Name", value=db["config"]["branch_name"])
             
             st.subheader("Lane Configuration")
-            # Editable Lanes using Data Editor
             df_lanes = pd.DataFrame.from_dict(db["config"]["lanes"], orient='index')
             edited_df = st.data_editor(df_lanes, num_rows="dynamic")
             if st.button("Save Lane Config"):
@@ -441,9 +446,8 @@ def render_admin_panel(user):
             
     elif user['role'] in ["BRANCH_HEAD", "SECTION_HEAD", "DIVISION_HEAD"]:
         mode = st.sidebar.radio("Module", ["Advanced Analytics", "Appointments"])
-        
         if mode == "Advanced Analytics":
-            st.title("📊 Branch Performance Intelligence")
+            st.title("📊 Branch Intelligence")
             hist = db["history"]
             if hist:
                 df = pd.DataFrame(hist)
@@ -454,7 +458,7 @@ def render_admin_panel(user):
                 k1.metric("Avg Wait Time", f"{round(df['wait_sec'].mean()/60, 1)} min")
                 k2.metric("Max Wait Time", f"{round(df['wait_sec'].max()/60, 1)} min")
                 k3.metric("Avg Svc Time", f"{round(df['svc_sec'].mean()/60, 1)} min")
-                k4.metric("Total Transactions", len(df))
+                k4.metric("Total Served", len(df))
                 
                 st.subheader("📈 Volume Trends")
                 st.bar_chart(df['service'].value_counts())
@@ -462,11 +466,10 @@ def render_admin_panel(user):
                 st.subheader("⭐ Customer Feedback")
                 if db["reviews"]:
                     rev_df = pd.DataFrame(db["reviews"])
-                    avg_rate = rev_df['rating'].mean()
-                    st.metric("Customer Satisfaction Score (CSAT)", f"{round(avg_rate, 1)} / 5.0")
+                    st.metric("CSAT Score", f"{round(rev_df['rating'].mean(), 1)} / 5.0")
                     st.dataframe(rev_df[['rating', 'personnel', 'comment', 'timestamp']])
                 else: st.info("No reviews yet.")
-            else: st.info("No transaction history yet.")
+            else: st.info("No data yet.")
             
         elif mode == "Appointments":
             st.title("Appointment Manager")
@@ -520,48 +523,32 @@ else:
             if t:
                 st.info(f"Status: {t['status']}")
                 if t['status'] == "WAITING":
-                    # REAL-TIME ESTIMATION ALGO
-                    est_wait = calculate_real_wait_time(t['lane'])
-                    st.metric("Estimated Wait Time", f"~{est_wait} mins")
-                    st.caption(f"Calculated based on current speed of {db['config']['lanes'][t['lane']]['name']} lane.")
+                    est = calculate_real_wait_time(t['lane'])
+                    st.metric("Estimated Wait", f"~{est} mins")
+                    pos = len([x for x in db["tickets"] if x['lane'] == t['lane'] and x['status'] == 'WAITING' and x['timestamp'] < t['timestamp']])
+                    st.caption(f"{pos} people ahead of you.")
                 elif t['status'] == "PARKED": st.error("URGENT: YOU WERE CALLED!")
             else: st.error("Ticket Not Found")
             
     with t2:
         st.markdown("### 🤖 Chat with G-ABAY")
-        st.caption("I can speak English, Tagalog, and Bisaya!")
-        
         if "messages" not in st.session_state: st.session_state.messages = []
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]): st.markdown(msg["content"])
-            
         if prompt := st.chat_input("Ask me anything..."):
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"): st.markdown(prompt)
-            
-            # CHATBOT BRAIN
-            resp = "I'm sorry, please proceed to the PACD for assistance."
-            p_lower = prompt.lower()
-            if any(x in p_lower for x in ["reset", "password", "lupa", "kalimot"]):
-                resp = "To reset your My.SSS password, please get a ticket for **eCenter** (Member Services > eServices)."
-            elif any(x in p_lower for x in ["id", "umid", "nawala"]):
-                resp = "For UMID/ID replacements, please proceed to **Member Services**."
-            elif any(x in p_lower for x in ["loan", "utang", "salary"]):
-                resp = "You can apply for a Salary Loan at the **eServices Kiosk** or **Member Services Lane**."
-            
+            resp = "I'm sorry, please proceed to the PACD."
+            if any(x in prompt.lower() for x in ["reset", "password"]): resp = "Reset password at eCenter."
             with st.chat_message("assistant"): st.markdown(resp)
             st.session_state.messages.append({"role": "assistant", "content": resp})
 
     with t3:
         st.markdown("### We value your feedback!")
         with st.form("review"):
-            st.markdown("##### How was your experience?")
             rate = st.slider("Rating", 1, 5, 5)
-            pers = st.text_input("Name of Personnel (Optional)")
-            comm = st.text_area("Comments / Suggestions")
-            if st.form_submit_button("Submit Feedback"):
-                db["reviews"].append({
-                    "rating": rate, "personnel": pers, "comment": comm, 
-                    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-                })
-                st.success("Thank you for your feedback!")
+            pers = st.text_input("Personnel (Optional)")
+            comm = st.text_area("Comments")
+            if st.form_submit_button("Submit"):
+                db["reviews"].append({"rating": rate, "personnel": pers, "comment": comm, "timestamp": datetime.datetime.now()})
+                st.success("Thank you!")
