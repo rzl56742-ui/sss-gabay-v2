@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v15.0 - BRANCH OPERATING SYSTEM (VERTICAL FLOW EDITION)
+# SSS G-ABAY v16.0 - BRANCH OPERATING SYSTEM (SWIMLANE EDITION)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -14,7 +14,7 @@ import base64
 # ==========================================
 # 1. SYSTEM CONFIGURATION & GLOBAL STATE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v15.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v16.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 # --- SINGLETON DATABASE (The "Glue") ---
 @st.cache_resource
@@ -81,44 +81,48 @@ function startTimer(duration, display) {
     .header-main { font-size: 40px; font-weight: 900; color: #0038A8; margin: 0; padding: 0; text-transform: uppercase; font-style: italic; }
     .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
     
-    /* KIOSK MAIN BUTTONS (HUGE) */
-    .reg-card > button {
-        background-color: #2563EB !important; color: white !important;
-        height: 350px !important; width: 100% !important;
-        border-radius: 30px !important; font-size: 40px !important;
-        font-weight: 900 !important; border: 8px solid #1E40AF !important;
-        text-transform: uppercase; box-shadow: 0 10px 20px rgba(0,0,0,0.2);
-    }
-    .prio-card > button {
-        background-color: #FFC107 !important; color: #1E3A8A !important;
-        height: 350px !important; width: 100% !important;
-        border-radius: 30px !important; font-size: 40px !important;
-        font-weight: 900 !important; border: 8px solid #B45309 !important;
-        text-transform: uppercase; box-shadow: 0 10px 20px rgba(0,0,0,0.2);
-    }
+    /* --- LAYOUT: SWIMLANES --- */
     
-    /* VERTICAL MENU BUTTONS (BARS) */
-    .vert-btn > button {
-        height: 100px !important; width: 100% !important;
-        font-size: 22px !important; font-weight: 700 !important;
-        border-radius: 15px !important; border: 2px solid #ddd !important;
-        background-color: white !important; color: #333 !important;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 10px;
-        text-align: left !important; padding-left: 30px !important;
+    /* MAIN MENU CARDS (3 Columns) */
+    .menu-card > button {
+        height: 300px !important; width: 100% !important;
+        font-size: 30px !important; font-weight: 800 !important;
+        border-radius: 20px !important; border: 4px solid #ddd !important;
+        background-color: white !important; color: #0038A8 !important;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
     }
-    .vert-btn > button:hover { transform: scale(1.01); background-color: #f8fafc !important; }
-    
-    /* COLOR CODING STRIPS */
-    .btn-red > button { border-left: 20px solid #DC2626 !important; }
-    .btn-orange > button { border-left: 20px solid #EA580C !important; }
-    .btn-green > button { border-left: 20px solid #16A34A !important; }
-    .btn-blue > button { border-left: 20px solid #2563EB !important; }
+    .menu-card > button:hover {
+        border-color: #0038A8 !important; transform: translateY(-5px);
+    }
 
-    /* SECTION HEADERS */
-    .section-header {
-        font-size: 26px; font-weight: 800; color: #444;
-        margin-top: 30px; margin-bottom: 10px; border-bottom: 3px solid #eee; padding-bottom: 5px;
+    /* SUB-MENU VERTICAL STACK BUTTONS */
+    .swim-btn > button {
+        height: 100px !important; width: 100% !important;
+        font-size: 18px !important; font-weight: 700 !important;
+        border-radius: 10px !important; border: 2px solid #eee !important;
+        background-color: white !important; color: #333 !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 10px !important;
     }
+    .swim-btn > button:hover { background-color: #f0f9ff !important; transform: scale(1.02); }
+
+    /* SWIMLANE HEADERS */
+    .swim-header {
+        font-size: 20px; font-weight: 900; text-align: center;
+        padding: 10px; border-radius: 10px 10px 0 0; color: white;
+        margin-bottom: 10px; text-transform: uppercase;
+    }
+    
+    /* COLOR CODING */
+    .head-red { background-color: #DC2626; }
+    .head-orange { background-color: #EA580C; }
+    .head-green { background-color: #16A34A; }
+    .head-blue { background-color: #2563EB; }
+    
+    .border-red > button { border-left: 10px solid #DC2626 !important; }
+    .border-orange > button { border-left: 10px solid #EA580C !important; }
+    .border-green > button { border-left: 10px solid #16A34A !important; }
+    .border-blue > button { border-left: 10px solid #2563EB !important; }
 
     /* DISPLAY MODULE STYLES */
     .serving-card {
@@ -152,6 +156,14 @@ function startTimer(duration, display) {
             border: 5px solid black; padding: 10px;
         }
         .no-print { display: none !important; }
+    }
+    
+    /* HUGE GATE BUTTONS */
+    .gate-btn > button {
+        height: 350px !important; width: 100% !important;
+        font-size: 40px !important; font-weight: 900 !important;
+        border-radius: 30px !important;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.2);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -199,7 +211,7 @@ def get_staff_efficiency(staff_name):
 # 4. MODULES
 # ==========================================
 
-# --- MODULE A: KIOSK (Vertical & Reset Logic) ---
+# --- MODULE A: KIOSK (Swimlane Layout) ---
 def render_kiosk():
     # HEADERS
     st.markdown("""
@@ -216,74 +228,92 @@ def render_kiosk():
         st.markdown("<div style='text-align:center; color:#555;'>Gabay sa bawat miyembro. Mangyaring pumili ng uri ng serbisyo.</div><br>", unsafe_allow_html=True)
 
     if 'kiosk_step' not in st.session_state:
+        # PAGE 1: GATE (Priority vs Regular)
         col_reg, col_prio = st.columns([1, 1], gap="large")
         with col_reg:
-            st.markdown('<div class="reg-card">', unsafe_allow_html=True)
+            st.markdown('<div class="gate-btn" style="border: 8px solid #1E40AF; border-radius:30px; overflow:hidden;">', unsafe_allow_html=True)
             if st.button("👤 REGULAR\n\nStandard Access"):
                 st.session_state['is_prio'] = False; st.session_state['kiosk_step'] = 'menu'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         with col_prio:
-            st.markdown('<div class="prio-card">', unsafe_allow_html=True)
+            st.markdown('<div class="gate-btn" style="border: 8px solid #B45309; border-radius:30px; overflow:hidden;">', unsafe_allow_html=True)
             if st.button("❤️ PRIORITY\n\nSenior, PWD, Pregnant"):
                 st.session_state['is_prio'] = True; st.session_state['kiosk_step'] = 'menu'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
             st.warning("⚠ NOTICE: Non-priority users will be transferred to end of line.")
 
     elif st.session_state['kiosk_step'] == 'menu':
+        # PAGE 2: MAIN MENU (3 Columns Side-by-Side)
         st.markdown("### Select Service Category")
         
-        # VERTICAL STACK FOR MAIN MENU
-        st.markdown('<div class="vert-btn">', unsafe_allow_html=True)
-        if st.button("💳 PAYMENTS (Contrib/Loans)"):
-            t = generate_ticket("Payment", "T", st.session_state['is_prio'])
-            st.session_state['last_ticket'] = t; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+        m1, m2, m3 = st.columns(3, gap="medium")
         
-        if st.button("💼 EMPLOYERS (Account Mgmt)"):
-            t = generate_ticket("Account Management", "A", st.session_state['is_prio'])
-            st.session_state['last_ticket'] = t; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+        with m1:
+            st.markdown('<div class="menu-card">', unsafe_allow_html=True)
+            if st.button("💳 PAYMENTS\n(Contrib/Loans)"):
+                t = generate_ticket("Payment", "T", st.session_state['is_prio'])
+                st.session_state['last_ticket'] = t; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
             
-        if st.button("👤 MEMBER SERVICES (Claims, ID, Records)"):
-            st.session_state['kiosk_step'] = 'mss'; st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        with m2:
+            st.markdown('<div class="menu-card">', unsafe_allow_html=True)
+            if st.button("💼 EMPLOYERS\n(Account Mgmt)"):
+                t = generate_ticket("Account Management", "A", st.session_state['is_prio'])
+                st.session_state['last_ticket'] = t; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+        with m3:
+            st.markdown('<div class="menu-card">', unsafe_allow_html=True)
+            if st.button("👤 MEMBER SERVICES\n(Claims, ID, Records)"):
+                st.session_state['kiosk_step'] = 'mss'; st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
         
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<br><br>", unsafe_allow_html=True)
         if st.button("⬅ GO BACK", type="secondary", use_container_width=True): del st.session_state['kiosk_step']; st.rerun()
 
     elif st.session_state['kiosk_step'] == 'mss':
+        # PAGE 3: MEMBER SERVICES (4 Columns Side-by-Side / Swimlanes)
         st.markdown("### 👤 Member Services")
         
-        # --- SECTION 1: BENEFITS (RED) ---
-        st.markdown("<div class='section-header'>🏥 Benefit Claims</div>", unsafe_allow_html=True)
-        st.markdown('<div class="vert-btn btn-red">', unsafe_allow_html=True)
-        if st.button("Maternity / Sickness Benefit"): generate_ticket("Ben-Mat/Sick", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-        if st.button("Retirement / Death / Funeral"): st.session_state['kiosk_step'] = 'gate_rd'; st.rerun()
-        if st.button("Disability / Unemployment"): generate_ticket("Ben-Dis/Unemp", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        # 4 Columns for the Categories
+        col1, col2, col3, col4 = st.columns(4, gap="small")
+        
+        # --- COLUMN 1: BENEFITS (RED) ---
+        with col1:
+            st.markdown("<div class='swim-header head-red'>🏥 Benefit Claims</div>", unsafe_allow_html=True)
+            st.markdown('<div class="swim-btn border-red">', unsafe_allow_html=True)
+            if st.button("Maternity / Sickness"): generate_ticket("Ben-Mat/Sick", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("Retirement / Death"): st.session_state['kiosk_step'] = 'gate_rd'; st.rerun()
+            if st.button("Disability / Unemp."): generate_ticket("Ben-Dis/Unemp", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
-        # --- SECTION 2: LOANS (ORANGE) ---
-        st.markdown("<div class='section-header'>💰 Loans</div>", unsafe_allow_html=True)
-        st.markdown('<div class="vert-btn btn-orange">', unsafe_allow_html=True)
-        if st.button("Salary / Calamity / Consolidation Loan"): generate_ticket("Ln-Sal/Conso", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-        if st.button("Pension Loan (Retiree)"): generate_ticket("Ln-Pension", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        # --- COLUMN 2: LOANS (ORANGE) ---
+        with col2:
+            st.markdown("<div class='swim-header head-orange'>💰 Loans</div>", unsafe_allow_html=True)
+            st.markdown('<div class="swim-btn border-orange">', unsafe_allow_html=True)
+            if st.button("Salary / Calamity"): generate_ticket("Ln-Sal/Conso", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("Pension Loan"): generate_ticket("Ln-Pension", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
-        # --- SECTION 3: RECORDS (GREEN) ---
-        st.markdown("<div class='section-header'>📝 Member Data Change</div>", unsafe_allow_html=True)
-        st.markdown('<div class="vert-btn btn-green">', unsafe_allow_html=True)
-        if st.button("Contact Info Update (E-4)"): generate_ticket("Rec-Contact", "F", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-        if st.button("Simple Corrections (Name/Gender)"): generate_ticket("Rec-Simple", "F", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-        if st.button("Complex Corrections (DOB/Status)"): generate_ticket("Rec-Complex", "C", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-        if st.button("Request Verification"): generate_ticket("Rec-Verify", "C", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        # --- COLUMN 3: RECORDS (GREEN) ---
+        with col3:
+            st.markdown("<div class='swim-header head-green'>📝 Records</div>", unsafe_allow_html=True)
+            st.markdown('<div class="swim-btn border-green">', unsafe_allow_html=True)
+            if st.button("Contact Update (E4)"): generate_ticket("Rec-Contact", "F", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("Simple Correction"): generate_ticket("Rec-Simple", "F", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("Complex Correction"): generate_ticket("Rec-Complex", "C", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("Verification"): generate_ticket("Rec-Verify", "C", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
-        # --- SECTION 4: eSERVICES (BLUE) ---
-        st.markdown("<div class='section-header'>💻 eServices</div>", unsafe_allow_html=True)
-        st.markdown('<div class="vert-btn btn-blue">', unsafe_allow_html=True)
-        if st.button("My.SSS Password Reset"): generate_ticket("eSvc-Reset", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-        if st.button("SS Number Application"): generate_ticket("eSvc-SSNum", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-        if st.button("Contribution / Loan Status"): generate_ticket("eSvc-Status", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-        if st.button("DAEM / ACOP Compliance"): generate_ticket("eSvc-DAEM/ACOP", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        # --- COLUMN 4: eSERVICES (BLUE) ---
+        with col4:
+            st.markdown("<div class='swim-header head-blue'>💻 eServices</div>", unsafe_allow_html=True)
+            st.markdown('<div class="swim-btn border-blue">', unsafe_allow_html=True)
+            if st.button("My.SSS Reset"): generate_ticket("eSvc-Reset", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("SS Number"): generate_ticket("eSvc-SSNum", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("Status Inquiry"): generate_ticket("eSvc-Status", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("DAEM / ACOP"): generate_ticket("eSvc-DAEM/ACOP", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("⬅ GO BACK", type="secondary", use_container_width=True): st.session_state['kiosk_step'] = 'menu'; st.rerun()
