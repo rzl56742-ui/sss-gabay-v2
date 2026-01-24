@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v16.0 - BRANCH OPERATING SYSTEM (SWIMLANE EDITION)
+# SSS G-ABAY v17.0 - BRANCH OPERATING SYSTEM (PRECISION EDITION)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -14,7 +14,7 @@ import base64
 # ==========================================
 # 1. SYSTEM CONFIGURATION & GLOBAL STATE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v16.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v17.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 # --- SINGLETON DATABASE (The "Glue") ---
 @st.cache_resource
@@ -58,15 +58,22 @@ db = st.session_state.system
 # --- INDUSTRIAL CSS & JS ---
 st.markdown("""
 <script>
-function startTimer(duration, display) {
+// ROBUST REAL-TIME TIMER
+function startTimer(duration, displayId) {
     var timer = duration, minutes, seconds;
-    setInterval(function () {
+    var display = document.getElementById(displayId);
+    if (!display) return;
+    
+    var interval = setInterval(function () {
         minutes = parseInt(timer / 60, 10);
         seconds = parseInt(timer % 60, 10);
         minutes = minutes < 10 ? "0" + minutes : minutes;
         seconds = seconds < 10 ? "0" + seconds : seconds;
         display.textContent = minutes + ":" + seconds;
-        if (--timer < 0) { timer = 0; }
+        if (--timer < 0) { 
+            clearInterval(interval); 
+            display.textContent = "EXPIRED";
+        }
     }, 1000);
 }
 </script>
@@ -81,9 +88,7 @@ function startTimer(duration, display) {
     .header-main { font-size: 40px; font-weight: 900; color: #0038A8; margin: 0; padding: 0; text-transform: uppercase; font-style: italic; }
     .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
     
-    /* --- LAYOUT: SWIMLANES --- */
-    
-    /* MAIN MENU CARDS (3 Columns) */
+    /* MAIN MENU CARDS */
     .menu-card > button {
         height: 300px !important; width: 100% !important;
         font-size: 30px !important; font-weight: 800 !important;
@@ -92,10 +97,7 @@ function startTimer(duration, display) {
         box-shadow: 0 10px 20px rgba(0,0,0,0.1);
         display: flex; flex-direction: column; justify-content: center; align-items: center;
     }
-    .menu-card > button:hover {
-        border-color: #0038A8 !important; transform: translateY(-5px);
-    }
-
+    
     /* SUB-MENU VERTICAL STACK BUTTONS */
     .swim-btn > button {
         height: 100px !important; width: 100% !important;
@@ -137,11 +139,6 @@ function startTimer(duration, display) {
     .queue-item {
         font-size: 24px; border-bottom: 1px solid #ccc; padding: 10px;
         display: flex; justify-content: space-between;
-    }
-    
-    .ref-badge {
-        background-color: #e0f2fe; color: #0369a1; padding: 5px 10px; border-radius: 5px;
-        border: 1px solid #0369a1; font-size: 14px; font-weight: bold; margin-bottom: 10px; display: inline-block;
     }
     
     /* PRINT STYLES */
@@ -211,7 +208,7 @@ def get_staff_efficiency(staff_name):
 # 4. MODULES
 # ==========================================
 
-# --- MODULE A: KIOSK (Swimlane Layout) ---
+# --- MODULE A: KIOSK (Swimlane Layout with Corrections) ---
 def render_kiosk():
     # HEADERS
     st.markdown("""
@@ -228,7 +225,7 @@ def render_kiosk():
         st.markdown("<div style='text-align:center; color:#555;'>Gabay sa bawat miyembro. Mangyaring pumili ng uri ng serbisyo.</div><br>", unsafe_allow_html=True)
 
     if 'kiosk_step' not in st.session_state:
-        # PAGE 1: GATE (Priority vs Regular)
+        # PAGE 1: GATE
         col_reg, col_prio = st.columns([1, 1], gap="large")
         with col_reg:
             st.markdown('<div class="gate-btn" style="border: 8px solid #1E40AF; border-radius:30px; overflow:hidden;">', unsafe_allow_html=True)
@@ -243,7 +240,7 @@ def render_kiosk():
             st.warning("⚠ NOTICE: Non-priority users will be transferred to end of line.")
 
     elif st.session_state['kiosk_step'] == 'menu':
-        # PAGE 2: MAIN MENU (3 Columns Side-by-Side)
+        # PAGE 2: MAIN MENU (Swimlanes)
         st.markdown("### Select Service Category")
         
         m1, m2, m3 = st.columns(3, gap="medium")
@@ -272,10 +269,9 @@ def render_kiosk():
         if st.button("⬅ GO BACK", type="secondary", use_container_width=True): del st.session_state['kiosk_step']; st.rerun()
 
     elif st.session_state['kiosk_step'] == 'mss':
-        # PAGE 3: MEMBER SERVICES (4 Columns Side-by-Side / Swimlanes)
+        # PAGE 3: MEMBER SERVICES (Corrected Text & Structure)
         st.markdown("### 👤 Member Services")
         
-        # 4 Columns for the Categories
         col1, col2, col3, col4 = st.columns(4, gap="small")
         
         # --- COLUMN 1: BENEFITS (RED) ---
@@ -284,25 +280,26 @@ def render_kiosk():
             st.markdown('<div class="swim-btn border-red">', unsafe_allow_html=True)
             if st.button("Maternity / Sickness"): generate_ticket("Ben-Mat/Sick", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
             if st.button("Retirement / Death"): st.session_state['kiosk_step'] = 'gate_rd'; st.rerun()
-            if st.button("Disability / Unemp."): generate_ticket("Ben-Dis/Unemp", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("Disability / Unemployment"): generate_ticket("Ben-Dis/Unemp", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
         # --- COLUMN 2: LOANS (ORANGE) ---
         with col2:
             st.markdown("<div class='swim-header head-orange'>💰 Loans</div>", unsafe_allow_html=True)
             st.markdown('<div class="swim-btn border-orange">', unsafe_allow_html=True)
-            if st.button("Salary / Calamity"): generate_ticket("Ln-Sal/Conso", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-            if st.button("Pension Loan"): generate_ticket("Ln-Pension", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("Salary / Conso"): generate_ticket("Ln-Sal/Conso", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("Calamity / Emergency"): generate_ticket("Ln-Cal/Emerg", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("Pension Loan (Retiree and Survivor)"): generate_ticket("Ln-Pension", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
         # --- COLUMN 3: RECORDS (GREEN) ---
         with col3:
-            st.markdown("<div class='swim-header head-green'>📝 Records</div>", unsafe_allow_html=True)
+            st.markdown("<div class='swim-header head-green'>📝 Member Records Update</div>", unsafe_allow_html=True)
             st.markdown('<div class="swim-btn border-green">', unsafe_allow_html=True)
-            if st.button("Contact Update (E4)"): generate_ticket("Rec-Contact", "F", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("Contact Information"): generate_ticket("Rec-Contact", "F", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
             if st.button("Simple Correction"): generate_ticket("Rec-Simple", "F", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
             if st.button("Complex Correction"): generate_ticket("Rec-Complex", "C", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-            if st.button("Verification"): generate_ticket("Rec-Verify", "C", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("Request Verification"): generate_ticket("Rec-Verify", "C", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
         # --- COLUMN 4: eSERVICES (BLUE) ---
@@ -338,15 +335,12 @@ def render_kiosk():
         """, unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         with c1: 
-            # LOGIC FIX: Delete kiosk_step to RESET TO MAIN MENU
             if st.button("❌ CANCEL", use_container_width=True): 
                 db.tickets.remove(t); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
         with c2:
-            # LOGIC FIX: Delete kiosk_step to RESET TO MAIN MENU
             if st.button("✅ DONE", type="primary", use_container_width=True): 
                 del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
         with c3:
-            # LOGIC FIX: Delete kiosk_step to RESET TO MAIN MENU
             if st.button("🖨️ PRINT", use_container_width=True): 
                 st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); 
                 del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
@@ -377,23 +371,24 @@ def render_display():
         parked = [t for t in db.tickets if t["status"] == "PARKED"]
         if parked:
             p = parked[0]
+            # Use Unique ID for Timer
+            timer_id = f"timer_{p['id']}"
             st.markdown(f"""
             <div class="recall-box">
                 <h1 style='margin:0; font-size: 50px;'>⚠ RECALL: {p['number']}</h1>
                 <h3>PLEASE PROCEED TO COUNTER</h3>
-                <div id="timer_{p['id']}" style="font-size:30px;">30:00</div>
-                <script>startTimer(1800, document.querySelector('#timer_{p['id']}'));</script>
+                <div id="{timer_id}" style="font-size:30px;">30:00</div>
+                <script>startTimer(1800, "{timer_id}");</script>
             </div>""", unsafe_allow_html=True)
 
     with col_queue:
         st.markdown("### 🕒 NEXT IN QUEUE")
         waiting = [t for t in db.tickets if t["status"] == "WAITING"]
-        # Sort by priority
         waiting.sort(key=get_prio_score)
         
         st.markdown('<div class="queue-list">', unsafe_allow_html=True)
         if waiting:
-            for t in waiting[:7]: # Show top 7
+            for t in waiting[:7]: 
                 icon = "♿" if t['type'] == 'PRIORITY' else "👤"
                 st.markdown(f"<div class='queue-item'><span>{icon} <b>{t['number']}</b></span> <span>{t['lane']} Lane</span></div>", unsafe_allow_html=True)
         else:
@@ -440,13 +435,18 @@ def render_counter(user):
                 with st.form("referral"):
                     target = st.selectbox("Transfer To", ["Teller", "Employer", "eCenter", "Counter"])
                     reason = st.text_input("Reason")
-                    if st.form_submit_button("CONFIRM"):
-                        lane_map = {"Teller": "T", "Employer": "A", "eCenter": "E", "Counter": "C"}
-                        current["lane"] = lane_map[target]
-                        current["status"] = "WAITING"
-                        current["served_by"] = None
-                        current["ref_from"] = st.session_state['my_station']
-                        st.session_state['refer_modal'] = False; st.rerun()
+                    c_col1, c_col2 = st.columns(2)
+                    with c_col1:
+                        if st.form_submit_button("✅ CONFIRM"):
+                            lane_map = {"Teller": "T", "Employer": "A", "eCenter": "E", "Counter": "C"}
+                            current["lane"] = lane_map[target]
+                            current["status"] = "WAITING"
+                            current["served_by"] = None
+                            current["ref_from"] = st.session_state['my_station']
+                            st.session_state['refer_modal'] = False; st.rerun()
+                    with c_col2:
+                        if st.form_submit_button("❌ CANCEL TRANSFER"):
+                            st.session_state['refer_modal'] = False; st.rerun()
             else:
                 st.markdown("<br>", unsafe_allow_html=True)
                 b1, b2, b3 = st.columns(3)
@@ -514,7 +514,7 @@ elif mode == "staff":
         else: render_counter(user)
 elif mode == "display": render_display()
 else:
-    # MOBILE DEFAULT (RESTORED COMPLETE FEATURES)
+    # MOBILE DEFAULT
     if db.config["logo_url"].startswith("http"): st.image(db.config["logo_url"], width=50)
     else: st.markdown(f'<img src="data:image/png;base64,{db.config["logo_url"]}" width="50">', unsafe_allow_html=True)
     st.title("G-ABAY Mobile Tracker")
