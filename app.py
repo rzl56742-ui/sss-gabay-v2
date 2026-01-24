@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v5.0 - BRANCH OPERATING SYSTEM (FINAL)
+# SSS G-ABAY v5.1 - BRANCH OPERATING SYSTEM
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -16,7 +16,7 @@ from io import BytesIO
 # ==========================================
 # 1. SYSTEM CONFIGURATION & CSS
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v5.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v5.1", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 # CSS: WORLD-CLASS VISUALS, BIG BUTTONS, & PRINT
 st.markdown("""
@@ -83,7 +83,7 @@ st.markdown("""
         .no-print { display: none !important; }
     }
 </style>
-<div class="watermark no-print">© 2026 rpt/sssgingoog | v5.0.0</div>
+<div class="watermark no-print">© 2026 rpt/sssgingoog | v5.1.0</div>
 """, unsafe_allow_html=True)
 
 # ==========================================
@@ -499,4 +499,69 @@ if access_code == "staff" or sim_mode == "Staff Login":
         if user['role'] in ["MSR", "TELLER"]: render_counter(user)
         elif user['role'] in ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD", "DIVISION_HEAD"]:
             sub_mode = st.sidebar.selectbox("Console View", ["Management Panel", "Display Mode"])
-            if sub_mode == "Management
+            if sub_mode == "Management Panel": render_admin_panel(user)
+            else: render_display()
+
+elif sim_mode == "Simulate Kiosk":
+    render_kiosk()
+
+else:
+    # PUBLIC MOBILE TRACKER & CHATBOT
+    if db["config"]["logo_url"].startswith("http"): st.image(db["config"]["logo_url"], width=50)
+    else: st.markdown(f'<img src="data:image/png;base64,{db["config"]["logo_url"]}" width="50">', unsafe_allow_html=True)
+    
+    t1, t2, t3 = st.tabs(["🎫 Tracker", "💬 Ask G-ABAY", "⭐ Rate Us"])
+    
+    with t1:
+        st.markdown("### G-ABAY Mobile Tracker")
+        tn = st.text_input("Enter Ticket # (e.g. TC-001)")
+        if tn:
+            t = next((x for x in db["tickets"] if x["number"] == tn), None)
+            if t:
+                st.info(f"Status: {t['status']}")
+                if t['status'] == "WAITING":
+                    # REAL-TIME ESTIMATION ALGO
+                    est_wait = calculate_real_wait_time(t['lane'])
+                    st.metric("Estimated Wait Time", f"~{est_wait} mins")
+                    st.caption(f"Calculated based on current speed of {db['config']['lanes'][t['lane']]['name']} lane.")
+                elif t['status'] == "PARKED": st.error("URGENT: YOU WERE CALLED!")
+            else: st.error("Ticket Not Found")
+            
+    with t2:
+        st.markdown("### 🤖 Chat with G-ABAY")
+        st.caption("I can speak English, Tagalog, and Bisaya!")
+        
+        if "messages" not in st.session_state: st.session_state.messages = []
+        for msg in st.session_state.messages:
+            with st.chat_message(msg["role"]): st.markdown(msg["content"])
+            
+        if prompt := st.chat_input("Ask me anything..."):
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"): st.markdown(prompt)
+            
+            # CHATBOT BRAIN
+            resp = "I'm sorry, please proceed to the PACD for assistance."
+            p_lower = prompt.lower()
+            if any(x in p_lower for x in ["reset", "password", "lupa", "kalimot"]):
+                resp = "To reset your My.SSS password, please get a ticket for **eCenter** (Member Services > eServices)."
+            elif any(x in p_lower for x in ["id", "umid", "nawala"]):
+                resp = "For UMID/ID replacements, please proceed to **Member Services**."
+            elif any(x in p_lower for x in ["loan", "utang", "salary"]):
+                resp = "You can apply for a Salary Loan at the **eServices Kiosk** or **Member Services Lane**."
+            
+            with st.chat_message("assistant"): st.markdown(resp)
+            st.session_state.messages.append({"role": "assistant", "content": resp})
+
+    with t3:
+        st.markdown("### We value your feedback!")
+        with st.form("review"):
+            st.markdown("##### How was your experience?")
+            rate = st.slider("Rating", 1, 5, 5)
+            pers = st.text_input("Name of Personnel (Optional)")
+            comm = st.text_area("Comments / Suggestions")
+            if st.form_submit_button("Submit Feedback"):
+                db["reviews"].append({
+                    "rating": rate, "personnel": pers, "comment": comm, 
+                    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+                })
+                st.success("Thank you for your feedback!")
