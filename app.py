@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v13.0 - BRANCH OPERATING SYSTEM (DIAMOND EDITION)
+# SSS G-ABAY v14.0 - BRANCH OPERATING SYSTEM (VERTICAL STACK EDITION)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -9,11 +9,12 @@ import pandas as pd
 import datetime
 import time
 import uuid
+import base64
 
 # ==========================================
 # 1. SYSTEM CONFIGURATION & GLOBAL STATE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v13.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v14.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 # --- SINGLETON DATABASE (The "Glue") ---
 @st.cache_resource
@@ -80,34 +81,46 @@ function startTimer(duration, display) {
     .header-main { font-size: 40px; font-weight: 900; color: #0038A8; margin: 0; padding: 0; text-transform: uppercase; font-style: italic; }
     .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
     
-    /* KIOSK BUTTONS */
+    /* MAIN MENU BUTTONS (HUGE) */
     .reg-card > button {
         background-color: #2563EB !important; color: white !important;
-        height: 400px !important; width: 100% !important;
+        height: 350px !important; width: 100% !important;
         border-radius: 30px !important; font-size: 40px !important;
         font-weight: 900 !important; border: 8px solid #1E40AF !important;
         text-transform: uppercase; box-shadow: 0 10px 20px rgba(0,0,0,0.2);
     }
     .prio-card > button {
         background-color: #FFC107 !important; color: #1E3A8A !important;
-        height: 400px !important; width: 100% !important;
+        height: 350px !important; width: 100% !important;
         border-radius: 30px !important; font-size: 40px !important;
         font-weight: 900 !important; border: 8px solid #B45309 !important;
         text-transform: uppercase; box-shadow: 0 10px 20px rgba(0,0,0,0.2);
     }
-    .grid-card > button {
-        height: 150px !important; width: 100% !important;
+    
+    /* SUB-MENU BUTTONS (UNIFORM & COMPACT) */
+    .sub-btn > button {
+        height: 100px !important; width: 100% !important;
         font-size: 20px !important; font-weight: 700 !important;
-        border-radius: 15px !important; border: 2px solid #ddd !important;
+        border-radius: 12px !important; border: 2px solid #ddd !important;
         background-color: white !important; color: #333 !important;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 5px;
+    }
+    .sub-btn > button:hover {
+        background-color: #f0f9ff !important;
+        transform: translateY(-2px);
     }
     
-    /* COLOR CODED SUB-MENUS */
-    .btn-red > button { border-top: 10px solid #DC2626 !important; }
-    .btn-orange > button { border-top: 10px solid #EA580C !important; }
-    .btn-green > button { border-top: 10px solid #16A34A !important; }
-    .btn-blue > button { border-top: 10px solid #2563EB !important; }
+    /* COLOR CODING */
+    .btn-red > button { border-left: 10px solid #DC2626 !important; }
+    .btn-orange > button { border-left: 10px solid #EA580C !important; }
+    .btn-green > button { border-left: 10px solid #16A34A !important; }
+    .btn-blue > button { border-left: 10px solid #2563EB !important; }
+
+    /* SECTION HEADERS */
+    .section-header {
+        font-size: 24px; font-weight: bold; color: #444;
+        margin-top: 20px; margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 5px;
+    }
 
     /* DISPLAY MODULE STYLES */
     .serving-card {
@@ -122,11 +135,6 @@ function startTimer(duration, display) {
     .queue-item {
         font-size: 24px; border-bottom: 1px solid #ccc; padding: 10px;
         display: flex; justify-content: space-between;
-    }
-    
-    .ref-badge {
-        background-color: #e0f2fe; color: #0369a1; padding: 5px 10px; border-radius: 5px;
-        border: 1px solid #0369a1; font-size: 14px; font-weight: bold; margin-bottom: 10px; display: inline-block;
     }
     
     /* PRINT STYLES */
@@ -190,7 +198,7 @@ def get_staff_efficiency(staff_name):
 
 # --- MODULE A: KIOSK (Fixed Headers & Buttons) ---
 def render_kiosk():
-    # RESTORED HEADERS
+    # HEADERS
     st.markdown("""
         <div class='header-text'>
             <div class='header-top'>Republic of the Philippines</div>
@@ -239,36 +247,35 @@ def render_kiosk():
         if st.button("⬅ GO BACK", type="secondary", use_container_width=True): del st.session_state['kiosk_step']; st.rerun()
 
     elif st.session_state['kiosk_step'] == 'mss':
-        # RESTORED CATEGORY HEADERS & COLOR CODING
         st.markdown("### 👤 Member Services")
         
-        # CATEGORY 1: BENEFITS (RED)
-        st.markdown("##### 🏥 Benefit Claims")
-        st.markdown('<div class="grid-card btn-red">', unsafe_allow_html=True)
-        g1, g2, g3 = st.columns(3)
-        with g1:
+        # --- SECTION 1: BENEFITS (RED) ---
+        st.markdown("<div class='section-header'>🏥 Benefit Claims</div>", unsafe_allow_html=True)
+        st.markdown('<div class="sub-btn btn-red">', unsafe_allow_html=True)
+        b1, b2, b3 = st.columns(3)
+        with b1: 
             if st.button("Maternity/Sickness"): generate_ticket("Ben-Mat/Sick", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
-        with g2:
+        with b2:
             if st.button("Retirement/Death"): st.session_state['kiosk_step'] = 'gate_rd'; st.rerun()
-        with g3:
+        with b3:
             if st.button("Disability/Unemp."): generate_ticket("Ben-Dis/Unemp", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # CATEGORY 2: LOANS (ORANGE)
-        st.markdown("##### 💰 Loans")
-        st.markdown('<div class="grid-card btn-orange">', unsafe_allow_html=True)
+        # --- SECTION 2: LOANS (ORANGE) ---
+        st.markdown("<div class='section-header'>💰 Loans</div>", unsafe_allow_html=True)
+        st.markdown('<div class="sub-btn btn-orange">', unsafe_allow_html=True)
         l1, l2, l3 = st.columns(3)
         with l1:
             if st.button("Salary/Conso"): generate_ticket("Ln-Sal/Conso", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
         with l2:
-            if st.button("Calamity/Emergency"): generate_ticket("Ln-Cal/Emerg", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
+            if st.button("Calamity/Emerg."): generate_ticket("Ln-Cal/Emerg", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
         with l3:
             if st.button("Pension Loan"): generate_ticket("Ln-Pension", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # CATEGORY 3: RECORDS (GREEN)
-        st.markdown("##### 📝 Member Data Change")
-        st.markdown('<div class="grid-card btn-green">', unsafe_allow_html=True)
+        # --- SECTION 3: RECORDS (GREEN) ---
+        st.markdown("<div class='section-header'>📝 Member Data Change</div>", unsafe_allow_html=True)
+        st.markdown('<div class="sub-btn btn-green">', unsafe_allow_html=True)
         r1, r2, r3, r4 = st.columns(4)
         with r1:
             if st.button("Contact Update"): generate_ticket("Rec-Contact", "F", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
@@ -280,9 +287,9 @@ def render_kiosk():
             if st.button("Req. Verification"): generate_ticket("Rec-Verify", "C", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # CATEGORY 4: eSERVICES (BLUE)
-        st.markdown("##### 💻 eServices")
-        st.markdown('<div class="grid-card btn-blue">', unsafe_allow_html=True)
+        # --- SECTION 4: eSERVICES (BLUE) ---
+        st.markdown("<div class='section-header'>💻 eServices</div>", unsafe_allow_html=True)
+        st.markdown('<div class="sub-btn btn-blue">', unsafe_allow_html=True)
         e1, e2, e3, e4 = st.columns(4)
         with e1:
             if st.button("My.SSS Reset"): generate_ticket("eSvc-Reset", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db.tickets[-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
@@ -486,7 +493,7 @@ elif mode == "staff":
         else: render_counter(user)
 elif mode == "display": render_display()
 else:
-    # PUBLIC MOBILE (RESTORED COMPLETE FEATURES)
+    # MOBILE DEFAULT (RESTORED COMPLETE FEATURES)
     if db.config["logo_url"].startswith("http"): st.image(db.config["logo_url"], width=50)
     else: st.markdown(f'<img src="data:image/png;base64,{db.config["logo_url"]}" width="50">', unsafe_allow_html=True)
     st.title("G-ABAY Mobile Tracker")
