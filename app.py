@@ -20,11 +20,17 @@ st.set_page_config(page_title="SSS G-ABAY v2.0", page_icon="🇵🇭", layout="w
 # CSS: GLASSMORPHISM, HIGH CONTRAST, & TV MODE HACKS
 st.markdown("""
 <style>
-    /* Global Watermark */
+    /* Global Watermark - FIXED Z-INDEX */
     .watermark {
-        position: fixed; bottom: 10px; right: 10px;
-        color: rgba(0,0,0,0.3); font-size: 12px; font-family: monospace;
-        z-index: 9999; pointer-events: none;
+        position: fixed; 
+        bottom: 15px; 
+        right: 15px;
+        color: rgba(0,0,0,0.5); 
+        font-size: 14px; 
+        font-family: monospace;
+        font-weight: bold;
+        z-index: 99999; 
+        pointer-events: none;
     }
     
     /* Hide Streamlit UI elements for Kiosk feel */
@@ -37,10 +43,8 @@ st.markdown("""
         border-radius: 10px;
         height: 3em;
         font-weight: bold;
+        font-size: 18px;
     }
-    
-    /* DISPLAY MODE: Hide Sidebar Completely */
-    [data-testid="stSidebar"] { display: none; }
     
     /* CUSTOM CLASSES FOR CARDS */
     .ticket-card {
@@ -49,7 +53,11 @@ st.markdown("""
         text-align: center;
         margin: 20px 0;
         border: 2px solid white;
+        box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
     }
+    
+    /* HIDE SIDEBAR IN DISPLAY MODE ONLY */
+    [data-testid="stSidebar"][aria-expanded="false"] { display: none; }
 </style>
 <div class="watermark">© 2026 rpt/sssgingoog | v2.0.1</div>
 """, unsafe_allow_html=True)
@@ -344,8 +352,9 @@ if params.get("access") == "staff":
 else:
     # PUBLIC ACCESS (Mobile / Kiosk)
     # Check if Mobile or Kiosk based on Sidebar Toggle (Simulated)
-    # For production, we assume default is Mobile Tracker
     st.sidebar.title("Dev Tools")
+    st.sidebar.info("Use this to test Kiosk Mode without logging in.")
+    
     if st.sidebar.checkbox("Simulate Kiosk Mode"):
         render_kiosk()
     else:
