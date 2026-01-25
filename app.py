@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v20.1 - BRANCH OPERATING SYSTEM (STABLE & POLISHED)
+# SSS G-ABAY v21.0 - BRANCH OPERATING SYSTEM (COMMAND CENTER EDITION)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -15,7 +15,7 @@ import os
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v20.1", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v21.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 
@@ -23,6 +23,7 @@ DATA_FILE = "sss_data.json"
 DEFAULT_DATA = {
     "tickets": [],
     "history": [],
+    "breaks": [], # New in v21
     "reviews": [],
     "knowledge_base": [
         {"topic": "Office Hours", "content": "We are open Monday to Friday, 8:00 AM to 5:00 PM."}
@@ -51,8 +52,7 @@ DEFAULT_DATA = {
             {"name": "Teller 1", "type": "Teller"},
             {"name": "Teller 2", "type": "Teller"},
             {"name": "Employer Desk", "type": "Employer"},
-            {"name": "eCenter", "type": "eCenter"},
-            {"name": "Second Floor", "type": "Counter"}
+            {"name": "eCenter", "type": "eCenter"}
         ]
     },
     "menu": {
@@ -80,23 +80,26 @@ DEFAULT_DATA = {
         ]
     },
     "staff": {
-        "admin": {"pass": "sss2026", "role": "ADMIN", "name": "System Admin", "default_station": "Counter 1"},
-        "head": {"pass": "head123", "role": "BRANCH_HEAD", "name": "Branch Head", "default_station": "Counter 1"},
-        "section": {"pass": "sec123", "role": "SECTION_HEAD", "name": "Section Head", "default_station": "Counter 1"},
-        "div": {"pass": "div123", "role": "DIV_HEAD", "name": "Division Head", "default_station": "Counter 1"},
-        "ao1": {"pass": "123", "role": "AO", "name": "Account Officer", "default_station": "Employer Desk"},
-        "teller1": {"pass": "123", "role": "TELLER", "name": "Teller 1", "default_station": "Teller 1"},
-        "msr1": {"pass": "123", "role": "MSR", "name": "MSR 1", "default_station": "Counter 1"}
+        "admin": {"pass": "sss2026", "role": "ADMIN", "name": "System Admin", "default_station": "Counter 1", "status": "ACTIVE"},
     }
 }
 
-# --- PERSISTENCE MANAGER ---
+# --- PERSISTENCE MANAGER & MIGRATION ---
 def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r") as f:
             try:
                 data = json.load(f)
-                if "counter_map" not in data['config']: return DEFAULT_DATA 
+                # v21 AUTO-MIGRATION: Inject 'breaks' if missing
+                if "breaks" not in data:
+                    data["breaks"] = []
+                # Ensure all staff have 'status' field
+                for uid in data['staff']:
+                    if "status" not in data['staff'][uid]:
+                        data['staff'][uid]["status"] = "ACTIVE"
+                # Ensure counter_map exists (v20 check)
+                if "counter_map" not in data['config']: 
+                    return DEFAULT_DATA 
                 return data
             except:
                 return DEFAULT_DATA
@@ -113,71 +116,51 @@ db = st.session_state.db
 
 # --- INDUSTRIAL CSS & JS ---
 st.markdown("""
-<script>
-function startTimer(duration, displayId) {
-    var timer = duration, minutes, seconds;
-    var display = document.getElementById(displayId);
-    if (!display) return;
-    var interval = setInterval(function () {
-        minutes = parseInt(timer / 60, 10);
-        seconds = parseInt(timer % 60, 10);
-        minutes = minutes < 10 ? "0" + minutes : minutes;
-        seconds = seconds < 10 ? "0" + seconds : seconds;
-        display.textContent = minutes + ":" + seconds;
-        if (--timer < 0) { clearInterval(interval); display.textContent = "EXPIRED"; }
-    }, 1000);
-}
-</script>
 <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     [data-testid="stSidebar"][aria-expanded="false"] { display: none; }
     
+    /* GLOBAL FONTS & COLORS */
     .header-text { text-align: center; font-family: sans-serif; }
-    .header-top { font-size: 14px; color: #555; text-transform: uppercase; letter-spacing: 2px; }
-    .header-main { font-size: 40px; font-weight: 900; color: #0038A8; margin: 0; padding: 0; text-transform: uppercase; font-style: italic; }
     .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
     
-    .gate-btn > button {
-        height: 350px !important; width: 100% !important;
-        font-size: 40px !important; font-weight: 900 !important;
-        border-radius: 30px !important;
-        box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+    /* DISPLAY: SERVING GRID */
+    .serving-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 20px; }
+    .serving-card-small {
+        background: white; border-left: 10px solid #2563EB; padding: 15px;
+        border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center;
+        animation: fadeIn 0.5s;
     }
-    .menu-card > button {
-        height: 300px !important; width: 100% !important;
-        font-size: 30px !important; font-weight: 800 !important;
-        border-radius: 20px !important; border: 4px solid #ddd !important;
-        background-color: white !important; color: #0038A8 !important;
-        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-        display: flex; flex-direction: column; justify-content: center; align-items: center;
+    .serving-card-small h2 { margin: 0; font-size: 40px; color: #0038A8; font-weight: 900; }
+    .serving-card-small p { margin: 0; font-size: 18px; color: #555; font-weight: bold; }
+    .serving-card-small span { font-size: 14px; color: #888; }
+    
+    /* DISPLAY: SWIMLANES */
+    .swim-col { background: #f8f9fa; border-radius: 10px; padding: 10px; border-top: 10px solid #ccc; height: 100%; }
+    .swim-col h3 { text-align: center; margin-bottom: 10px; font-size: 18px; text-transform: uppercase; }
+    .queue-item { 
+        background: white; border-bottom: 1px solid #ddd; padding: 8px; margin-bottom: 5px;
+        border-radius: 5px; font-size: 20px; font-weight: bold; display: flex; justify-content: space-between;
     }
-    .swim-btn > button {
-        height: 100px !important; width: 100% !important;
-        font-size: 18px !important; font-weight: 700 !important;
-        border-radius: 10px !important; border: 2px solid #eee !important;
-        background-color: white !important; color: #333 !important;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 10px !important;
-        text-align: left !important; padding-left: 20px !important;
-        white-space: normal !important; line-height: 1.2 !important;
+    
+    /* DISPLAY: PARKED LIST */
+    .park-row {
+        background: #fff3cd; color: #856404; padding: 10px; margin-bottom: 5px; border-radius: 5px;
+        font-weight: bold; display: flex; justify-content: space-between; border-left: 5px solid #ffc107;
     }
-    .swim-btn > button:hover { background-color: #f0f9ff !important; transform: scale(1.02); }
-    .section-header {
-        font-size: 20px; font-weight: 900; text-align: center;
-        padding: 10px; border-radius: 10px 10px 0 0; color: white;
-        margin-bottom: 10px; text-transform: uppercase;
-    }
+    
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    
+    /* KIOSK STYLES */
+    .gate-btn > button { height: 350px !important; width: 100% !important; font-size: 40px !important; font-weight: 900 !important; border-radius: 30px !important; }
+    .menu-card > button { height: 300px !important; width: 100% !important; font-size: 30px !important; font-weight: 800 !important; border-radius: 20px !important; border: 4px solid #ddd !important; }
+    .swim-btn > button { height: 100px !important; width: 100% !important; font-size: 18px !important; font-weight: 700 !important; text-align: left !important; padding-left: 20px !important; }
+    
     .head-red { background-color: #DC2626; } .border-red > button { border-left: 20px solid #DC2626 !important; }
     .head-orange { background-color: #EA580C; } .border-orange > button { border-left: 20px solid #EA580C !important; }
     .head-green { background-color: #16A34A; } .border-green > button { border-left: 20px solid #16A34A !important; }
     .head-blue { background-color: #2563EB; } .border-blue > button { border-left: 20px solid #2563EB !important; }
-    .serving-card {
-        background-color: white; border-left: 20px solid #2563EB;
-        padding: 40px; margin-bottom: 20px; border-radius: 15px;
-        box-shadow: 0 10px 20px rgba(0,0,0,0.1); text-align: center;
-    }
-    .queue-list { background-color: #f8f9fa; padding: 20px; border-radius: 15px; border: 2px solid #ddd; height: 100%; }
-    .queue-item { font-size: 24px; border-bottom: 1px solid #ccc; padding: 10px; display: flex; justify-content: space-between; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -235,8 +218,8 @@ def get_allowed_counters(role):
 def render_kiosk():
     st.markdown("""
         <div class='header-text'>
-            <div class='header-top'>Republic of the Philippines</div>
-            <div class='header-main'>SOCIAL SECURITY SYSTEM</div>
+            <div style='font-size: 14px; color: #555; text-transform: uppercase; letter-spacing: 2px;'>Republic of the Philippines</div>
+            <div style='font-size: 40px; font-weight: 900; color: #0038A8; text-transform: uppercase; font-style: italic;'>SOCIAL SECURITY SYSTEM</div>
         </div>
     """, unsafe_allow_html=True)
     st.markdown(f"<div class='header-text header-branch'>{db['config']['branch_name']}</div>", unsafe_allow_html=True)
@@ -255,7 +238,6 @@ def render_kiosk():
                 st.session_state['is_prio'] = True; st.session_state['kiosk_step'] = 'menu'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
             st.warning("⚠ NOTICE: Non-priority users will be transferred to end of line.")
-
     elif st.session_state['kiosk_step'] == 'menu':
         st.markdown("### Select Service Category")
         m1, m2, m3 = st.columns(3, gap="medium")
@@ -278,14 +260,12 @@ def render_kiosk():
             st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<br><br>", unsafe_allow_html=True)
         if st.button("⬅ GO BACK", type="secondary", use_container_width=True): del st.session_state['kiosk_step']; st.rerun()
-
     elif st.session_state['kiosk_step'] == 'mss':
         st.markdown("### 👤 Member Services")
         cols = st.columns(4, gap="small")
         categories = ["Benefits", "Loans", "Member Records Update", "eServices"]
         colors = ["red", "orange", "green", "blue"]
         icons = ["🏥", "💰", "📝", "💻"]
-        
         for i, cat_name in enumerate(categories):
             with cols[i]:
                 st.markdown(f"<div class='swim-header head-{colors[i]}'>{icons[i]} {cat_name}</div>", unsafe_allow_html=True)
@@ -300,7 +280,6 @@ def render_kiosk():
                 st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("⬅ GO BACK", type="secondary", use_container_width=True): st.session_state['kiosk_step'] = 'menu'; st.rerun()
-
     elif st.session_state['kiosk_step'] == 'gate_rd':
         st.warning("Pre-Qualification: Do you have pending cases/portability issues?")
         c1, c2 = st.columns(2)
@@ -309,7 +288,6 @@ def render_kiosk():
         with c2:
             if st.button("NO (Regular)", type="primary", use_container_width=True): generate_ticket("Ben-Ret(S)", "E", st.session_state['is_prio']); st.session_state['last_ticket'] = db['tickets'][-1]; st.session_state['kiosk_step'] = 'ticket'; st.rerun()
         st.button("⬅ CANCEL", on_click=lambda: st.session_state.update({'kiosk_step': 'mss'}))
-
     elif st.session_state['kiosk_step'] == 'ticket':
         t = st.session_state['last_ticket']
         bg = "#FFC107" if t['type'] == 'PRIORITY' else "#2563EB"
@@ -329,55 +307,126 @@ def render_kiosk():
 
 def render_display():
     st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
-    col_serve, col_queue = st.columns([3, 2])
-    with col_serve:
-        serving = [t for t in db['tickets'] if t["status"] == "SERVING"]
-        if serving:
-            for t in serving:
-                b_col = "#2563EB" if t['lane'] == "E" else ("#DC2626" if t['lane'] == "T" else "#4B5563")
-                ref = f" (Ref: {t['ref_from']})" if t.get('ref_from') else ""
-                st.markdown(f"""
-                <div class="serving-card">
-                    <div style='font-size: 80px; font-weight: 900; color:{b_col};'>{t['number']}</div>
-                    <div style='font-size: 40px; font-weight:bold;'>{t.get('served_by','Counter')}</div>
-                    <div style='font-size: 20px; color:gray;'>{t['service']}{ref}</div>
-                </div>""", unsafe_allow_html=True)
-        else: st.info("Waiting for next number...")
-        parked = [t for t in db['tickets'] if t["status"] == "PARKED"]
-        if parked:
-            p = parked[0]
-            timer_id = f"timer_{p['id']}"
+    
+    # 1. SERVING GRID (ACTIVE USERS ONLY)
+    serving_tickets = [t for t in db['tickets'] if t["status"] == "SERVING"]
+    if serving_tickets:
+        st.markdown('<div class="serving-grid">', unsafe_allow_html=True)
+        for t in serving_tickets:
+            # Check if staff is ON BREAK (if so, hide from display)
+            staff_obj = next((v for k,v in db['staff'].items() if v['name'] == t.get('served_by')), None)
+            if staff_obj and staff_obj.get('status') == "ON_BREAK": continue
+            
+            b_color = "#DC2626" if t['lane'] == "T" else ("#16A34A" if t['lane'] == "A" else "#2563EB")
             st.markdown(f"""
-            <div class="recall-box">
-                <h1 style='margin:0; font-size: 50px;'>⚠ RECALL: {p['number']}</h1>
-                <h3>PLEASE PROCEED TO COUNTER</h3>
-                <div id="{timer_id}" style="font-size:30px;">30:00</div>
-                <script>startTimer(1800, "{timer_id}");</script>
+            <div class="serving-card-small" style="border-left: 10px solid {b_color};">
+                <h2 style="color:{b_color}">{t['number']}</h2>
+                <p>{t.get('served_by','Counter')}</p>
+                <span>{t['service']}</span>
             </div>""", unsafe_allow_html=True)
-    with col_queue:
-        st.markdown("### 🕒 NEXT IN QUEUE")
+        st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        st.info("Waiting for next number...")
+        
+    c_queue, c_park = st.columns([3, 1])
+    
+    # 2. SWIMLANE QUEUES
+    with c_queue:
+        q1, q2, q3 = st.columns(3)
         waiting = [t for t in db['tickets'] if t["status"] == "WAITING"]
         waiting.sort(key=get_prio_score)
-        st.markdown('<div class="queue-list">', unsafe_allow_html=True)
-        if waiting:
-            for t in waiting[:7]: 
-                icon = "♿" if t['type'] == 'PRIORITY' else "👤"
-                st.markdown(f"<div class='queue-item'><span>{icon} <b>{t['number']}</b></span> <span>{t['lane']} Lane</span></div>", unsafe_allow_html=True)
-        else: st.write("Queue is empty.")
-        st.markdown('</div>', unsafe_allow_html=True)
+        
+        with q1:
+            st.markdown(f"<div class='swim-col' style='border-top-color:#DC2626;'><h3>💳 PAYMENTS</h3>", unsafe_allow_html=True)
+            for t in [x for x in waiting if x['lane'] == 'T'][:5]:
+                st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+        with q2:
+            st.markdown(f"<div class='swim-col' style='border-top-color:#16A34A;'><h3>💼 EMPLOYERS</h3>", unsafe_allow_html=True)
+            for t in [x for x in waiting if x['lane'] == 'A'][:5]:
+                st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+        with q3:
+            st.markdown(f"<div class='swim-col' style='border-top-color:#2563EB;'><h3>👤 SERVICES</h3>", unsafe_allow_html=True)
+            for t in [x for x in waiting if x['lane'] in ['C','E','F']][:5]:
+                st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    # 3. REAL-TIME PARKED LIST
+    with c_park:
+        st.markdown("### 🅿️ PARKED")
+        parked = [t for t in db['tickets'] if t["status"] == "PARKED"]
+        for p in parked:
+            # Calculate elapsed time in minutes:seconds
+            park_time = datetime.datetime.fromisoformat(p['park_timestamp'])
+            elapsed = datetime.datetime.now() - park_time
+            mins, secs = divmod(elapsed.total_seconds(), 60)
+            
+            st.markdown(f"""
+            <div class="park-row">
+                <span>{p['number']}</span>
+                <span>{int(mins)}m {int(secs)}s</span>
+            </div>""", unsafe_allow_html=True)
+
     txt = " | ".join(db['announcements'])
     st.markdown(f"<div style='background: #FFD700; color: black; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%; font-size:20px;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
     time.sleep(3); st.rerun()
 
 def render_counter(user):
+    # GET USER KEY FOR DB UPDATES
+    user_key = next((k for k,v in db['staff'].items() if v['name'] == user['name']), None)
+    
+    # --- ON BREAK LOCKOUT SCREEN ---
+    if user.get('status') == "ON_BREAK":
+        st.warning(f"⛔ YOU ARE CURRENTLY ON BREAK ({user.get('break_reason', 'Break')})")
+        st.info(f"Break started at: {user.get('break_start_time', '')}")
+        
+        # Calculate Duration
+        start_dt = datetime.datetime.fromisoformat(user.get('break_start_time'))
+        elapsed = datetime.datetime.now() - start_dt
+        st.metric("Time Elapsed", str(elapsed).split('.')[0])
+        
+        if st.button("▶ RESUME WORK", type="primary"):
+            # Log End of Break
+            db['breaks'].append({
+                "name": user['name'],
+                "reason": user.get('break_reason'),
+                "start": user.get('break_start_time'),
+                "end": datetime.datetime.now().isoformat(),
+                "duration_sec": elapsed.total_seconds()
+            })
+            # Reset Status
+            db['staff'][user_key]['status'] = "ACTIVE"
+            del db['staff'][user_key]['break_reason']
+            del db['staff'][user_key]['break_start_time']
+            save_data()
+            # Update session state
+            st.session_state['user'] = db['staff'][user_key]
+            st.rerun()
+        return # STOP RENDERING THE REST
+
+    # --- NORMAL COUNTER INTERFACE ---
     if 'my_station' not in st.session_state: st.session_state['my_station'] = user.get('default_station', 'Counter 1')
     st.sidebar.title(f"👮 {user['name']}")
+    
+    # BREAK CONTROLS
+    with st.sidebar.expander("☕ Go On Break"):
+        b_reason = st.selectbox("Reason", ["Lunch Break", "Coffee Break (15m)", "Bio-Break", "Emergency"])
+        if st.button("⏸ START BREAK"):
+            db['staff'][user_key]['status'] = "ON_BREAK"
+            db['staff'][user_key]['break_reason'] = b_reason
+            db['staff'][user_key]['break_start_time'] = datetime.datetime.now().isoformat()
+            save_data()
+            st.session_state['user'] = db['staff'][user_key]
+            st.rerun()
+
     with st.sidebar.expander("🔒 Change Password"):
         with st.form("pwd_chg"):
             n_pass = st.text_input("New Password", type="password")
             if st.form_submit_button("Update"):
-                ukey = next((k for k,v in db['staff'].items() if v['name'] == user['name']), None)
-                if ukey: db['staff'][ukey]['pass'] = n_pass; save_data(); st.success("Updated!")
+                if user_key: db['staff'][user_key]['pass'] = n_pass; save_data(); st.success("Updated!")
     if st.sidebar.button("⬅ LOGOUT"): del st.session_state['user']; del st.session_state['my_station']; st.rerun()
     
     if user['role'] in ["SECTION_HEAD", "BRANCH_HEAD"]:
@@ -460,11 +509,9 @@ def render_admin_panel(user):
     
     if active == "Users":
         st.subheader("Manage Users")
-        # CLEAN LAYOUT: Headers
         h1, h2, h3, h4, h5 = st.columns([1.5, 3, 2, 1, 0.5])
         h1.markdown("**User ID**"); h2.markdown("**Name (Role)**"); h3.markdown("**Station**"); h4.markdown("**Actions**")
         st.divider()
-        
         for uid, udata in list(db['staff'].items()):
             c1, c2, c3, c4, c5 = st.columns([1.5, 3, 2, 0.5, 0.5])
             c1.text(uid)
@@ -474,51 +521,32 @@ def render_admin_panel(user):
             if c5.button("🗑", key=f"del_{uid}"): 
                 if uid == user['name']: st.error("Cannot delete yourself!")
                 else: del db['staff'][uid]; save_data(); st.rerun()
-            
         st.divider()
         uid_to_edit = st.session_state.get('edit_uid', None)
-        
-        # ERROR FIX: Check if uid still exists before loading edit form
         if uid_to_edit and uid_to_edit not in db['staff']: del st.session_state['edit_uid']; st.rerun()
-            
         with st.form("user_form"):
             st.write(f"**{'Edit User: ' + uid_to_edit if uid_to_edit else 'Add New User'}**")
-            st.info("ℹ️ NOTE: Default password for new users is '123'. They can change it after login.")
-            
+            st.info("ℹ️ NOTE: Default password for new users is '123'.")
             def_id = uid_to_edit if uid_to_edit else ""
             def_name = db['staff'][uid_to_edit]['name'] if uid_to_edit else ""
             def_role = db['staff'][uid_to_edit]['role'] if uid_to_edit else "MSR"
-            
             u_id = st.text_input("User ID (Login)", value=def_id)
             u_name = st.text_input("Display Name", value=def_name)
             u_role = st.selectbox("Role", ["MSR", "TELLER", "AO", "SECTION_HEAD", "DIV_HEAD", "BRANCH_HEAD", "ADMIN"], index=["MSR", "TELLER", "AO", "SECTION_HEAD", "DIV_HEAD", "BRANCH_HEAD", "ADMIN"].index(def_role))
-            
             avail_stations = get_allowed_counters(u_role)
             if not avail_stations: avail_stations = ["None"]
             u_station = st.selectbox("Default Station", avail_stations)
-            
-            # PASSWORD RESET BUTTON (Only for editing)
             reset_requested = False
             if uid_to_edit:
                 st.markdown("---")
                 if st.checkbox("RESET PASSWORD TO '123'"): reset_requested = True
-            
             if st.form_submit_button("Save User"):
-                # MIGRATION LOGIC: If ID changed, delete old key
                 old_pass = "123"
                 if uid_to_edit:
                     old_pass = db['staff'][uid_to_edit]['pass']
                     if u_id != uid_to_edit: del db['staff'][uid_to_edit]
-                
-                # If reset requested, override pass
                 if reset_requested: old_pass = "123"
-                
-                db['staff'][u_id] = {
-                    "pass": old_pass,
-                    "role": u_role, 
-                    "name": u_name, 
-                    "default_station": u_station
-                }
+                db['staff'][u_id] = {"pass": old_pass, "role": u_role, "name": u_name, "default_station": u_station, "status": "ACTIVE"}
                 save_data()
                 if 'edit_uid' in st.session_state: del st.session_state['edit_uid']
                 st.success("Saved!"); st.rerun()
@@ -559,7 +587,14 @@ def render_admin_panel(user):
         up = st.file_uploader("📤 RESTORE DATABASE", type="json")
         if up: st.session_state.db = json.load(up); save_data(); st.success("Restored!"); time.sleep(1); st.rerun()
     elif active == "Analytics":
-        st.write("📊 History"); st.write(pd.DataFrame(db['history']))
+        st.subheader("📊 Ticket History")
+        st.dataframe(pd.DataFrame(db['history']))
+        st.divider()
+        st.subheader("☕ Staff Break Logs")
+        if "breaks" in db:
+            st.dataframe(pd.DataFrame(db['breaks']))
+        else:
+            st.info("No break data yet.")
 
 # ==========================================
 # 5. ROUTER
