@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v20.0 - BRANCH OPERATING SYSTEM (ARCHITECTURAL FREEDOM)
+# SSS G-ABAY v20.0 - BRANCH OPERATING SYSTEM (REVISED ARCHITECTURE)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -46,7 +46,7 @@ DEFAULT_DATA = {
             "eCenter": ["E"],          # MSR/eCenter
             "Help": ["F", "E"]         # MSR
         },
-        # NEW v20: Dynamic Counter Objects (Name + Type)
+        # DYNAMIC COUNTER MAP (Architectural Layout)
         "counter_map": [
             {"name": "Counter 1", "type": "Counter"},
             {"name": "Counter 2", "type": "Counter"},
@@ -97,9 +97,9 @@ def load_data():
         with open(DATA_FILE, "r") as f:
             try:
                 data = json.load(f)
-                # v20 Migration Check: If old counters list exists, migrate to map
+                # v20 Migration Safety: Check if config has counter_map
                 if "counter_map" not in data['config']:
-                    return DEFAULT_DATA # Safety Reset if old version detected
+                    return DEFAULT_DATA # Hard reset if old version
                 return data
             except:
                 return DEFAULT_DATA
@@ -232,16 +232,14 @@ def get_staff_efficiency(staff_name):
     return len(my_txns), "5m"
 
 def get_allowed_counters(role):
-    # RETURNS LIST OF COUNTER NAMES ALLOWED FOR THIS ROLE
+    # STRICT CATEGORY LOCKING
     all_counters = db['config']['counter_map']
-    allowed = []
     
-    # MAPPING LOGIC
     target_types = []
     if role == "TELLER": target_types = ["Teller"]
     elif role == "AO": target_types = ["Employer"]
-    elif role == "MSR": target_types = ["Counter", "eCenter", "Help"] # MSR covers all these
-    elif role in ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD"]: return [c['name'] for c in all_counters] # Heads can sit anywhere
+    elif role == "MSR": target_types = ["Counter", "eCenter", "Help"]
+    elif role in ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD"]: return [c['name'] for c in all_counters] 
     
     return [c['name'] for c in all_counters if c['type'] in target_types]
 
@@ -395,23 +393,24 @@ def render_display():
     time.sleep(3); st.rerun()
 
 def render_counter(user):
-    # SMART DEFAULTING: Use User's Assigned Default Station on First Load
+    # SMART DEFAULTING
     if 'my_station' not in st.session_state: 
         st.session_state['my_station'] = user.get('default_station', 'Counter 1')
         
     st.sidebar.title(f"👮 {user['name']}")
     
-    # CHANGE PASSWORD WIDGET
     with st.sidebar.expander("🔒 Change Password"):
         with st.form("pwd_chg"):
             n_pass = st.text_input("New Password", type="password")
             if st.form_submit_button("Update"):
-                db['staff'][next(k for k,v in db['staff'].items() if v['name'] == user['name'])]['pass'] = n_pass
-                save_data(); st.success("Updated!")
+                # Find user key by name (safe lookup)
+                ukey = next((k for k,v in db['staff'].items() if v['name'] == user['name']), None)
+                if ukey:
+                    db['staff'][ukey]['pass'] = n_pass
+                    save_data(); st.success("Updated!")
                 
     if st.sidebar.button("⬅ LOGOUT"): del st.session_state['user']; del st.session_state['my_station']; st.rerun()
     
-    # APPOINTMENT (SH/BH Only)
     if user['role'] in ["SECTION_HEAD", "BRANCH_HEAD"]:
         with st.sidebar.expander("📅 Add Appointment"):
             with st.form("add_appt"):
@@ -425,7 +424,6 @@ def render_counter(user):
     
     # STRICT STATION SWITCHING
     allowed_counters = get_allowed_counters(user['role'])
-    # If current station not in allowed (e.g. config changed), reset to first allowed
     if st.session_state['my_station'] not in allowed_counters and allowed_counters:
         st.session_state['my_station'] = allowed_counters[0]
         
@@ -493,7 +491,6 @@ def render_admin_panel(user):
     st.title("🛠 Admin & Brain Console")
     if st.sidebar.button("⬅ LOGOUT"): del st.session_state['user']; st.rerun()
     
-    # STRICT PERMISSIONS
     tabs = []
     if user['role'] in ["ADMIN", "BRANCH_HEAD"]: tabs.extend(["Users", "Counters", "Menu", "Brain (KB)", "Announcements", "Backup"])
     if user['role'] in ["BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]: tabs.append("Analytics")
@@ -503,41 +500,55 @@ def render_admin_panel(user):
     st.divider()
     
     if active == "Users":
-        # FULL CRUD USER TABLE
         st.subheader("Manage Users")
-        
-        # TABLE VIEW
         for uid, udata in list(db['staff'].items()):
             c1, c2, c3, c4 = st.columns([1, 2, 2, 1])
             c1.write(uid)
             c2.write(f"**{udata['name']}** ({udata['role']})")
             c3.write(f"Station: {udata.get('default_station', 'None')}")
             if c4.button("Edit", key=f"ed_{uid}"): st.session_state['edit_uid'] = uid; st.rerun()
-            if c4.button("🗑", key=f"del_{uid}"): del db['staff'][uid]; save_data(); st.rerun()
+            if c4.button("🗑", key=f"del_{uid}"): 
+                if uid == user['name']: st.error("Cannot delete yourself!")
+                else: del db['staff'][uid]; save_data(); st.rerun()
             
         st.divider()
-        # ADD / EDIT FORM
+        # REVISED EDIT FORM
         uid_to_edit = st.session_state.get('edit_uid', None)
+        
+        # Safe Lookup to prevent KeyError if user was deleted
+        if uid_to_edit and uid_to_edit not in db['staff']:
+            del st.session_state['edit_uid']
+            st.rerun()
+            
         with st.form("user_form"):
             st.write(f"**{'Edit User: ' + uid_to_edit if uid_to_edit else 'Add New User'}**")
-            # Pre-fill if editing
+            
+            # Default values
             def_id = uid_to_edit if uid_to_edit else ""
             def_name = db['staff'][uid_to_edit]['name'] if uid_to_edit else ""
             def_role = db['staff'][uid_to_edit]['role'] if uid_to_edit else "MSR"
             
-            u_id = st.text_input("User ID (Login)", value=def_id, disabled=bool(uid_to_edit))
+            # UNLOCKED ID Field
+            u_id = st.text_input("User ID (Login)", value=def_id)
             u_name = st.text_input("Display Name", value=def_name)
             u_role = st.selectbox("Role", ["MSR", "TELLER", "AO", "SECTION_HEAD", "DIV_HEAD", "BRANCH_HEAD", "ADMIN"], index=["MSR", "TELLER", "AO", "SECTION_HEAD", "DIV_HEAD", "BRANCH_HEAD", "ADMIN"].index(def_role))
             
-            # DYNAMIC DEFAULT STATION PICKER
             avail_stations = get_allowed_counters(u_role)
             if not avail_stations: avail_stations = ["None"]
             u_station = st.selectbox("Default Station", avail_stations)
             
             if st.form_submit_button("Save User"):
-                db['staff'][u_id] = {"pass": "123", "role": u_role, "name": u_name, "default_station": u_station}
-                # Preserve password if editing
-                if uid_to_edit: db['staff'][u_id]['pass'] = db['staff'][uid_to_edit]['pass']
+                # MIGRATION LOGIC: If ID changed, delete old
+                if uid_to_edit and u_id != uid_to_edit:
+                    del db['staff'][uid_to_edit]
+                
+                # Create/Update
+                db['staff'][u_id] = {
+                    "pass": db['staff'][uid_to_edit]['pass'] if uid_to_edit else "123", # Preserve pass
+                    "role": u_role, 
+                    "name": u_name, 
+                    "default_station": u_station
+                }
                 save_data()
                 if 'edit_uid' in st.session_state: del st.session_state['edit_uid']
                 st.success("Saved!"); st.rerun()
