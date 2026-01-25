@@ -1,5 +1,8 @@
+if os.path.exists("sss_data.json"):
+    os.remove("sss_data.json")
+    print("⚠️ OLD DATA DELETED! REMOVE THIS LINE NOW.")
 # ==============================================================================
-# SSS G-ABAY v20.0 - BRANCH OPERATING SYSTEM (REVISED ARCHITECTURE)
+# SSS G-ABAY v20.0 - BRANCH OPERATING SYSTEM (ARCHITECTURAL FREEDOM - CORRECTED)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -38,15 +41,13 @@ DEFAULT_DATA = {
             "E": {"name": "eCenter", "desc": "Online Services"},
             "F": {"name": "Fast Lane", "desc": "Simple Trans"}
         },
-        # Defines which lanes a counter type pulls from
         "assignments": {
-            "Counter": ["C", "E", "F"], # MSR
-            "Teller": ["T"],           # Teller
-            "Employer": ["A"],         # AO
-            "eCenter": ["E"],          # MSR/eCenter
-            "Help": ["F", "E"]         # MSR
+            "Counter": ["C", "E", "F"],
+            "Teller": ["T"],
+            "Employer": ["A"],
+            "eCenter": ["E"],
+            "Help": ["F", "E"]
         },
-        # DYNAMIC COUNTER MAP (Architectural Layout)
         "counter_map": [
             {"name": "Counter 1", "type": "Counter"},
             {"name": "Counter 2", "type": "Counter"},
@@ -97,9 +98,7 @@ def load_data():
         with open(DATA_FILE, "r") as f:
             try:
                 data = json.load(f)
-                # v20 Migration Safety: Check if config has counter_map
-                if "counter_map" not in data['config']:
-                    return DEFAULT_DATA # Hard reset if old version
+                if "counter_map" not in data['config']: return DEFAULT_DATA 
                 return data
             except:
                 return DEFAULT_DATA
@@ -121,17 +120,13 @@ function startTimer(duration, displayId) {
     var timer = duration, minutes, seconds;
     var display = document.getElementById(displayId);
     if (!display) return;
-    
     var interval = setInterval(function () {
         minutes = parseInt(timer / 60, 10);
         seconds = parseInt(timer % 60, 10);
         minutes = minutes < 10 ? "0" + minutes : minutes;
         seconds = seconds < 10 ? "0" + seconds : seconds;
         display.textContent = minutes + ":" + seconds;
-        if (--timer < 0) { 
-            clearInterval(interval); 
-            display.textContent = "EXPIRED";
-        }
+        if (--timer < 0) { clearInterval(interval); display.textContent = "EXPIRED"; }
     }, 1000);
 }
 </script>
@@ -151,7 +146,6 @@ function startTimer(duration, displayId) {
         border-radius: 30px !important;
         box-shadow: 0 10px 20px rgba(0,0,0,0.2);
     }
-    
     .menu-card > button {
         height: 300px !important; width: 100% !important;
         font-size: 30px !important; font-weight: 800 !important;
@@ -160,7 +154,6 @@ function startTimer(duration, displayId) {
         box-shadow: 0 10px 20px rgba(0,0,0,0.1);
         display: flex; flex-direction: column; justify-content: center; align-items: center;
     }
-    
     .swim-btn > button {
         height: 100px !important; width: 100% !important;
         font-size: 18px !important; font-weight: 700 !important;
@@ -171,18 +164,15 @@ function startTimer(duration, displayId) {
         white-space: normal !important; line-height: 1.2 !important;
     }
     .swim-btn > button:hover { background-color: #f0f9ff !important; transform: scale(1.02); }
-
     .section-header {
         font-size: 20px; font-weight: 900; text-align: center;
         padding: 10px; border-radius: 10px 10px 0 0; color: white;
         margin-bottom: 10px; text-transform: uppercase;
     }
-    
     .head-red { background-color: #DC2626; } .border-red > button { border-left: 20px solid #DC2626 !important; }
     .head-orange { background-color: #EA580C; } .border-orange > button { border-left: 20px solid #EA580C !important; }
     .head-green { background-color: #16A34A; } .border-green > button { border-left: 20px solid #16A34A !important; }
     .head-blue { background-color: #2563EB; } .border-blue > button { border-left: 20px solid #2563EB !important; }
-
     .serving-card {
         background-color: white; border-left: 20px solid #2563EB;
         padding: 40px; margin-bottom: 20px; border-radius: 15px;
@@ -232,15 +222,12 @@ def get_staff_efficiency(staff_name):
     return len(my_txns), "5m"
 
 def get_allowed_counters(role):
-    # STRICT CATEGORY LOCKING
     all_counters = db['config']['counter_map']
-    
     target_types = []
     if role == "TELLER": target_types = ["Teller"]
     elif role == "AO": target_types = ["Employer"]
     elif role == "MSR": target_types = ["Counter", "eCenter", "Help"]
     elif role in ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD"]: return [c['name'] for c in all_counters] 
-    
     return [c['name'] for c in all_counters if c['type'] in target_types]
 
 # ==========================================
@@ -254,7 +241,6 @@ def render_kiosk():
             <div class='header-main'>SOCIAL SECURITY SYSTEM</div>
         </div>
     """, unsafe_allow_html=True)
-    
     st.markdown(f"<div class='header-text header-branch'>{db['config']['branch_name']}</div>", unsafe_allow_html=True)
     st.markdown("<div style='text-align:center; color:#555;'>Gabay sa bawat miyembro. Mangyaring pumili ng uri ng serbisyo.</div><br>", unsafe_allow_html=True)
 
@@ -308,8 +294,7 @@ def render_kiosk():
                 st.markdown(f'<div class="swim-btn border-{colors[i]}">', unsafe_allow_html=True)
                 for label, svc_code, lane in db['menu'].get(cat_name, []):
                     if st.button(label, key=label):
-                        if "Retirement" in label:
-                            st.session_state['kiosk_step'] = 'gate_rd'; st.rerun()
+                        if "Retirement" in label: st.session_state['kiosk_step'] = 'gate_rd'; st.rerun()
                         else:
                             generate_ticket(svc_code, lane, st.session_state['is_prio'])
                             st.session_state['last_ticket'] = db['tickets'][-1]
@@ -338,15 +323,11 @@ def render_kiosk():
         """, unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         with c1: 
-            if st.button("❌ CANCEL", use_container_width=True): 
-                db['tickets'].remove(t); save_data(); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
+            if st.button("❌ CANCEL", use_container_width=True): db['tickets'].remove(t); save_data(); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
         with c2:
-            if st.button("✅ DONE", type="primary", use_container_width=True): 
-                del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
+            if st.button("✅ DONE", type="primary", use_container_width=True): del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
         with c3:
-            if st.button("🖨️ PRINT", use_container_width=True): 
-                st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); 
-                del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
+            if st.button("🖨️ PRINT", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
 
 def render_display():
     st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
@@ -363,8 +344,7 @@ def render_display():
                     <div style='font-size: 40px; font-weight:bold;'>{t.get('served_by','Counter')}</div>
                     <div style='font-size: 20px; color:gray;'>{t['service']}{ref}</div>
                 </div>""", unsafe_allow_html=True)
-        else:
-            st.info("Waiting for next number...")
+        else: st.info("Waiting for next number...")
         parked = [t for t in db['tickets'] if t["status"] == "PARKED"]
         if parked:
             p = parked[0]
@@ -385,30 +365,21 @@ def render_display():
             for t in waiting[:7]: 
                 icon = "♿" if t['type'] == 'PRIORITY' else "👤"
                 st.markdown(f"<div class='queue-item'><span>{icon} <b>{t['number']}</b></span> <span>{t['lane']} Lane</span></div>", unsafe_allow_html=True)
-        else:
-            st.write("Queue is empty.")
+        else: st.write("Queue is empty.")
         st.markdown('</div>', unsafe_allow_html=True)
     txt = " | ".join(db['announcements'])
     st.markdown(f"<div style='background: #FFD700; color: black; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%; font-size:20px;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
     time.sleep(3); st.rerun()
 
 def render_counter(user):
-    # SMART DEFAULTING
-    if 'my_station' not in st.session_state: 
-        st.session_state['my_station'] = user.get('default_station', 'Counter 1')
-        
+    if 'my_station' not in st.session_state: st.session_state['my_station'] = user.get('default_station', 'Counter 1')
     st.sidebar.title(f"👮 {user['name']}")
-    
     with st.sidebar.expander("🔒 Change Password"):
         with st.form("pwd_chg"):
             n_pass = st.text_input("New Password", type="password")
             if st.form_submit_button("Update"):
-                # Find user key by name (safe lookup)
                 ukey = next((k for k,v in db['staff'].items() if v['name'] == user['name']), None)
-                if ukey:
-                    db['staff'][ukey]['pass'] = n_pass
-                    save_data(); st.success("Updated!")
-                
+                if ukey: db['staff'][ukey]['pass'] = n_pass; save_data(); st.success("Updated!")
     if st.sidebar.button("⬅ LOGOUT"): del st.session_state['user']; del st.session_state['my_station']; st.rerun()
     
     if user['role'] in ["SECTION_HEAD", "BRANCH_HEAD"]:
@@ -416,21 +387,14 @@ def render_counter(user):
             with st.form("add_appt"):
                 nm = st.text_input("Name"); svc = st.selectbox("Service", ["Pension", "Death", "Loan"])
                 tm = st.time_input("Time")
-                if st.form_submit_button("Book Slot"):
-                    generate_ticket(svc, "C", True, is_appt=True, appt_name=nm, appt_time=tm)
-                    st.success("Booked!")
+                if st.form_submit_button("Book Slot"): generate_ticket(svc, "C", True, is_appt=True, appt_name=nm, appt_time=tm); st.success("Booked!")
                     
     st.markdown(f"### Station: {st.session_state['my_station']}")
-    
-    # STRICT STATION SWITCHING
     allowed_counters = get_allowed_counters(user['role'])
-    if st.session_state['my_station'] not in allowed_counters and allowed_counters:
-        st.session_state['my_station'] = allowed_counters[0]
-        
+    if st.session_state['my_station'] not in allowed_counters and allowed_counters: st.session_state['my_station'] = allowed_counters[0]
     st.session_state['my_station'] = st.selectbox("Switch Station", allowed_counters, index=allowed_counters.index(st.session_state['my_station']) if st.session_state['my_station'] in allowed_counters else 0)
     st.markdown("<hr>", unsafe_allow_html=True)
     
-    # LANE ASSIGNMENT LOOKUP
     current_counter_obj = next((c for c in db['config']['counter_map'] if c['name'] == st.session_state['my_station']), None)
     station_type = current_counter_obj['type'] if current_counter_obj else "Counter"
     my_lanes = db['config']["assignments"].get(station_type, ["C"])
@@ -450,7 +414,6 @@ def render_counter(user):
             if st.session_state['refer_modal']:
                 with st.form("referral"):
                     target = st.selectbox("Transfer To", ["Teller", "Employer", "eCenter", "Counter"])
-                    reason = st.text_input("Reason")
                     c_col1, c_col2 = st.columns(2)
                     with c_col1:
                         if st.form_submit_button("✅ CONFIRM TRANSFER"):
@@ -490,45 +453,39 @@ def render_counter(user):
 def render_admin_panel(user):
     st.title("🛠 Admin & Brain Console")
     if st.sidebar.button("⬅ LOGOUT"): del st.session_state['user']; st.rerun()
-    
     tabs = []
     if user['role'] in ["ADMIN", "BRANCH_HEAD"]: tabs.extend(["Users", "Counters", "Menu", "Brain (KB)", "Announcements", "Backup"])
     if user['role'] in ["BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]: tabs.append("Analytics")
-    
     if not tabs: st.error("Access Denied"); return
     active = st.radio("Module", tabs, horizontal=True)
     st.divider()
     
     if active == "Users":
         st.subheader("Manage Users")
+        # FIXED LAYOUT: One line per user with adjusted columns
         for uid, udata in list(db['staff'].items()):
-            c1, c2, c3, c4 = st.columns([1, 2, 2, 1])
-            c1.write(uid)
-            c2.write(f"**{udata['name']}** ({udata['role']})")
-            c3.write(f"Station: {udata.get('default_station', 'None')}")
-            if c4.button("Edit", key=f"ed_{uid}"): st.session_state['edit_uid'] = uid; st.rerun()
-            if c4.button("🗑", key=f"del_{uid}"): 
+            c1, c2, c3, c4, c5 = st.columns([1.5, 3, 2, 0.5, 0.5])
+            c1.text(uid)
+            c2.text(f"{udata['name']} ({udata['role']})")
+            c3.text(udata.get('default_station', '-'))
+            if c4.button("✏️", key=f"ed_{uid}"): st.session_state['edit_uid'] = uid; st.rerun()
+            if c5.button("🗑", key=f"del_{uid}"): 
                 if uid == user['name']: st.error("Cannot delete yourself!")
                 else: del db['staff'][uid]; save_data(); st.rerun()
             
         st.divider()
-        # REVISED EDIT FORM
         uid_to_edit = st.session_state.get('edit_uid', None)
-        
-        # Safe Lookup to prevent KeyError if user was deleted
+        # Safety check: if editing a user that doesn't exist (deleted), clear state
         if uid_to_edit and uid_to_edit not in db['staff']:
             del st.session_state['edit_uid']
             st.rerun()
             
         with st.form("user_form"):
             st.write(f"**{'Edit User: ' + uid_to_edit if uid_to_edit else 'Add New User'}**")
-            
-            # Default values
             def_id = uid_to_edit if uid_to_edit else ""
             def_name = db['staff'][uid_to_edit]['name'] if uid_to_edit else ""
             def_role = db['staff'][uid_to_edit]['role'] if uid_to_edit else "MSR"
             
-            # UNLOCKED ID Field
             u_id = st.text_input("User ID (Login)", value=def_id)
             u_name = st.text_input("Display Name", value=def_name)
             u_role = st.selectbox("Role", ["MSR", "TELLER", "AO", "SECTION_HEAD", "DIV_HEAD", "BRANCH_HEAD", "ADMIN"], index=["MSR", "TELLER", "AO", "SECTION_HEAD", "DIV_HEAD", "BRANCH_HEAD", "ADMIN"].index(def_role))
@@ -538,13 +495,16 @@ def render_admin_panel(user):
             u_station = st.selectbox("Default Station", avail_stations)
             
             if st.form_submit_button("Save User"):
-                # MIGRATION LOGIC: If ID changed, delete old
-                if uid_to_edit and u_id != uid_to_edit:
-                    del db['staff'][uid_to_edit]
+                # KEY ERROR FIX: Get password BEFORE deleting old record
+                old_pass = "123"
+                if uid_to_edit:
+                    old_pass = db['staff'][uid_to_edit]['pass']
+                    # If renaming, delete old record
+                    if u_id != uid_to_edit:
+                        del db['staff'][uid_to_edit]
                 
-                # Create/Update
                 db['staff'][u_id] = {
-                    "pass": db['staff'][uid_to_edit]['pass'] if uid_to_edit else "123", # Preserve pass
+                    "pass": old_pass,
                     "role": u_role, 
                     "name": u_name, 
                     "default_station": u_station
@@ -554,22 +514,17 @@ def render_admin_panel(user):
                 st.success("Saved!"); st.rerun()
                 
     elif active == "Counters":
-        st.info("Configure Branch Architecture (Counters & Locations)")
+        st.info("Configure Branch Architecture")
         for i, c in enumerate(db['config']['counter_map']):
             c1, c2, c3 = st.columns([3, 2, 1])
             c1.write(f"**{c['name']}**")
             c2.write(f"Type: {c['type']}")
             if c3.button("🗑", key=f"dc_{i}"): db['config']['counter_map'].pop(i); save_data(); st.rerun()
-        
         with st.form("add_counter"):
-            cn = st.text_input("Counter Name (e.g. Window 5)")
-            ct = st.selectbox("Category", ["Counter", "Teller", "Employer", "eCenter"])
-            if st.form_submit_button("Add Counter"):
-                db['config']['counter_map'].append({"name": cn, "type": ct}); save_data(); st.success("Added!"); st.rerun()
-                
+            cn = st.text_input("Counter Name"); ct = st.selectbox("Category", ["Counter", "Teller", "Employer", "eCenter"])
+            if st.form_submit_button("Add"): db['config']['counter_map'].append({"name": cn, "type": ct}); save_data(); st.success("Added!"); st.rerun()
     elif active == "Menu":
-        st.info("Edit Kiosk Buttons")
-        cat = st.selectbox("Category", list(db['menu'].keys()))
+        st.info("Edit Kiosk Buttons"); cat = st.selectbox("Category", list(db['menu'].keys()))
         for i, (label, code, lane) in enumerate(db['menu'][cat]):
             c1, c2 = st.columns([4, 1])
             c1.text(f"{label} ({code}) -> {lane}")
@@ -578,26 +533,21 @@ def render_admin_panel(user):
             n_lbl = st.text_input("Label"); n_code = st.text_input("Code"); n_lane = st.selectbox("Lane", ["C", "E", "F", "T", "A"])
             if st.form_submit_button("Add"): db['menu'][cat].append((n_lbl, n_code, n_lane)); save_data(); st.rerun()
     elif active == "Brain (KB)":
-        st.info("Train the Chatbot here.")
+        st.info("Train Chatbot"); 
         for i, item in enumerate(db['knowledge_base']):
             with st.expander(f"📚 {item['topic']}"):
                 st.write(item['content'])
                 if st.button("Delete", key=f"kb_{i}"): db['knowledge_base'].pop(i); save_data(); st.rerun()
         with st.form("new_kb"):
-            topic = st.text_input("Topic / Circular Title")
-            content = st.text_area("Content / Answer Body")
-            if st.form_submit_button("Add to Brain"):
-                db['knowledge_base'].append({"topic": topic, "content": content}); save_data(); st.success("Learned!")
+            topic = st.text_input("Topic"); content = st.text_area("Content")
+            if st.form_submit_button("Add"): db['knowledge_base'].append({"topic": topic, "content": content}); save_data(); st.success("Learned!")
     elif active == "Announcements":
-        curr = " | ".join(db['announcements'])
-        new_txt = st.text_area("Display Marquee Text", value=curr)
-        if st.button("Update Display"):
-            db['announcements'] = [new_txt]; save_data(); st.success("Updated Display!")
+        curr = " | ".join(db['announcements']); new_txt = st.text_area("Display Marquee", value=curr)
+        if st.button("Update"): db['announcements'] = [new_txt]; save_data(); st.success("Updated!")
     elif active == "Backup":
-        st.download_button("📥 DOWNLOAD DATABASE (JSON)", data=json.dumps(db), file_name="sss_backup.json", mime="application/json")
+        st.download_button("📥 DOWNLOAD DATABASE", data=json.dumps(db), file_name="sss_backup.json", mime="application/json")
         up = st.file_uploader("📤 RESTORE DATABASE", type="json")
-        if up:
-            st.session_state.db = json.load(up); save_data(); st.success("Restored! Reloading..."); time.sleep(1); st.rerun()
+        if up: st.session_state.db = json.load(up); save_data(); st.success("Restored!"); time.sleep(1); st.rerun()
     elif active == "Analytics":
         st.write("📊 History"); st.write(pd.DataFrame(db['history']))
 
@@ -643,29 +593,23 @@ else:
         st.markdown("### 🤖 Chatbot")
         now = datetime.datetime.now()
         is_offline = not (8 <= now.hour < 17) # 8AM to 5PM
-        
         if "messages" not in st.session_state: st.session_state.messages = []
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]): st.markdown(msg["content"])
         if prompt := st.chat_input("Ask about SSS..."):
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"): st.markdown(prompt)
-            
             if is_offline:
                 resp = "Hello! I am currently offline. My operating hours are Monday to Friday, 8:00 AM to 5:00 PM. For immediate assistance, please visit the official SSS website at www.sss.gov.ph or download the My.SSS App here: https://www.sss.gov.ph/download-the-sss-mobile-app-2/"
             else:
                 found = False
                 for kb in db['knowledge_base']:
                     if prompt.lower() in kb['topic'].lower() or prompt.lower() in kb['content'].lower():
-                        resp = f"**Found in {kb['topic']}:**\n{kb['content']}"
-                        found = True
-                        break
+                        resp = f"**Found in {kb['topic']}:**\n{kb['content']}"; found = True; break
                 if not found: resp = "I couldn't find that in my records. Please visit the eCenter."
-            
             st.session_state.messages.append({"role": "assistant", "content": resp})
             with st.chat_message("assistant"): st.markdown(resp)
     with t3:
         with st.form("rev"):
-            rate = st.slider("Rating", 1, 5)
-            pers = st.text_input("Personnel"); comm = st.text_area("Comments")
+            rate = st.slider("Rating", 1, 5); pers = st.text_input("Personnel"); comm = st.text_area("Comments")
             if st.form_submit_button("Submit"): db['reviews'].append({"rating": rate, "personnel": pers, "comment": comm}); save_data(); st.success("Thanks!")
