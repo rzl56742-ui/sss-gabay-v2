@@ -1,5 +1,8 @@
+if os.path.exists("sss_data.json"):
+    os.remove("sss_data.json")
+    print("⚠️ OLD DATA DELETED! REMOVE THIS LINE NOW.")
 # ==============================================================================
-# SSS G-ABAY v19.0 - BRANCH OPERATING SYSTEM (PERSISTENT BRAIN EDITION)
+# SSS G-ABAY v20.0 - BRANCH OPERATING SYSTEM (ARCHITECTURAL FREEDOM)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -15,7 +18,7 @@ import os
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v19.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v20.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 
@@ -38,19 +41,28 @@ DEFAULT_DATA = {
             "E": {"name": "eCenter", "desc": "Online Services"},
             "F": {"name": "Fast Lane", "desc": "Simple Trans"}
         },
+        # Defines which lanes a counter type pulls from
         "assignments": {
-            "Counter": ["C", "E", "F"],
-            "Teller": ["T"],
-            "Employer": ["A"],
-            "eCenter": ["E"],
-            "Help": ["F", "E"]
+            "Counter": ["C", "E", "F"], # MSR
+            "Teller": ["T"],           # Teller
+            "Employer": ["A"],         # AO
+            "eCenter": ["E"],          # MSR/eCenter
+            "Help": ["F", "E"]         # MSR
         },
-        "counters": ["Counter 1", "Counter 2", "Counter 3", "Teller 1", "Teller 2", "Employer Desk", "eCenter", "Help Desk"]
+        # NEW v20: Dynamic Counter Objects (Name + Type)
+        "counter_map": [
+            {"name": "Counter 1", "type": "Counter"},
+            {"name": "Counter 2", "type": "Counter"},
+            {"name": "Teller 1", "type": "Teller"},
+            {"name": "Teller 2", "type": "Teller"},
+            {"name": "Employer Desk", "type": "Employer"},
+            {"name": "eCenter", "type": "eCenter"}
+        ]
     },
     "menu": {
         "Benefits": [
             ("Maternity / Sickness", "Ben-Mat/Sick", "E"),
-            ("Retirement / Death", "Ben-Ret/Death", "C"), 
+            ("Retirement / Death / Funeral", "Ben-Ret/Death", "C"), 
             ("Disability / Unemployment", "Ben-Dis/Unemp", "E")
         ],
         "Loans": [
@@ -72,13 +84,13 @@ DEFAULT_DATA = {
         ]
     },
     "staff": {
-        "admin": {"pass": "sss2026", "role": "ADMIN", "name": "System Admin"},
-        "head": {"pass": "head123", "role": "BRANCH_HEAD", "name": "Branch Head"},
-        "div": {"pass": "div123", "role": "DIV_HEAD", "name": "Division Head"},
-        "section": {"pass": "sec123", "role": "SECTION_HEAD", "name": "Section Head"},
-        "ao1": {"pass": "123", "role": "AO", "name": "Account Officer"},
-        "teller1": {"pass": "123", "role": "TELLER", "name": "Teller 1"},
-        "msr1": {"pass": "123", "role": "MSR", "name": "MSR 1"}
+        "admin": {"pass": "sss2026", "role": "ADMIN", "name": "System Admin", "default_station": "Counter 1"},
+        "head": {"pass": "head123", "role": "BRANCH_HEAD", "name": "Branch Head", "default_station": "Counter 1"},
+        "div": {"pass": "div123", "role": "DIV_HEAD", "name": "Division Head", "default_station": "Counter 1"},
+        "section": {"pass": "sec123", "role": "SECTION_HEAD", "name": "Section Head", "default_station": "Counter 1"},
+        "ao1": {"pass": "123", "role": "AO", "name": "Account Officer", "default_station": "Employer Desk"},
+        "teller1": {"pass": "123", "role": "TELLER", "name": "Teller 1", "default_station": "Teller 1"},
+        "msr1": {"pass": "123", "role": "MSR", "name": "MSR 1", "default_station": "Counter 1"}
     }
 }
 
@@ -87,7 +99,11 @@ def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r") as f:
             try:
-                return json.load(f)
+                data = json.load(f)
+                # v20 Migration Check: If old counters list exists, migrate to map
+                if "counter_map" not in data['config']:
+                    return DEFAULT_DATA # Safety Reset if old version detected
+                return data
             except:
                 return DEFAULT_DATA
     return DEFAULT_DATA
@@ -96,7 +112,6 @@ def save_data():
     with open(DATA_FILE, "w") as f:
         json.dump(st.session_state.db, f, default=str)
 
-# Initialize Session State
 if 'db' not in st.session_state:
     st.session_state.db = load_data()
 
@@ -128,13 +143,11 @@ function startTimer(duration, displayId) {
     footer {visibility: hidden;}
     [data-testid="stSidebar"][aria-expanded="false"] { display: none; }
     
-    /* HEADER */
     .header-text { text-align: center; font-family: sans-serif; }
     .header-top { font-size: 14px; color: #555; text-transform: uppercase; letter-spacing: 2px; }
     .header-main { font-size: 40px; font-weight: 900; color: #0038A8; margin: 0; padding: 0; text-transform: uppercase; font-style: italic; }
     .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
     
-    /* KIOSK MAIN BUTTONS */
     .gate-btn > button {
         height: 350px !important; width: 100% !important;
         font-size: 40px !important; font-weight: 900 !important;
@@ -142,7 +155,6 @@ function startTimer(duration, displayId) {
         box-shadow: 0 10px 20px rgba(0,0,0,0.2);
     }
     
-    /* MAIN MENU CARDS */
     .menu-card > button {
         height: 300px !important; width: 100% !important;
         font-size: 30px !important; font-weight: 800 !important;
@@ -152,7 +164,6 @@ function startTimer(duration, displayId) {
         display: flex; flex-direction: column; justify-content: center; align-items: center;
     }
     
-    /* SUB-MENU VERTICAL STACK */
     .swim-btn > button {
         height: 100px !important; width: 100% !important;
         font-size: 18px !important; font-weight: 700 !important;
@@ -164,7 +175,6 @@ function startTimer(duration, displayId) {
     }
     .swim-btn > button:hover { background-color: #f0f9ff !important; transform: scale(1.02); }
 
-    /* SECTION HEADERS */
     .section-header {
         font-size: 20px; font-weight: 900; text-align: center;
         padding: 10px; border-radius: 10px 10px 0 0; color: white;
@@ -176,7 +186,6 @@ function startTimer(duration, displayId) {
     .head-green { background-color: #16A34A; } .border-green > button { border-left: 20px solid #16A34A !important; }
     .head-blue { background-color: #2563EB; } .border-blue > button { border-left: 20px solid #2563EB !important; }
 
-    /* DISPLAY MODULE */
     .serving-card {
         background-color: white; border-left: 20px solid #2563EB;
         padding: 40px; margin-bottom: 20px; border-radius: 15px;
@@ -224,6 +233,20 @@ def calculate_real_wait_time(lane_code):
 def get_staff_efficiency(staff_name):
     my_txns = [t for t in db['history'] if t.get("served_by") == staff_name]
     return len(my_txns), "5m"
+
+def get_allowed_counters(role):
+    # RETURNS LIST OF COUNTER NAMES ALLOWED FOR THIS ROLE
+    all_counters = db['config']['counter_map']
+    allowed = []
+    
+    # MAPPING LOGIC
+    target_types = []
+    if role == "TELLER": target_types = ["Teller"]
+    elif role == "AO": target_types = ["Employer"]
+    elif role == "MSR": target_types = ["Counter", "eCenter", "Help"] # MSR covers all these
+    elif role in ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD"]: return [c['name'] for c in all_counters] # Heads can sit anywhere
+    
+    return [c['name'] for c in all_counters if c['type'] in target_types]
 
 # ==========================================
 # 4. MODULES
@@ -274,7 +297,6 @@ def render_kiosk():
             if st.button("👤 MEMBER SERVICES\n(Claims, ID, Records)"):
                 st.session_state['kiosk_step'] = 'mss'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
-        
         st.markdown("<br><br>", unsafe_allow_html=True)
         if st.button("⬅ GO BACK", type="secondary", use_container_width=True): del st.session_state['kiosk_step']; st.rerun()
 
@@ -298,7 +320,6 @@ def render_kiosk():
                             st.session_state['last_ticket'] = db['tickets'][-1]
                             st.session_state['kiosk_step'] = 'ticket'; st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
-        
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("⬅ GO BACK", type="secondary", use_container_width=True): st.session_state['kiosk_step'] = 'menu'; st.rerun()
 
@@ -377,9 +398,23 @@ def render_display():
     time.sleep(3); st.rerun()
 
 def render_counter(user):
-    if 'my_station' not in st.session_state: st.session_state['my_station'] = db['config']["counters"][0]
+    # SMART DEFAULTING: Use User's Assigned Default Station on First Load
+    if 'my_station' not in st.session_state: 
+        st.session_state['my_station'] = user.get('default_station', 'Counter 1')
+        
     st.sidebar.title(f"👮 {user['name']}")
-    if st.sidebar.button("⬅ LOGOUT"): del st.session_state['user']; st.rerun()
+    
+    # CHANGE PASSWORD WIDGET
+    with st.sidebar.expander("🔒 Change Password"):
+        with st.form("pwd_chg"):
+            n_pass = st.text_input("New Password", type="password")
+            if st.form_submit_button("Update"):
+                db['staff'][next(k for k,v in db['staff'].items() if v['name'] == user['name'])]['pass'] = n_pass
+                save_data(); st.success("Updated!")
+                
+    if st.sidebar.button("⬅ LOGOUT"): del st.session_state['user']; del st.session_state['my_station']; st.rerun()
+    
+    # APPOINTMENT (SH/BH Only)
     if user['role'] in ["SECTION_HEAD", "BRANCH_HEAD"]:
         with st.sidebar.expander("📅 Add Appointment"):
             with st.form("add_appt"):
@@ -388,14 +423,27 @@ def render_counter(user):
                 if st.form_submit_button("Book Slot"):
                     generate_ticket(svc, "C", True, is_appt=True, appt_name=nm, appt_time=tm)
                     st.success("Booked!")
+                    
     st.markdown(f"### Station: {st.session_state['my_station']}")
-    st.session_state['my_station'] = st.selectbox("Switch Station", db['config']["counters"], index=0)
+    
+    # STRICT STATION SWITCHING
+    allowed_counters = get_allowed_counters(user['role'])
+    # If current station not in allowed (e.g. config changed), reset to first allowed
+    if st.session_state['my_station'] not in allowed_counters and allowed_counters:
+        st.session_state['my_station'] = allowed_counters[0]
+        
+    st.session_state['my_station'] = st.selectbox("Switch Station", allowed_counters, index=allowed_counters.index(st.session_state['my_station']) if st.session_state['my_station'] in allowed_counters else 0)
     st.markdown("<hr>", unsafe_allow_html=True)
-    station_type = st.session_state['my_station'].split()[0]
+    
+    # LANE ASSIGNMENT LOOKUP
+    current_counter_obj = next((c for c in db['config']['counter_map'] if c['name'] == st.session_state['my_station']), None)
+    station_type = current_counter_obj['type'] if current_counter_obj else "Counter"
     my_lanes = db['config']["assignments"].get(station_type, ["C"])
+    
     queue = [t for t in db['tickets'] if t["status"] == "WAITING" and t["lane"] in my_lanes]
     queue.sort(key=get_prio_score)
     current = next((t for t in db['tickets'] if t["status"] == "SERVING" and t.get("served_by") == st.session_state['my_station']), None)
+    
     if 'refer_modal' not in st.session_state: st.session_state['refer_modal'] = False
     c1, c2 = st.columns([2,1])
     with c1:
@@ -448,18 +496,69 @@ def render_admin_panel(user):
     st.title("🛠 Admin & Brain Console")
     if st.sidebar.button("⬅ LOGOUT"): del st.session_state['user']; st.rerun()
     
-    tabs = ["Users", "Menu", "Brain (KB)", "Announcements"]
+    # STRICT PERMISSIONS
+    tabs = []
+    if user['role'] in ["ADMIN", "BRANCH_HEAD"]: tabs.extend(["Users", "Counters", "Menu", "Brain (KB)", "Announcements", "Backup"])
     if user['role'] in ["BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]: tabs.append("Analytics")
-    if user['role'] in ["ADMIN", "BRANCH_HEAD"]: tabs.append("Backup")
     
+    if not tabs: st.error("Access Denied"); return
     active = st.radio("Module", tabs, horizontal=True)
     st.divider()
     
     if active == "Users":
-        st.dataframe(pd.DataFrame.from_dict(db['staff'], orient='index'))
-        with st.form("add_user"):
-            u_id = st.text_input("User ID"); u_name = st.text_input("Name"); u_role = st.selectbox("Role", ["MSR", "TELLER", "AO", "SECTION_HEAD", "DIV_HEAD", "ADMIN"])
-            if st.form_submit_button("Save"): db['staff'][u_id] = {"pass": "123", "role": u_role, "name": u_name}; save_data(); st.success("Saved")
+        # FULL CRUD USER TABLE
+        st.subheader("Manage Users")
+        
+        # TABLE VIEW
+        for uid, udata in list(db['staff'].items()):
+            c1, c2, c3, c4 = st.columns([1, 2, 2, 1])
+            c1.write(uid)
+            c2.write(f"**{udata['name']}** ({udata['role']})")
+            c3.write(f"Station: {udata.get('default_station', 'None')}")
+            if c4.button("Edit", key=f"ed_{uid}"): st.session_state['edit_uid'] = uid; st.rerun()
+            if c4.button("🗑", key=f"del_{uid}"): del db['staff'][uid]; save_data(); st.rerun()
+            
+        st.divider()
+        # ADD / EDIT FORM
+        uid_to_edit = st.session_state.get('edit_uid', None)
+        with st.form("user_form"):
+            st.write(f"**{'Edit User: ' + uid_to_edit if uid_to_edit else 'Add New User'}**")
+            # Pre-fill if editing
+            def_id = uid_to_edit if uid_to_edit else ""
+            def_name = db['staff'][uid_to_edit]['name'] if uid_to_edit else ""
+            def_role = db['staff'][uid_to_edit]['role'] if uid_to_edit else "MSR"
+            
+            u_id = st.text_input("User ID (Login)", value=def_id, disabled=bool(uid_to_edit))
+            u_name = st.text_input("Display Name", value=def_name)
+            u_role = st.selectbox("Role", ["MSR", "TELLER", "AO", "SECTION_HEAD", "DIV_HEAD", "BRANCH_HEAD", "ADMIN"], index=["MSR", "TELLER", "AO", "SECTION_HEAD", "DIV_HEAD", "BRANCH_HEAD", "ADMIN"].index(def_role))
+            
+            # DYNAMIC DEFAULT STATION PICKER
+            avail_stations = get_allowed_counters(u_role)
+            if not avail_stations: avail_stations = ["None"]
+            u_station = st.selectbox("Default Station", avail_stations)
+            
+            if st.form_submit_button("Save User"):
+                db['staff'][u_id] = {"pass": "123", "role": u_role, "name": u_name, "default_station": u_station}
+                # Preserve password if editing
+                if uid_to_edit: db['staff'][u_id]['pass'] = db['staff'][uid_to_edit]['pass']
+                save_data()
+                if 'edit_uid' in st.session_state: del st.session_state['edit_uid']
+                st.success("Saved!"); st.rerun()
+                
+    elif active == "Counters":
+        st.info("Configure Branch Architecture (Counters & Locations)")
+        for i, c in enumerate(db['config']['counter_map']):
+            c1, c2, c3 = st.columns([3, 2, 1])
+            c1.write(f"**{c['name']}**")
+            c2.write(f"Type: {c['type']}")
+            if c3.button("🗑", key=f"dc_{i}"): db['config']['counter_map'].pop(i); save_data(); st.rerun()
+        
+        with st.form("add_counter"):
+            cn = st.text_input("Counter Name (e.g. Window 5)")
+            ct = st.selectbox("Category", ["Counter", "Teller", "Employer", "eCenter"])
+            if st.form_submit_button("Add Counter"):
+                db['config']['counter_map'].append({"name": cn, "type": ct}); save_data(); st.success("Added!"); st.rerun()
+                
     elif active == "Menu":
         st.info("Edit Kiosk Buttons")
         cat = st.selectbox("Category", list(db['menu'].keys()))
@@ -534,7 +633,6 @@ else:
             else: st.error("Not Found")
     with t2:
         st.markdown("### 🤖 Chatbot")
-        # TIME CHECK FOR OFFLINE MSG
         now = datetime.datetime.now()
         is_offline = not (8 <= now.hour < 17) # 8AM to 5PM
         
