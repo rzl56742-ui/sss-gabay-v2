@@ -1,5 +1,8 @@
+if os.path.exists("sss_data.json"):
+    os.remove("sss_data.json")
+    print("⚠️ OLD DATA DELETED! REMOVE THIS LINE NOW.")
 # ==============================================================================
-# SSS G-ABAY v20.0 - BRANCH OPERATING SYSTEM (ARCHITECTURAL FREEDOM - CORRECTED)
+# SSS G-ABAY v20.1 - BRANCH OPERATING SYSTEM (STABLE & POLISHED)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -15,7 +18,7 @@ import os
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v20.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v20.1", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 
@@ -51,7 +54,8 @@ DEFAULT_DATA = {
             {"name": "Teller 1", "type": "Teller"},
             {"name": "Teller 2", "type": "Teller"},
             {"name": "Employer Desk", "type": "Employer"},
-            {"name": "eCenter", "type": "eCenter"}
+            {"name": "eCenter", "type": "eCenter"},
+            {"name": "Second Floor", "type": "Counter"}
         ]
     },
     "menu": {
@@ -81,8 +85,8 @@ DEFAULT_DATA = {
     "staff": {
         "admin": {"pass": "sss2026", "role": "ADMIN", "name": "System Admin", "default_station": "Counter 1"},
         "head": {"pass": "head123", "role": "BRANCH_HEAD", "name": "Branch Head", "default_station": "Counter 1"},
-        "div": {"pass": "div123", "role": "DIV_HEAD", "name": "Division Head", "default_station": "Counter 1"},
         "section": {"pass": "sec123", "role": "SECTION_HEAD", "name": "Section Head", "default_station": "Counter 1"},
+        "div": {"pass": "div123", "role": "DIV_HEAD", "name": "Division Head", "default_station": "Counter 1"},
         "ao1": {"pass": "123", "role": "AO", "name": "Account Officer", "default_station": "Employer Desk"},
         "teller1": {"pass": "123", "role": "TELLER", "name": "Teller 1", "default_station": "Teller 1"},
         "msr1": {"pass": "123", "role": "MSR", "name": "MSR 1", "default_station": "Counter 1"}
@@ -224,7 +228,7 @@ def get_allowed_counters(role):
     if role == "TELLER": target_types = ["Teller"]
     elif role == "AO": target_types = ["Employer"]
     elif role == "MSR": target_types = ["Counter", "eCenter", "Help"]
-    elif role in ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD"]: return [c['name'] for c in all_counters] 
+    elif role in ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]: return [c['name'] for c in all_counters] 
     return [c['name'] for c in all_counters if c['type'] in target_types]
 
 # ==========================================
@@ -459,7 +463,11 @@ def render_admin_panel(user):
     
     if active == "Users":
         st.subheader("Manage Users")
-        # FIXED LAYOUT: One line per user with adjusted columns
+        # CLEAN LAYOUT: Headers
+        h1, h2, h3, h4, h5 = st.columns([1.5, 3, 2, 1, 0.5])
+        h1.markdown("**User ID**"); h2.markdown("**Name (Role)**"); h3.markdown("**Station**"); h4.markdown("**Actions**")
+        st.divider()
+        
         for uid, udata in list(db['staff'].items()):
             c1, c2, c3, c4, c5 = st.columns([1.5, 3, 2, 0.5, 0.5])
             c1.text(uid)
@@ -472,13 +480,14 @@ def render_admin_panel(user):
             
         st.divider()
         uid_to_edit = st.session_state.get('edit_uid', None)
-        # Safety check: if editing a user that doesn't exist (deleted), clear state
-        if uid_to_edit and uid_to_edit not in db['staff']:
-            del st.session_state['edit_uid']
-            st.rerun()
+        
+        # ERROR FIX: Check if uid still exists before loading edit form
+        if uid_to_edit and uid_to_edit not in db['staff']: del st.session_state['edit_uid']; st.rerun()
             
         with st.form("user_form"):
             st.write(f"**{'Edit User: ' + uid_to_edit if uid_to_edit else 'Add New User'}**")
+            st.info("ℹ️ NOTE: Default password for new users is '123'. They can change it after login.")
+            
             def_id = uid_to_edit if uid_to_edit else ""
             def_name = db['staff'][uid_to_edit]['name'] if uid_to_edit else ""
             def_role = db['staff'][uid_to_edit]['role'] if uid_to_edit else "MSR"
@@ -491,14 +500,21 @@ def render_admin_panel(user):
             if not avail_stations: avail_stations = ["None"]
             u_station = st.selectbox("Default Station", avail_stations)
             
+            # PASSWORD RESET BUTTON (Only for editing)
+            reset_requested = False
+            if uid_to_edit:
+                st.markdown("---")
+                if st.checkbox("RESET PASSWORD TO '123'"): reset_requested = True
+            
             if st.form_submit_button("Save User"):
-                # KEY ERROR FIX: Get password BEFORE deleting old record
+                # MIGRATION LOGIC: If ID changed, delete old key
                 old_pass = "123"
                 if uid_to_edit:
                     old_pass = db['staff'][uid_to_edit]['pass']
-                    # If renaming, delete old record
-                    if u_id != uid_to_edit:
-                        del db['staff'][uid_to_edit]
+                    if u_id != uid_to_edit: del db['staff'][uid_to_edit]
+                
+                # If reset requested, override pass
+                if reset_requested: old_pass = "123"
                 
                 db['staff'][u_id] = {
                     "pass": old_pass,
@@ -561,8 +577,10 @@ elif mode == "staff":
         u = st.text_input("Username"); p = st.text_input("Password", type="password")
         if st.button("Login"):
             acct = next((v for k,v in db['staff'].items() if v["name"] == u or k == u), None)
-            if acct: st.session_state['user'] = acct; st.rerun()
-            else: st.error("Invalid")
+            if acct: 
+                if acct['pass'] == p: st.session_state['user'] = acct; st.rerun()
+                else: st.error("Wrong Password")
+            else: st.error("User not found")
     else:
         user = st.session_state['user']
         if user['role'] in ["ADMIN", "DIV_HEAD"]: render_admin_panel(user)
