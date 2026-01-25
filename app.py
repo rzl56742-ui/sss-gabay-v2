@@ -1,6 +1,3 @@
-if os.path.exists("sss_data.json"):
-    os.remove("sss_data.json")
-    print("⚠️ OLD DATA DELETED! REMOVE THIS LINE NOW.")
 # ==============================================================================
 # SSS G-ABAY v20.0 - BRANCH OPERATING SYSTEM (REVISED ARCHITECTURE)
 # "World-Class Service, Zero-Install Architecture"
