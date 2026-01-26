@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v21.1 - BRANCH OPERATING SYSTEM (POLICY ENFORCEMENT EDITION)
+# SSS G-ABAY v21.2 - BRANCH OPERATING SYSTEM (VISUAL REPAIR)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -15,7 +15,7 @@ import os
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v21.1", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v21.2", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 
@@ -119,34 +119,40 @@ st.markdown("""
     .header-text { text-align: center; font-family: sans-serif; }
     .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
     
-    /* TV DISPLAY: SIDE BY SIDE CARDS (Flex Row) */
-    .serving-row { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; margin-bottom: 20px; }
+    /* TV DISPLAY: FIXED VISIBILITY & LAYOUT */
+    .serving-row { 
+        display: flex; flex-direction: row; flex-wrap: wrap; 
+        gap: 20px; justify-content: center; width: 100%; margin-bottom: 20px; 
+    }
     .serving-card-small {
         background: white; border-left: 15px solid #2563EB; padding: 20px;
         border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.15); text-align: center;
-        min-width: 250px; flex: 1; animation: fadeIn 0.5s;
+        flex: 1 1 300px; /* Grow to fill, but min width 300px */
+        min-width: 250px;
+        animation: fadeIn 0.5s;
     }
     .serving-card-small h2 { margin: 0; font-size: 50px; color: #0038A8; font-weight: 900; }
-    .serving-card-small p { margin: 0; font-size: 22px; color: #555; font-weight: bold; }
-    .serving-card-small span { font-size: 16px; color: #888; }
+    .serving-card-small p { margin: 0; font-size: 22px; color: #333; font-weight: bold; } /* Changed to #333 */
+    .serving-card-small span { font-size: 16px; color: #555; }
     
-    /* PARKED COUNTDOWN RED */
+    /* PARKED COUNTDOWN */
     .park-row {
-        background: #fff3cd; color: #856404; padding: 10px; margin-bottom: 5px; border-radius: 5px;
+        background: #fff3cd; color: #333; padding: 10px; margin-bottom: 5px; border-radius: 5px; /* Text #333 */
         font-weight: bold; display: flex; justify-content: space-between; border-left: 5px solid #ffc107;
     }
     .park-danger { 
         background: #fee2e2; color: #b91c1c; border-left: 5px solid #ef4444; 
-        animation: pulse 2s infinite;
+        animation: pulse 2s infinite; display: flex; justify-content: space-between; padding: 10px; border-radius: 5px; font-weight: bold;
     }
     
-    /* SWIMLANES */
+    /* SWIMLANES - HIGH CONTRAST FIX */
     .swim-col { background: #f8f9fa; border-radius: 10px; padding: 10px; border-top: 10px solid #ccc; height: 100%; }
-    .swim-col h3 { text-align: center; margin-bottom: 10px; font-size: 18px; text-transform: uppercase; }
+    .swim-col h3 { text-align: center; margin-bottom: 10px; font-size: 18px; text-transform: uppercase; color: #333; }
     .queue-item { 
-        background: white; border-bottom: 1px solid #ddd; padding: 8px; margin-bottom: 5px;
-        border-radius: 5px; font-size: 20px; font-weight: bold; display: flex; justify-content: space-between;
+        background: white; border-bottom: 1px solid #ddd; padding: 15px; margin-bottom: 5px;
+        border-radius: 5px; display: flex; justify-content: space-between;
     }
+    .queue-item span { font-size: 24px; font-weight: 900; color: #111; } /* FORCE BLACK TEXT */
     
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
@@ -291,15 +297,23 @@ def render_kiosk():
         t = st.session_state['last_ticket']
         bg = "#FFC107" if t['type'] == 'PRIORITY' else "#2563EB"
         col = "#0038A8" if t['type'] == 'PRIORITY' else "white"
-        prio_warning = "<p style='font-size:16px; color:red; font-weight:bold; margin-top:10px;'>⚠ PRIORITY LANE: For Seniors, PWDs, Pregnant ONLY. Non-qualified users will be sent to END of queue.</p>" if t['type'] == 'PRIORITY' else ""
+        
+        # FIX: Prio Warning as simple formatted Markdown string, not raw HTML injection
+        prio_text = ""
+        if t['type'] == 'PRIORITY':
+            prio_text = "**⚠ PRIORITY LANE:** For Seniors, PWDs, Pregnant ONLY. Non-qualified users will be sent to END of queue."
         
         st.markdown(f"""
         <div class="ticket-card no-print" style='background:{bg}; color:{col}; padding:40px; border-radius:20px; text-align:center; margin:20px 0;'>
             <h1>{t['number']}</h1><h3>{t['service']}</h3><p>Please wait for the voice call.</p>
-            {prio_warning}
-            <p style='font-size:14px; font-weight:bold; margin-top:20px; color:black;'>POLICY: Ticket forfeited if parked for 30 mins.</p>
         </div>
         """, unsafe_allow_html=True)
+        
+        if prio_text:
+            st.error(prio_text) # Use Streamlit native error box for visibility
+            
+        st.info("**POLICY:** Ticket forfeited if parked for 30 mins.") # Use Streamlit native info box
+
         c1, c2, c3 = st.columns(3)
         with c1: 
             if st.button("❌ CANCEL", use_container_width=True): db['tickets'].remove(t); save_data(); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
@@ -356,16 +370,15 @@ def render_display():
 
     # 3. PARKED COUNTDOWN (REAL TIME: 30:00 -> 00:00)
     with c_park:
-        st.markdown("### 🅿️ PARKED (Countdown)")
+        st.markdown("### 🅿️ PARKED")
         parked = [t for t in db['tickets'] if t["status"] == "PARKED"]
         for p in parked:
-            # Calculate time remaining
             park_time = datetime.datetime.fromisoformat(p['park_timestamp'])
             elapsed = datetime.datetime.now() - park_time
             remaining = datetime.timedelta(minutes=30) - elapsed
             
             if remaining.total_seconds() <= 0:
-                p["status"] = "NO_SHOW" # Auto-forfeit
+                p["status"] = "NO_SHOW"
                 save_data()
                 st.rerun()
             else:
@@ -441,7 +454,6 @@ def render_counter(user):
             <h1 style='margin:0; color:#0369a1; font-size: 80px;'>{current['number']}</h1>
             <h3>{current['service']}</h3></div>""", unsafe_allow_html=True)
             
-            # REFERRAL REASON (RED TEXT)
             if current.get("ref_from"): 
                 st.markdown(f"""
                 <div style='background:#fee2e2; border-left:5px solid #ef4444; padding:10px; margin-top:10px;'>
@@ -462,12 +474,9 @@ def render_counter(user):
                             current_lane = current['lane']
                             target_lane = {"Teller":"T", "Employer":"A", "eCenter":"E", "Counter":"C"}[target]
                             
-                            # PRIORITY PENALTY (OPTION A): If Priority is moved, DEMOTE to Regular & Reset Time
                             if current['type'] == 'PRIORITY':
-                                current['type'] = 'REGULAR' # Demote status
-                                current['timestamp'] = datetime.datetime.now().isoformat() # Reset to bottom of queue
-                                
-                            # Normal Time Adjustment (Only if NOT demoted/reset above)
+                                current['type'] = 'REGULAR' 
+                                current['timestamp'] = datetime.datetime.now().isoformat() 
                             else:
                                 ts = datetime.datetime.fromisoformat(current['timestamp'])
                                 if current_lane == "C" and target_lane != "C": ts -= datetime.timedelta(minutes=30)
