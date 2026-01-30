@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v22.4 - BRANCH OPERATING SYSTEM (PRECISION & LAYOUT)
+# SSS G-ABAY v22.5 - BRANCH OPERATING SYSTEM (STABLE RELEASE)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -15,7 +15,7 @@ import os
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v22.4", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v22.5", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 
@@ -117,7 +117,7 @@ def load_db():
                         if 'break_reason' in data['staff'][uid]: del data['staff'][uid]['break_reason']
                         if 'break_start_time' in data['staff'][uid]: del data['staff'][uid]['break_start_time']
                 
-                # AUTO-MIGRATION: Fix "C" lanes to "GATE" for complex claims (Issue #4)
+                # AUTO-MIGRATION
                 if "menu" in data and "Benefits" in data['menu']:
                     new_benefits = []
                     for lbl, code, lane in data['menu']['Benefits']:
@@ -129,6 +129,11 @@ def load_db():
 
                 if "Counter" not in data['config']['assignments']:
                     data['config']['assignments']['Counter'] = ["C", "F", "E"]
+                
+                # Ensure online field exists
+                for uid in data['staff']:
+                    if 'online' not in data['staff'][uid]: data['staff'][uid]['online'] = False
+                    
                 return data
             except:
                 return DEFAULT_DATA
@@ -253,14 +258,12 @@ def get_prio_score(t):
 
 def calculate_specific_wait_time(ticket_id, lane_code):
     local_db = load_db()
-    # 1. Calculate Average Transaction Time (from History)
     recent = [t for t in local_db['history'] if t['lane'] == lane_code and t['end_time']]
-    avg_txn_time = 15 # Default 15 mins if no data
+    avg_txn_time = 15 # Default
     if recent:
         total_sec = sum([datetime.datetime.fromisoformat(t["end_time"]).timestamp() - datetime.datetime.fromisoformat(t["start_time"]).timestamp() for t in recent[-10:]])
         avg_txn_time = (total_sec / len(recent[-10:])) / 60
     
-    # 2. Calculate Position in Queue
     waiting_in_lane = [t for t in local_db['tickets'] if t['lane'] == lane_code and t['status'] == "WAITING"]
     waiting_in_lane.sort(key=get_prio_score)
     
@@ -270,7 +273,6 @@ def calculate_specific_wait_time(ticket_id, lane_code):
             position = i
             break
             
-    # 3. Calculate Specific Wait (Pos * Avg)
     wait_time = round(position * avg_txn_time)
     if wait_time < 2: return "Next"
     return f"{wait_time} min"
@@ -488,7 +490,6 @@ def render_display():
                     cols = st.columns(len(batch))
                     for idx, staff in enumerate(batch):
                         with cols[idx]:
-                            # ISSUE #1: GHOST USER FILTER
                             if staff['role'] == "ADMIN": continue
                             
                             nickname = format_nickname(staff['name'])
@@ -724,7 +725,6 @@ def render_admin_panel(user):
             if c4.button("✏️", key=f"ed_{uid}"): st.session_state['edit_uid'] = uid; st.rerun()
             if c5.button("🗑", key=f"del_{uid}"): del local_db['staff'][uid]; save_db(local_db); st.rerun()
         
-        # ISSUE #3 FIX: ADD USER FORM OUTSIDE LOOP
         st.markdown("---")
         uid_to_edit = st.session_state.get('edit_uid', None)
         if uid_to_edit:
@@ -748,7 +748,6 @@ def render_admin_panel(user):
                         save_db(local_db); st.success("Created!"); st.rerun()
 
     elif active == "Counters":
-        # ISSUE #2 FIX: COUNTER LAYOUT
         for i, c in enumerate(local_db['config']['counter_map']): 
             c1, c2, c3 = st.columns([3, 2, 1])
             c1.text(c['name']); c2.text(c['type'])
@@ -809,12 +808,9 @@ else:
                     else: st.error("❌ YOUR TICKET HAS EXPIRED."); st.markdown("<h3 style='text-align:center; color:red;'>Please get a new ticket.</h3>", unsafe_allow_html=True)
                 else:
                     st.info(f"Status: {t['status']}")
-                    # ISSUE #5 FIX: INDIVIDUAL WAIT TIME CALCULATION
                     wait_str = calculate_specific_wait_time(t['id'], t['lane'])
                     people_ahead = calculate_people_ahead(t['id'], t['lane'])
-                    c1, c2 = st.columns(2)
-                    c1.metric("Est. Wait", wait_str)
-                    c2.metric("People Ahead", f"{people_ahead}")
+                    c1, c2 = st.columns(2); c1.metric("Est. Wait", wait_str); c2.metric("People Ahead", f"{people_ahead}")
             elif t_hist: st.success("✅ TRANSACTION COMPLETE. Thank you for visiting SSS Gingoog!")
             else: st.error("Not Found")
             st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026</div>", unsafe_allow_html=True)
@@ -823,11 +819,15 @@ else:
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]): st.markdown(msg["content"])
         if prompt := st.chat_input("Ask about SSS..."):
-            st.session_state.messages.append({"role": "user", "content": prompt}); with st.chat_message("user"): st.markdown(prompt)
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
             resp = "Hello! For assistance, please visit the official SSS website at www.sss.gov.ph"
             for kb in db['knowledge_base']:
                 if prompt.lower() in kb['topic'].lower() or prompt.lower() in kb['content'].lower(): resp = f"**Found in {kb['topic']}:**\n{kb['content']}"; break
-            st.session_state.messages.append({"role": "assistant", "content": resp}); with st.chat_message("assistant"): st.markdown(resp)
+            st.session_state.messages.append({"role": "assistant", "content": resp})
+            with st.chat_message("assistant"):
+                st.markdown(resp)
     with t3:
         with st.form("rev"):
             rate = st.slider("Rating", 1, 5); pers = st.text_input("Personnel"); comm = st.text_area("Comments")
