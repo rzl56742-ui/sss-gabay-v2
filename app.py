@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v22.12 - BRANCH OPERATING SYSTEM (DUPLICATE KILLER EDITION)
+# SSS G-ABAY v22.13 - BRANCH OPERATING SYSTEM (MENU SPLITTER EDITION)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -16,7 +16,7 @@ import math
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v22.12", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v22.13", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 
@@ -63,7 +63,7 @@ DEFAULT_DATA = {
             {"name": "eCenter", "type": "eCenter"}
         ]
     },
-    # CORRECTED MENU STRUCTURE (V22.12 - 5 Items under Benefits)
+    # TARGET STRUCTURE (5 Items under Benefits)
     "menu": {
         "Benefits": [
             ("Maternity / Sickness", "Ben-Mat/Sick", "E"),
@@ -119,33 +119,50 @@ def load_db():
                         if 'break_reason' in data['staff'][uid]: del data['staff'][uid]['break_reason']
                         if 'break_start_time' in data['staff'][uid]: del data['staff'][uid]['break_start_time']
                 
-                # --- V22.12 FORCE-MERGE MIGRATION ---
-                # This fixes the split menu issues from v22.10
+                # --- V22.13 MENU EXPLODER & MERGER ---
                 if "menu" in data:
+                    # 1. Merge fragmented categories back to "Benefits"
                     if "Benefits" not in data['menu']: data['menu']['Benefits'] = []
-                    
-                    # Merge scattered keys back to Benefits
                     fragments = ["Retirement", "Death", "Funeral", "Benefits (Short-Term)"]
                     for frag in fragments:
                         if frag in data['menu']:
                             for item in data['menu'][frag]:
-                                # Check if item already exists by code to prevent duplicates
-                                exists = any(existing[1] == item[1] for existing in data['menu']['Benefits'])
-                                if not exists:
+                                # Prevent exact code duplicates
+                                if not any(existing[1] == item[1] for existing in data['menu']['Benefits']):
                                     data['menu']['Benefits'].append(item)
                             del data['menu'][frag]
                     
-                    # Force GATE logic on the 3 critical items
-                    updated_benefits = []
-                    for lbl, code, lane in data['menu']['Benefits']:
-                        if ("Retirement" in lbl or "Death" in lbl or "Funeral" in lbl) and lane != "GATE":
-                            updated_benefits.append((lbl, code, "GATE"))
-                        else:
-                            updated_benefits.append((lbl, code, lane))
+                    # 2. EXPLODE COMBINED BUTTONS (The Critical Fix)
+                    # We rebuild the Benefits list from scratch to ensure cleanliness
+                    final_benefits = []
+                    has_ret = False
+                    has_death = False
+                    has_fun = False
                     
-                    # Sort to ensure order: Mat, Dis, Ret, Death, Funeral (Optional visual sort)
-                    # For now, just saving the updated list
-                    data['menu']['Benefits'] = updated_benefits
+                    for lbl, code, lane in data['menu']['Benefits']:
+                        # If we find the old combined button or any variation
+                        if "Retirement" in lbl and "Death" in lbl:
+                            continue # SKIP IT (Delete it)
+                        
+                        # Track what we have
+                        if lbl == "Retirement": has_ret = True
+                        if lbl == "Death": has_death = True
+                        if lbl == "Funeral": has_fun = True
+                        
+                        # Add existing valid items (Mat, Dis, or already separated items)
+                        # Force GATE logic here as well
+                        if "Retirement" in lbl and lane != "GATE": lane = "GATE"
+                        if "Death" in lbl and lane != "GATE": lane = "GATE"
+                        if "Funeral" in lbl and lane != "GATE": lane = "GATE"
+                        
+                        final_benefits.append((lbl, code, lane))
+                    
+                    # 3. INJECT MISSING BUTTONS
+                    if not has_ret: final_benefits.append(("Retirement", "Ben-Retirement", "GATE"))
+                    if not has_death: final_benefits.append(("Death", "Ben-Death", "GATE"))
+                    if not has_fun: final_benefits.append(("Funeral", "Ben-Funeral", "GATE"))
+                    
+                    data['menu']['Benefits'] = final_benefits
 
                 if "Counter" not in data['config']['assignments']:
                     data['config']['assignments']['Counter'] = ["C", "F", "E"]
