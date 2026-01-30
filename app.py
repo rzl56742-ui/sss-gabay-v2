@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v21.5 - BRANCH OPERATING SYSTEM (SMART & AGILE EDITION)
+# SSS G-ABAY v21.6 - BRANCH OPERATING SYSTEM (PRECISION & RESET)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -15,12 +15,13 @@ import os
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v21.5", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v21.6", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 
 # --- DEFAULT DATA ---
 DEFAULT_DATA = {
+    "system_date": datetime.datetime.now().strftime("%Y-%m-%d"), # TRACKS DAILY RESET
     "tickets": [],
     "history": [],
     "breaks": [],
@@ -40,7 +41,7 @@ DEFAULT_DATA = {
             "F": {"name": "Fast Lane", "desc": "Simple Trans"}
         },
         "assignments": {
-            "Counter": ["C", "F", "E"], # MSRs see C, F, and E (Smart Priority)
+            "Counter": ["C", "F", "E"],
             "Teller": ["T"],
             "Employer": ["A"],
             "eCenter": ["E"],
@@ -84,18 +85,32 @@ DEFAULT_DATA = {
     }
 }
 
-# --- REAL-TIME DATABASE ENGINE ---
+# --- REAL-TIME DATABASE ENGINE & DAILY RESET ---
 def load_db():
+    current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+    
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r") as f:
             try:
                 data = json.load(f)
+                
+                # V21.6 AUTO-MIGRATION & FIXES
                 if "breaks" not in data: data["breaks"] = []
-                if "counter_map" not in data['config']: return DEFAULT_DATA 
-                for uid in data['staff']:
-                    if "status" not in data['staff'][uid]: data['staff'][uid]["status"] = "ACTIVE"
-                # V21.5: Ensure assignments are correct
-                data['config']['assignments']['Counter'] = ["C", "F", "E"]
+                if "system_date" not in data: data["system_date"] = current_date
+                
+                # DAILY RESET LOGIC (Midnight Reset)
+                if data["system_date"] != current_date:
+                    # It's a new day! Reset queues.
+                    data["history"] = [] # Optional: In a real DB we'd archive this, but file-based needs cleanup
+                    data["tickets"] = []
+                    data["breaks"] = []
+                    data["system_date"] = current_date
+                    # Reset staff status
+                    for uid in data['staff']:
+                        data['staff'][uid]['status'] = "ACTIVE"
+                        if 'break_reason' in data['staff'][uid]: del data['staff'][uid]['break_reason']
+                        if 'break_start_time' in data['staff'][uid]: del data['staff'][uid]['break_start_time']
+                
                 return data
             except:
                 return DEFAULT_DATA
@@ -143,9 +158,11 @@ function startTimer(duration, displayId) {
         border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.15); text-align: center;
         flex: 1 1 300px; min-width: 250px; animation: fadeIn 0.5s;
     }
-    .serving-card-small h2 { margin: 0; font-size: 50px; color: #0038A8; font-weight: 900; }
-    .serving-card-small p { margin: 0; font-size: 22px; color: #333; font-weight: bold; }
-    .serving-card-small span { font-size: 16px; color: #555; }
+    .serving-card-break {
+        background: #FEF3C7; border-left: 15px solid #D97706; padding: 20px;
+        border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.15); text-align: center;
+        flex: 1 1 300px; min-width: 250px; animation: fadeIn 0.5s;
+    }
     
     /* PARKED COUNTDOWN */
     .park-row {
@@ -182,13 +199,27 @@ function startTimer(duration, displayId) {
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 3. CORE LOGIC (SMART ALGORITHMS)
+# 3. CORE LOGIC
 # ==========================================
+def format_nickname(full_name):
+    """Extracts first name from 'Last, First M.' format or uses first word."""
+    try:
+        if "," in full_name:
+            # "Tayo, Razel P." -> "Razel"
+            return full_name.split(",")[1].strip().split(" ")[0]
+        return full_name.split(" ")[0]
+    except:
+        return full_name
+
 def generate_ticket(service, lane_code, is_priority, is_appt=False, appt_name=None, appt_time=None):
     local_db = load_db()
     prefix = "A" if is_appt else ("P" if is_priority else "R")
-    count = len([t for t in local_db['tickets'] if t["lane"] == lane_code]) + 1
-    ticket_num = f"{lane_code}{prefix}-{count:03d}"
+    
+    # COUNT LOGIC FIX: Count Active + History for TODAY to keep numbers sequential
+    today_count = len([t for t in local_db['tickets'] if t["lane"] == lane_code]) + \
+                  len([t for t in local_db['history'] if t["lane"] == lane_code]) + 1
+                  
+    ticket_num = f"{lane_code}{prefix}-{today_count:03d}"
     
     new_t = {
         "id": str(uuid.uuid4()), "number": ticket_num, "lane": lane_code,
@@ -205,7 +236,6 @@ def generate_ticket(service, lane_code, is_priority, is_appt=False, appt_name=No
 def get_prio_score(t):
     ts = datetime.datetime.fromisoformat(t["timestamp"]).timestamp()
     if t.get("appt_time"): return ts - 100000 
-    # V21.5: 30-min bonus kept as fallback sorting mechanism within same category
     bonus = 1800 if t["type"] == "PRIORITY" else 0
     return ts - bonus
 
@@ -240,31 +270,18 @@ def get_allowed_counters(role):
     elif role in ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]: return [c['name'] for c in all_counters] 
     return [c['name'] for c in all_counters if c['type'] in target_types]
 
-# --- 2:1 RATIO & SMART PRIORITY LOGIC ---
 def get_next_ticket(queue, surge_mode):
     if not queue: return None
-    
-    # 1. PRIORITY SURGE MODE: Strict P Priority
     if surge_mode:
         prio_tickets = [t for t in queue if t['type'] == 'PRIORITY']
-        if prio_tickets: return prio_tickets[0] # Return top P
-        return queue[0] # Fallback to R if no P
-        
-    # 2. NORMAL MODE: 2:1 RATIO CHECK
+        if prio_tickets: return prio_tickets[0] 
+        return queue[0] 
     local_db = load_db()
-    # Check last 2 served tickets globally (simplest proxy for flow)
-    # Ideally checking per lane, but global history proxy works well for "Branch Rhythm"
     last_2 = local_db['history'][-2:]
-    
     p_count = sum(1 for t in last_2 if t['type'] == 'PRIORITY')
-    
-    # IF last 2 were Priority, FORCE REGULAR (if available)
     if p_count >= 2:
         reg_tickets = [t for t in queue if t['type'] == 'REGULAR']
         if reg_tickets: return reg_tickets[0]
-        
-    # OTHERWISE: Return Top Sorted Ticket (Priority Weighted)
-    # (Queue is already sorted by get_prio_score which handles standard P>R sort)
     return queue[0]
 
 # ==========================================
@@ -348,16 +365,26 @@ def render_kiosk():
         t = st.session_state['last_ticket']
         bg = "#FFC107" if t['type'] == 'PRIORITY' else "#2563EB"
         col = "#0038A8" if t['type'] == 'PRIORITY' else "white"
+        
         prio_text = ""
         if t['type'] == 'PRIORITY':
             prio_text = "**⚠ PRIORITY LANE:** For Seniors, PWDs, Pregnant ONLY. Non-qualified users will be sent to END of queue."
+        
+        # ISSUE #3 FIX: ADD DATE AND TIME TO PRINT
+        print_dt = datetime.datetime.now().strftime("%B %d, %Y - %I:%M %p")
+        
         st.markdown(f"""
         <div class="ticket-card no-print" style='background:{bg}; color:{col}; padding:40px; border-radius:20px; text-align:center; margin:20px 0;'>
-            <h1>{t['number']}</h1><h3>{t['service']}</h3><p>Please wait for the voice call.</p>
+            <h1>{t['number']}</h1>
+            <h3>{t['service']}</h3>
+            <p style="font-size:18px; margin-top:10px;">{print_dt}</p>
+            <p>Please wait for the voice call.</p>
         </div>
         """, unsafe_allow_html=True)
+        
         if prio_text: st.error(prio_text)
         st.info("**POLICY:** Ticket forfeited if parked for 30 mins.")
+        
         c1, c2, c3 = st.columns(3)
         with c1: 
             if st.button("❌ CANCEL", use_container_width=True): 
@@ -374,22 +401,40 @@ def render_display():
     local_db = load_db()
     st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
     
-    serving_tickets = [t for t in local_db['tickets'] if t["status"] == "SERVING"]
-    if serving_tickets:
-        st.markdown('<div class="serving-row">', unsafe_allow_html=True)
-        for t in serving_tickets:
-            staff_obj = next((v for k,v in local_db['staff'].items() if v['name'] == t.get('served_by')), None)
-            if staff_obj and staff_obj.get('status') == "ON_BREAK": continue
-            b_color = "#DC2626" if t['lane'] == "T" else ("#16A34A" if t['lane'] == "A" else "#2563EB")
-            st.markdown(f"""
-            <div class="serving-card-small" style="border-left: 15px solid {b_color};">
-                <h2 style="color:{b_color}">{t['number']}</h2>
-                <p>{t.get('served_by','Counter')}</p>
-                <span>{t['service']}</span>
-            </div>""", unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    else:
-        st.info("Waiting for next number...")
+    # ISSUE #1 FIX: COUNTER-BASED DISPLAY LOGIC (Prevent Duplicates, Show Breaks)
+    counters = local_db['config']['counter_map']
+    st.markdown('<div class="serving-row">', unsafe_allow_html=True)
+    
+    for counter in counters:
+        # Find staff at this counter
+        staff = next((s for s in local_db['staff'].values() if s.get('default_station') == counter['name']), None)
+        
+        if staff:
+            nickname = format_nickname(staff['name']) # ISSUE #1: NICKNAME
+            
+            # Check Status
+            if staff.get('status') == "ON_BREAK":
+                st.markdown(f"""
+                <div class="serving-card-break">
+                    <h2 style="color:#92400E; font-size:30px;">ON BREAK</h2>
+                    <p>{counter['name']}</p>
+                    <span>{nickname}</span>
+                </div>""", unsafe_allow_html=True)
+            
+            # Check if Serving
+            elif staff.get('status') == "ACTIVE":
+                # Find active ticket for this counter
+                active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == counter['name']), None)
+                if active_t:
+                    b_color = "#DC2626" if active_t['lane'] == "T" else ("#16A34A" if active_t['lane'] == "A" else "#2563EB")
+                    st.markdown(f"""
+                    <div class="serving-card-small" style="border-left: 15px solid {b_color};">
+                        <h2 style="color:{b_color}">{active_t['number']}</h2>
+                        <p>{counter['name']}</p>
+                        <span>{nickname} - {active_t['service']}</span>
+                    </div>""", unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
         
     c_queue, c_park = st.columns([3, 1])
     with c_queue:
@@ -462,7 +507,6 @@ def render_counter(user):
     if 'my_station' not in st.session_state: st.session_state['my_station'] = current_user_state.get('default_station', 'Counter 1')
     st.sidebar.title(f"👮 {user['name']}")
     
-    # --- SURGE MODE TOGGLE ---
     if 'surge_mode' not in st.session_state: st.session_state['surge_mode'] = False
     st.sidebar.markdown("---")
     st.session_state['surge_mode'] = st.sidebar.checkbox("🚨 PRIORITY SURGE MODE", value=st.session_state['surge_mode'])
@@ -499,14 +543,9 @@ def render_counter(user):
     station_type = current_counter_obj['type'] if current_counter_obj else "Counter"
     my_lanes = local_db['config']["assignments"].get(station_type, ["C"])
     
-    # VISIBILITY FILTER
     queue = [t for t in local_db['tickets'] if t["status"] == "WAITING" and t["lane"] in my_lanes]
-    # SORT QUEUE WITH MSR SMART LOGIC (C > F > E)
-    if "C" in my_lanes: # If MSR
-        queue.sort(key=lambda x: (
-            {"C":0, "F":1, "E":2}.get(x['lane'], 3), # Lane Priority
-            get_prio_score(x) # Then Time/Priority
-        ))
+    if "C" in my_lanes: 
+        queue.sort(key=lambda x: ({"C":0, "F":1, "E":2}.get(x['lane'], 3), get_prio_score(x)))
     else:
         queue.sort(key=get_prio_score)
     
@@ -556,7 +595,6 @@ def render_counter(user):
                 if b3.button("🔄 REFER", use_container_width=True): st.session_state['refer_modal'] = True; st.rerun()
         else:
             if st.button("🔊 CALL NEXT", type="primary", use_container_width=True):
-                # SMART 2:1 CALL LOGIC
                 nxt = get_next_ticket(queue, st.session_state['surge_mode'])
                 if nxt:
                     db_ticket = next((x for x in local_db['tickets'] if x['id'] == nxt['id']), None)
@@ -571,7 +609,6 @@ def render_counter(user):
         st.metric("Performance", count, delta=avg_time + " avg/txn")
         st.divider()
         st.write("🅿️ Parked Tickets")
-        # PARKED PRIVACY: SHOW TICKETS PARKED BY MY GROUP (LANES)
         parked = [t for t in local_db['tickets'] if t["status"] == "PARKED" and t["lane"] in my_lanes]
         for p in parked:
             if st.button(f"🔊 {p['number']}", key=p['id']):
@@ -673,7 +710,7 @@ elif mode == "staff":
         st.title("Staff Login")
         u = st.text_input("Username"); p = st.text_input("Password", type="password")
         if st.button("Login"):
-            local_db = load_db() # Fresh load to check new users
+            local_db = load_db() 
             acct = next((v for k,v in local_db['staff'].items() if v["name"] == u or k == u), None)
             if acct: 
                 if acct['pass'] == p: st.session_state['user'] = acct; st.rerun()
@@ -694,17 +731,24 @@ else:
     t1, t2, t3 = st.tabs(["🎫 Tracker", "💬 Ask G-ABAY", "⭐ Rate Us"])
     with t1:
         tn = st.text_input("Enter Ticket #")
+        # ISSUE #2 FIX: REAL-TIME REFRESH
+        if tn:
+            time.sleep(2) # AUTO-REFRESH HACK FOR REAL-TIME UPDATES
+            st.rerun()
+            
         if tn:
             local_db = load_db()
             t = next((x for x in local_db['tickets'] if x["number"] == tn), None)
+            
+            # ISSUE #2 FIX: CHECK HISTORY FOR COMPLETED TICKETS
+            t_hist = next((x for x in local_db['history'] if x["number"] == tn), None)
+            
             if t:
                 if t['status'] == "PARKED":
-                    # MOBILE LIVE TICKER
                     park_time = datetime.datetime.fromisoformat(t['park_timestamp'])
                     remaining = datetime.timedelta(minutes=30) - (datetime.datetime.now() - park_time)
                     if remaining.total_seconds() > 0:
                         mins, secs = divmod(remaining.total_seconds(), 60)
-                        # JS INJECTION FOR LIVE TICKING
                         st.markdown(f"""
                         <div id="mob_timer_{t['id']}" style="font-size:30px; font-weight:bold; color:#b91c1c; text-align:center;">
                             {int(mins):02d}:{int(secs):02d}
@@ -721,6 +765,8 @@ else:
                         c_wait1, c_wait2 = st.columns(2)
                         c_wait1.metric("Est. Wait", f"{est} mins")
                         c_wait2.metric("People Ahead", f"{people_ahead}")
+            elif t_hist:
+                st.success("✅ TRANSACTION COMPLETE. Thank you for visiting SSS Gingoog!")
             else: st.error("Not Found")
     with t2:
         st.markdown("### 🤖 Chatbot")
