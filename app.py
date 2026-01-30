@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v21.8 - BRANCH OPERATING SYSTEM (DYNAMIC GRID & LOGIN STATE)
+# SSS G-ABAY v21.9 - BRANCH OPERATING SYSTEM (POLITE EFFICIENCY EDITION)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -15,13 +15,14 @@ import os
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v21.8", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v21.9", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 
 # --- DEFAULT DATA ---
 DEFAULT_DATA = {
     "system_date": datetime.datetime.now().strftime("%Y-%m-%d"),
+    "latest_announcement": {"text": "", "id": ""}, # NEW: For Audio Sync
     "tickets": [],
     "history": [],
     "breaks": [],
@@ -93,6 +94,7 @@ def load_db():
             try:
                 data = json.load(f)
                 if "breaks" not in data: data["breaks"] = []
+                if "latest_announcement" not in data: data["latest_announcement"] = {"text": "", "id": ""}
                 if "system_date" not in data: data["system_date"] = current_date
                 
                 # DAILY RESET
@@ -103,17 +105,15 @@ def load_db():
                     data["system_date"] = current_date
                     for uid in data['staff']:
                         data['staff'][uid]['status'] = "ACTIVE"
-                        data['staff'][uid]['online'] = False # Force logout on new day
+                        data['staff'][uid]['online'] = False
                         if 'break_reason' in data['staff'][uid]: del data['staff'][uid]['break_reason']
                         if 'break_start_time' in data['staff'][uid]: del data['staff'][uid]['break_start_time']
                 
-                # MIGRATION: Ensure 'online' field exists
+                # MIGRATION
                 for uid in data['staff']:
                     if 'online' not in data['staff'][uid]: data['staff'][uid]['online'] = False
-                
                 if "Counter" not in data['config']['assignments']:
                     data['config']['assignments']['Counter'] = ["C", "F", "E"]
-                
                 return data
             except:
                 return DEFAULT_DATA
@@ -154,31 +154,24 @@ function startTimer(duration, displayId) {
     .header-text { text-align: center; font-family: sans-serif; }
     .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
     
-    /* FLUID GRID LAYOUT (AUTO-RESIZE) */
-    .serving-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-        gap: 20px;
-        width: 100%;
-        margin-bottom: 30px;
-    }
-    
+    /* TV DISPLAY CARDS */
     .serving-card-small {
-        background: white; border-left: 20px solid #2563EB; padding: 30px;
+        background: white; border-left: 20px solid #2563EB; padding: 20px;
         border-radius: 15px; box-shadow: 0 10px 15px rgba(0,0,0,0.1); text-align: center;
-        display: flex; flex-direction: column; justify-content: center;
+        display: flex; flex-direction: column; justify-content: center; height: 100%;
         animation: fadeIn 0.5s;
     }
     .serving-card-break {
-        background: #FEF3C7; border-left: 20px solid #D97706; padding: 30px;
+        background: #FEF3C7; border-left: 20px solid #D97706; padding: 20px;
         border-radius: 15px; box-shadow: 0 10px 15px rgba(0,0,0,0.1); text-align: center;
-        display: flex; flex-direction: column; justify-content: center;
+        display: flex; flex-direction: column; justify-content: center; height: 100%;
         animation: fadeIn 0.5s;
     }
-    .serving-card-small h2 { margin: 0; font-size: 60px; color: #0038A8; font-weight: 900; line-height: 1.1; }
-    .serving-card-small h3 { margin: 0; font-size: 40px; color: #92400E; font-weight: 900; line-height: 1.1; }
-    .serving-card-small p { margin: 10px 0 0 0; font-size: 24px; color: #333; font-weight: bold; text-transform: uppercase; }
-    .serving-card-small span { font-size: 20px; color: #666; font-weight: 600; margin-top: 5px; }
+    
+    /* TEXT HIERARCHY (PER CLIENT REQUEST) */
+    .serving-card-small h2 { margin: 0; font-size: 80px; color: #0038A8; font-weight: 900; line-height: 1.0; } /* TICKET */
+    .serving-card-small p { margin: 0; font-size: 24px; color: #111; font-weight: bold; text-transform: uppercase; } /* COUNTER */
+    .serving-card-small span { font-size: 20px; color: #777; font-weight: normal; margin-top: 5px; } /* STAFF */
     
     /* SWIMLANES */
     .swim-col { background: #f8f9fa; border-radius: 10px; padding: 10px; border-top: 10px solid #ccc; height: 100%; }
@@ -285,6 +278,31 @@ def get_next_ticket(queue, surge_mode):
         if reg_tickets: return reg_tickets[0]
     return queue[0]
 
+def trigger_audio(ticket_num, counter_name):
+    """Updates database to trigger audio on TV."""
+    local_db = load_db()
+    # PHONETIC SPELLING: T-R-0-0-5 -> "T... R... Zero... Zero... Five"
+    # Logic: Split letters and numbers.
+    spoken_text = f"Priority Ticket... " if "P" in ticket_num else "Ticket... "
+    
+    # CHAR BY CHAR BREAKDOWN for clarity
+    clean_num = ticket_num.replace("-", " ")
+    spelled_out = ""
+    for char in clean_num:
+        if char.isdigit():
+            if char == "0": spelled_out += "Zero... "
+            else: spelled_out += f"{char}... "
+        else:
+            spelled_out += f"{char}... "
+            
+    spoken_text += f"{spelled_out} please proceed to... {counter_name}."
+    
+    local_db['latest_announcement'] = {
+        "text": spoken_text,
+        "id": str(uuid.uuid4()) # Unique ID forces TV to play
+    }
+    save_db(local_db)
+
 # ==========================================
 # 4. MODULES
 # ==========================================
@@ -384,55 +402,81 @@ def render_kiosk():
 def render_display():
     # REAL-TIME DISPLAY: Using an empty container + Loop to force updates
     placeholder = st.empty()
+    last_audio_id = ""
     
     while True:
         local_db = load_db()
+        
+        # --- AUDIO TRIGGER (JS INJECTION) ---
+        audio_script = ""
+        current_audio = local_db.get('latest_announcement', {})
+        if current_audio.get('id') != last_audio_id and current_audio.get('text'):
+            last_audio_id = current_audio['id']
+            text_safe = current_audio['text'].replace("'", "")
+            audio_script = f"""
+            <script>
+                var msg = new SpeechSynthesisUtterance();
+                msg.text = "{text_safe}";
+                msg.rate = 1.0;
+                msg.pitch = 1.1;
+                var voices = window.speechSynthesis.getVoices();
+                // Try to find female voices
+                var fVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Zira') || v.name.includes('Google UK English Female'));
+                if(fVoice) msg.voice = fVoice;
+                window.speechSynthesis.speak(msg);
+            </script>
+            """
+        
         with placeholder.container():
+            if audio_script: st.markdown(audio_script, unsafe_allow_html=True)
+            
             st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
             
-            # --- DYNAMIC FLUID GRID (ONLY LOGGED IN STAFF) ---
+            # --- DYNAMIC FLUID GRID (SIDE-BY-SIDE 6 MAX) ---
             online_staff = [s for s in local_db['staff'].values() if s.get('online') is True]
             
             if not online_staff:
                 st.warning("Waiting for staff to log in...")
             else:
-                st.markdown('<div class="serving-grid">', unsafe_allow_html=True)
-                for staff in online_staff:
-                    nickname = format_nickname(staff['name'])
-                    station_name = staff.get('default_station', 'Unassigned')
+                # MAX 6 per row logic
+                for i in range(0, len(online_staff), 6):
+                    batch = online_staff[i:i+6]
+                    cols = st.columns(len(batch)) # Fluid width
                     
-                    # 1. Check if ON BREAK
-                    if staff.get('status') == "ON_BREAK":
-                        st.markdown(f"""
-                        <div class="serving-card-break">
-                            <h3>ON BREAK</h3>
-                            <p>{station_name}</p>
-                            <span>{nickname}</span>
-                        </div>""", unsafe_allow_html=True)
-                    
-                    # 2. Check if ACTIVE
-                    elif staff.get('status') == "ACTIVE":
-                        # Find ticket served by THIS station name
-                        active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station_name), None)
-                        
-                        if active_t:
-                            b_color = "#DC2626" if active_t['lane'] == "T" else ("#16A34A" if active_t['lane'] == "A" else "#2563EB")
-                            st.markdown(f"""
-                            <div class="serving-card-small" style="border-left: 20px solid {b_color};">
-                                <h2 style="color:{b_color}">{active_t['number']}</h2>
-                                <p>{station_name}</p>
-                                <span>{nickname} - {active_t['service']}</span>
-                            </div>""", unsafe_allow_html=True)
-                        else:
-                            # ACTIVE BUT WAITING (OPEN)
-                            st.markdown(f"""
-                            <div class="serving-card-small" style="border-left: 20px solid #ccc;">
-                                <h2 style="color:#888;">OPEN</h2>
-                                <p>{station_name}</p>
-                                <span>{nickname}</span>
-                            </div>""", unsafe_allow_html=True)
+                    for idx, staff in enumerate(batch):
+                        with cols[idx]:
+                            nickname = format_nickname(staff['name'])
+                            station_name = staff.get('default_station', 'Unassigned')
                             
-                st.markdown('</div>', unsafe_allow_html=True)
+                            # 1. Check if ON BREAK
+                            if staff.get('status') == "ON_BREAK":
+                                st.markdown(f"""
+                                <div class="serving-card-break">
+                                    <p>{station_name}</p>
+                                    <h3>ON BREAK</h3>
+                                    <span>{nickname}</span>
+                                </div>""", unsafe_allow_html=True)
+                            
+                            # 2. Check if ACTIVE
+                            elif staff.get('status') == "ACTIVE":
+                                active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station_name), None)
+                                
+                                if active_t:
+                                    b_color = "#DC2626" if active_t['lane'] == "T" else ("#16A34A" if active_t['lane'] == "A" else "#2563EB")
+                                    st.markdown(f"""
+                                    <div class="serving-card-small" style="border-left: 20px solid {b_color};">
+                                        <p>{station_name}</p>
+                                        <h2 style="color:{b_color}">{active_t['number']}</h2>
+                                        <span>{nickname}</span>
+                                    </div>""", unsafe_allow_html=True)
+                                else:
+                                    # ACTIVE BUT WAITING (OPEN)
+                                    st.markdown(f"""
+                                    <div class="serving-card-small" style="border-left: 20px solid #ccc;">
+                                        <p>{station_name}</p>
+                                        <h2 style="color:#888;">OPEN</h2>
+                                        <span>{nickname}</span>
+                                    </div>""", unsafe_allow_html=True)
 
             # --- QUEUES & PARKED ---
             st.markdown("---")
@@ -522,7 +566,6 @@ def render_counter(user):
             if st.form_submit_button("Update"):
                 if user_key: local_db['staff'][user_key]['pass'] = n_pass; save_db(local_db); st.success("Updated!")
                 
-    # LOGOUT HANDLER (Set Offline)
     if st.sidebar.button("⬅ LOGOUT"): 
         local_db['staff'][user_key]['online'] = False
         save_db(local_db)
@@ -535,8 +578,6 @@ def render_counter(user):
                 if st.form_submit_button("Book Slot"): generate_ticket(svc, "C", True, is_appt=True, appt_name=nm, appt_time=tm); st.success("Booked!")
                     
     st.markdown(f"### Station: {st.session_state['my_station']}")
-    
-    # UPDATE DB STATION IF CHANGED (SYNC FOR TV)
     allowed_counters = get_allowed_counters(user['role'])
     if st.session_state['my_station'] not in allowed_counters and allowed_counters: st.session_state['my_station'] = allowed_counters[0]
     new_station = st.selectbox("Switch Station", allowed_counters, index=allowed_counters.index(st.session_state['my_station']) if st.session_state['my_station'] in allowed_counters else 0)
@@ -594,6 +635,7 @@ def render_counter(user):
                     with c_col2:
                         if st.form_submit_button("❌ CANCEL"): st.session_state['refer_modal'] = False; st.rerun()
             else:
+                # --- CONTROL BUTTONS ---
                 st.markdown("<br>", unsafe_allow_html=True)
                 b1, b2, b3 = st.columns(3)
                 if b1.button("✅ COMPLETE", use_container_width=True): 
@@ -602,7 +644,15 @@ def render_counter(user):
                 if b2.button("🅿️ PARK", use_container_width=True): 
                     current["status"] = "PARKED"; current["park_timestamp"] = datetime.datetime.now().isoformat(); 
                     save_db(local_db); st.rerun()
-                if b3.button("🔄 REFER", use_container_width=True): st.session_state['refer_modal'] = True; st.rerun()
+                
+                # RE-CALL BUTTON (BELL)
+                if b3.button("🔔 RE-CALL", use_container_width=True):
+                    # Trigger Audio Only
+                    trigger_audio(current['number'], st.session_state['my_station'])
+                    st.toast(f"Re-calling {current['number']}...")
+                    
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("🔄 REFER", use_container_width=True): st.session_state['refer_modal'] = True; st.rerun()
         else:
             if st.button("🔊 CALL NEXT", type="primary", use_container_width=True):
                 nxt = get_next_ticket(queue, st.session_state['surge_mode'])
@@ -612,6 +662,8 @@ def render_counter(user):
                         db_ticket["status"] = "SERVING"
                         db_ticket["served_by"] = st.session_state['my_station']
                         db_ticket["start_time"] = datetime.datetime.now().isoformat()
+                        # TRIGGER AUDIO
+                        trigger_audio(db_ticket['number'], st.session_state['my_station'])
                         save_db(local_db); st.rerun()
                 else: st.warning(f"No tickets for {station_type}.")
     with c2:
@@ -623,12 +675,16 @@ def render_counter(user):
         for p in parked:
             if st.button(f"🔊 {p['number']}", key=p['id']):
                 p["status"] = "SERVING"; p["served_by"] = st.session_state['my_station']; 
+                trigger_audio(p['number'], st.session_state['my_station'])
                 save_db(local_db); st.rerun()
 
 def render_admin_panel(user):
     local_db = load_db()
     st.title("🛠 Admin & Brain Console")
-    if st.sidebar.button("⬅ LOGOUT"): del st.session_state['user']; st.rerun()
+    if st.sidebar.button("⬅ LOGOUT"): 
+        local_db['staff'][next((k for k,v in local_db['staff'].items() if v['name'] == user['name']), None)]['online'] = False
+        save_db(local_db)
+        del st.session_state['user']; st.rerun()
     tabs = []
     if user['role'] in ["ADMIN", "BRANCH_HEAD"]: tabs.extend(["Users", "Counters", "Menu", "Brain (KB)", "Announcements", "Backup"])
     if user['role'] in ["BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]: tabs.append("Analytics")
@@ -769,7 +825,7 @@ else:
                         st.warning("⚠ TICKET PARKED. Please return to counter immediately.")
                     else: 
                         st.error("❌ TICKET FORFEITED (NO SHOW).")
-                        st.markdown("<h3 style='text-align:center; color:red;'>Please get a new number.</h3>", unsafe_allow_html=True)
+                        st.markdown("<h3 style='text-align:center; color:red;'>Please get a new ticket.</h3>", unsafe_allow_html=True)
                 else:
                     st.info(f"Status: {t['status']}")
                     if t['status'] == "WAITING":
