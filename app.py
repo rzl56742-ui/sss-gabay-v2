@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v22.0 - BRANCH OPERATING SYSTEM (ZERO-COMPLAINT UX)
+# SSS G-ABAY v22.1 - BRANCH OPERATING SYSTEM (BRANDED EDITION)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -15,7 +15,7 @@ import os
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v22.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v22.1", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 
@@ -153,6 +153,13 @@ function startTimer(duration, displayId) {
     
     .header-text { text-align: center; font-family: sans-serif; }
     .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
+    
+    /* BRANDING FOOTER */
+    .brand-footer {
+        position: fixed; bottom: 5px; right: 10px; 
+        font-family: monospace; font-size: 12px; color: #888;
+        opacity: 0.7; pointer-events: none; z-index: 9999;
+    }
     
     /* SMART BLINK ANIMATION */
     @keyframes blink { 
@@ -399,6 +406,9 @@ def render_kiosk():
             if st.button("✅ DONE", type="primary", use_container_width=True): del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
         with c3:
             if st.button("🖨️ PRINT", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
+    
+    # WATERMARK
+    st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026</div>", unsafe_allow_html=True)
 
 def render_display():
     placeholder = st.empty()
@@ -518,6 +528,7 @@ def render_display():
             
             txt = " | ".join(local_db['announcements'])
             st.markdown(f"<div style='background: #FFD700; color: black; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%; font-size:20px;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
+            st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026</div>", unsafe_allow_html=True)
         
         time.sleep(3)
 
@@ -635,6 +646,7 @@ def render_counter(user):
                     with c_col2:
                         if st.form_submit_button("❌ CANCEL"): st.session_state['refer_modal'] = False; st.rerun()
             else:
+                # --- CONTROL BUTTONS ---
                 st.markdown("<br>", unsafe_allow_html=True)
                 b1, b2, b3 = st.columns(3)
                 if b1.button("✅ COMPLETE", use_container_width=True): 
@@ -643,10 +655,9 @@ def render_counter(user):
                 if b2.button("🅿️ PARK", use_container_width=True): 
                     current["status"] = "PARKED"; current["park_timestamp"] = datetime.datetime.now().isoformat(); 
                     save_db(local_db); st.rerun()
+                
                 if b3.button("🔔 RE-CALL", use_container_width=True):
-                    # SYNC RE-CALL: UPDATE TIME TO TRIGGER BLINK AGAIN
                     current["start_time"] = datetime.datetime.now().isoformat()
-                    # Find and update in DB by ID
                     for i, t in enumerate(local_db['tickets']):
                         if t['id'] == current['id']:
                             local_db['tickets'][i]['start_time'] = current["start_time"]
@@ -679,7 +690,7 @@ def render_counter(user):
         for p in parked:
             if st.button(f"🔊 {p['number']}", key=p['id']):
                 p["status"] = "SERVING"; p["served_by"] = st.session_state['my_station']; 
-                p["start_time"] = datetime.datetime.now().isoformat() # Reset for blink
+                p["start_time"] = datetime.datetime.now().isoformat()
                 trigger_audio(p['number'], st.session_state['my_station'])
                 save_db(local_db); st.rerun()
 
@@ -841,6 +852,8 @@ else:
             elif t_hist:
                 st.success("✅ TRANSACTION COMPLETE. Thank you for visiting SSS Gingoog!")
             else: st.error("Not Found")
+            
+            st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026</div>", unsafe_allow_html=True)
             
     with t2:
         st.markdown("### 🤖 Chatbot")
