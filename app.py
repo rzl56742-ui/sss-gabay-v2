@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v22.7 - BRANCH OPERATING SYSTEM (FLUID DYNAMICS EDITION)
+# SSS G-ABAY v22.8 - BRANCH OPERATING SYSTEM (GATEKEEPER FIX)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -16,7 +16,7 @@ import math
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v22.7", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v22.8", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 
@@ -118,11 +118,12 @@ def load_db():
                         if 'break_reason' in data['staff'][uid]: del data['staff'][uid]['break_reason']
                         if 'break_start_time' in data['staff'][uid]: del data['staff'][uid]['break_start_time']
                 
-                # AUTO-MIGRATION
+                # AUTO-CORRECTION: Force GATE lanes for key keywords
                 if "menu" in data and "Benefits" in data['menu']:
                     new_benefits = []
                     for lbl, code, lane in data['menu']['Benefits']:
-                        if lbl in ["Retirement", "Death", "Funeral"] and lane != "GATE":
+                        # AGGRESSIVE CHECK: If label contains key words, force GATE
+                        if ("Retirement" in lbl or "Death" in lbl or "Funeral" in lbl) and lane != "GATE":
                             new_benefits.append((lbl, code, "GATE"))
                         else:
                             new_benefits.append((lbl, code, lane))
@@ -400,7 +401,10 @@ def render_kiosk():
                 
                 for label, code, lane in db['menu'].get(cat_name, []):
                     if st.button(label, key=label):
-                        if lane == "GATE":
+                        # GATEKEEPER FIX: Force logic even if DB says otherwise
+                        is_gate_trans = (lane == "GATE") or any(x in label for x in ["Retirement", "Death", "Funeral"])
+                        
+                        if is_gate_trans:
                             st.session_state['gate_target'] = {"label": label, "code": code}
                             st.session_state['kiosk_step'] = 'gate_check'
                             st.rerun()
@@ -493,67 +497,57 @@ def render_display():
             if audio_script: st.markdown(audio_script, unsafe_allow_html=True)
             st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
             
-            # --- FLUID DYNAMICS CALCULATION ---
-            # 1. Filter Staff
-            online_staff = [s for s in local_db['staff'].values() if s.get('online') is True and s['role'] != "ADMIN" and s['name'] != "System Admin"]
-            
+            online_staff = [s for s in local_db['staff'].values() if s.get('online') is True]
             if not online_staff:
                 st.warning("Waiting for staff to log in...")
             else:
-                count = len(online_staff)
-                # 2. Calculate Rows needed (Max 6 per row)
-                num_rows = math.ceil(count / 6)
+                # FILTER SYSTEM USERS
+                active_staff = [s for s in online_staff if s['role'] != "ADMIN" and s['name'] != "System Admin"]
                 
-                # 3. Dynamic Height Formula:
-                # Available Height = 65vh. Distribute evenly.
-                # If 1 row -> 65vh. If 2 rows -> 32vh. If 3 rows -> 21vh.
-                card_height = 65 // num_rows
-                
-                # Adjust font size for multiple rows to prevent clutter
-                font_scale = 1.0 if num_rows == 1 else (0.8 if num_rows == 2 else 0.6)
-                
-                for i in range(0, count, 6):
-                    batch = online_staff[i:i+6]
-                    # 4. Use st.columns(len(batch)) to STRETCH items to fill width
-                    cols = st.columns(len(batch))
+                count = len(active_staff)
+                if count > 0:
+                    num_rows = math.ceil(count / 6)
+                    card_height = 65 // num_rows
+                    font_scale = 1.0 if num_rows == 1 else (0.8 if num_rows == 2 else 0.6)
                     
-                    for idx, staff in enumerate(batch):
-                        with cols[idx]:
-                            nickname = format_nickname(staff['name'])
-                            station_name = staff.get('default_station', 'Unassigned')
-                            
-                            # DYNAMIC CSS INJECTION PER CARD
-                            # Note: We inject a div with specific style height
-                            style_str = f"height: {card_height}vh;"
-                            
-                            if staff.get('status') == "ON_BREAK":
-                                st.markdown(f"""
-                                <div class="serving-card-break" style="{style_str}">
-                                    <p style="font-size: {30*font_scale}px;">{station_name}</p>
-                                    <h3 style="margin:0; font-size:{50*font_scale}px; color:#92400E;">ON BREAK</h3>
-                                    <span style="font-size: {24*font_scale}px;">{nickname}</span>
-                                </div>""", unsafe_allow_html=True)
-                            elif staff.get('status') == "ACTIVE":
-                                active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station_name), None)
-                                if active_t:
-                                    is_blinking = ""
-                                    if active_t.get('start_time'):
-                                        start_dt = datetime.datetime.fromisoformat(active_t['start_time'])
-                                        if (datetime.datetime.now() - start_dt).total_seconds() < 20: is_blinking = "blink-active"
-                                    b_color = "#DC2626" if active_t['lane'] == "T" else ("#16A34A" if active_t['lane'] == "A" else "#2563EB")
+                    for i in range(0, count, 6):
+                        batch = active_staff[i:i+6]
+                        cols = st.columns(len(batch))
+                        
+                        for idx, staff in enumerate(batch):
+                            with cols[idx]:
+                                nickname = format_nickname(staff['name'])
+                                station_name = staff.get('default_station', 'Unassigned')
+                                style_str = f"height: {card_height}vh;"
+                                
+                                if staff.get('status') == "ON_BREAK":
                                     st.markdown(f"""
-                                    <div class="serving-card-small" style="border-left: 25px solid {b_color}; {style_str}">
+                                    <div class="serving-card-break" style="{style_str}">
                                         <p style="font-size: {30*font_scale}px;">{station_name}</p>
-                                        <h2 style="color:{b_color}; font-size: {100*font_scale}px;" class="{is_blinking}">{active_t['number']}</h2>
+                                        <h3 style="margin:0; font-size:{50*font_scale}px; color:#92400E;">ON BREAK</h3>
                                         <span style="font-size: {24*font_scale}px;">{nickname}</span>
                                     </div>""", unsafe_allow_html=True)
-                                else:
-                                    st.markdown(f"""
-                                    <div class="serving-card-small" style="border-left: 25px solid #ccc; {style_str}">
-                                        <p style="font-size: {30*font_scale}px;">{station_name}</p>
-                                        <h2 style="color:#22c55e; font-size: {70*font_scale}px;">READY</h2>
-                                        <span style="font-size: {24*font_scale}px;">{nickname}</span>
-                                    </div>""", unsafe_allow_html=True)
+                                elif staff.get('status') == "ACTIVE":
+                                    active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station_name), None)
+                                    if active_t:
+                                        is_blinking = ""
+                                        if active_t.get('start_time'):
+                                            start_dt = datetime.datetime.fromisoformat(active_t['start_time'])
+                                            if (datetime.datetime.now() - start_dt).total_seconds() < 20: is_blinking = "blink-active"
+                                        b_color = "#DC2626" if active_t['lane'] == "T" else ("#16A34A" if active_t['lane'] == "A" else "#2563EB")
+                                        st.markdown(f"""
+                                        <div class="serving-card-small" style="border-left: 25px solid {b_color}; {style_str}">
+                                            <p style="font-size: {30*font_scale}px;">{station_name}</p>
+                                            <h2 style="color:{b_color}; font-size: {100*font_scale}px;" class="{is_blinking}">{active_t['number']}</h2>
+                                            <span style="font-size: {24*font_scale}px;">{nickname}</span>
+                                        </div>""", unsafe_allow_html=True)
+                                    else:
+                                        st.markdown(f"""
+                                        <div class="serving-card-small" style="border-left: 25px solid #ccc; {style_str}">
+                                            <p style="font-size: {30*font_scale}px;">{station_name}</p>
+                                            <h2 style="color:#22c55e; font-size: {70*font_scale}px;">READY</h2>
+                                            <span style="font-size: {24*font_scale}px;">{nickname}</span>
+                                        </div>""", unsafe_allow_html=True)
 
             st.markdown("---")
             c_queue, c_park = st.columns([3, 1])
