@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v22.8 - BRANCH OPERATING SYSTEM (GATEKEEPER FIX)
+# SSS G-ABAY v22.9 - BRANCH OPERATING SYSTEM (GRANULAR CONTROL EDITION)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -16,7 +16,7 @@ import math
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v22.8", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v22.9", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 
@@ -118,11 +118,10 @@ def load_db():
                         if 'break_reason' in data['staff'][uid]: del data['staff'][uid]['break_reason']
                         if 'break_start_time' in data['staff'][uid]: del data['staff'][uid]['break_start_time']
                 
-                # AUTO-CORRECTION: Force GATE lanes for key keywords
+                # AUTO-CORRECTION
                 if "menu" in data and "Benefits" in data['menu']:
                     new_benefits = []
                     for lbl, code, lane in data['menu']['Benefits']:
-                        # AGGRESSIVE CHECK: If label contains key words, force GATE
                         if ("Retirement" in lbl or "Death" in lbl or "Funeral" in lbl) and lane != "GATE":
                             new_benefits.append((lbl, code, "GATE"))
                         else:
@@ -178,25 +177,12 @@ function startTimer(duration, displayId) {
     @keyframes blink { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.05); color: #dc2626; } 100% { opacity: 1; transform: scale(1); } }
     .blink-active { animation: blink 1.5s infinite; }
     
-    /* SERVING CARDS (Height is set dynamically via inline style, base style here) */
-    .serving-card-small {
-        background: white; border-left: 25px solid #2563EB; padding: 20px;
-        border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center;
-        display: flex; flex-direction: column; justify-content: center;
-        transition: all 0.3s ease;
-        width: 100%;
-    }
-    .serving-card-break {
-        background: #FEF3C7; border-left: 25px solid #D97706; padding: 20px;
-        border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center;
-        display: flex; flex-direction: column; justify-content: center;
-        transition: all 0.3s ease;
-        width: 100%;
-    }
+    .serving-card-small { background: white; border-left: 25px solid #2563EB; padding: 20px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center; display: flex; flex-direction: column; justify-content: center; height: 100%; transition: all 0.3s ease; width: 100%; }
+    .serving-card-break { background: #FEF3C7; border-left: 25px solid #D97706; padding: 20px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center; display: flex; flex-direction: column; justify-content: center; transition: all 0.3s ease; width: 100%; }
     
-    /* DYNAMIC FONT SIZES HANDLED IN RENDER */
-    .serving-card-small p { margin: 0; font-weight: bold; text-transform: uppercase; color: #111; }
-    .serving-card-small span { font-weight: normal; color: #555; }
+    .serving-card-small h2 { margin: 0; font-size: 80px; color: #0038A8; font-weight: 900; line-height: 1.0; }
+    .serving-card-small p { margin: 0; font-size: 24px; color: #111; font-weight: bold; text-transform: uppercase; }
+    .serving-card-small span { font-size: 20px; color: #777; font-weight: normal; margin-top: 5px; }
     
     .swim-col { background: #f8f9fa; border-radius: 10px; padding: 10px; border-top: 10px solid #ccc; height: 100%; }
     .swim-col h3 { text-align: center; margin-bottom: 10px; font-size: 18px; text-transform: uppercase; color: #333; }
@@ -497,57 +483,67 @@ def render_display():
             if audio_script: st.markdown(audio_script, unsafe_allow_html=True)
             st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
             
-            online_staff = [s for s in local_db['staff'].values() if s.get('online') is True]
+            # --- FLUID DYNAMICS CALCULATION ---
+            # 1. Filter Staff
+            online_staff = [s for s in local_db['staff'].values() if s.get('online') is True and s['role'] != "ADMIN" and s['name'] != "System Admin"]
+            
             if not online_staff:
                 st.warning("Waiting for staff to log in...")
             else:
-                # FILTER SYSTEM USERS
-                active_staff = [s for s in online_staff if s['role'] != "ADMIN" and s['name'] != "System Admin"]
+                count = len(online_staff)
+                # 2. Calculate Rows needed (Max 6 per row)
+                num_rows = math.ceil(count / 6)
                 
-                count = len(active_staff)
-                if count > 0:
-                    num_rows = math.ceil(count / 6)
-                    card_height = 65 // num_rows
-                    font_scale = 1.0 if num_rows == 1 else (0.8 if num_rows == 2 else 0.6)
+                # 3. Dynamic Height Formula:
+                # Available Height = 65vh. Distribute evenly.
+                # If 1 row -> 65vh. If 2 rows -> 32vh. If 3 rows -> 21vh.
+                card_height = 65 // num_rows
+                
+                # Adjust font size for multiple rows to prevent clutter
+                font_scale = 1.0 if num_rows == 1 else (0.8 if num_rows == 2 else 0.6)
+                
+                for i in range(0, count, 6):
+                    batch = online_staff[i:i+6]
+                    # 4. Use st.columns(len(batch)) to STRETCH items to fill width
+                    cols = st.columns(len(batch))
                     
-                    for i in range(0, count, 6):
-                        batch = active_staff[i:i+6]
-                        cols = st.columns(len(batch))
-                        
-                        for idx, staff in enumerate(batch):
-                            with cols[idx]:
-                                nickname = format_nickname(staff['name'])
-                                station_name = staff.get('default_station', 'Unassigned')
-                                style_str = f"height: {card_height}vh;"
-                                
-                                if staff.get('status') == "ON_BREAK":
+                    for idx, staff in enumerate(batch):
+                        with cols[idx]:
+                            nickname = format_nickname(staff['name'])
+                            station_name = staff.get('default_station', 'Unassigned')
+                            
+                            # DYNAMIC CSS INJECTION PER CARD
+                            # Note: We inject a div with specific style height
+                            style_str = f"height: {card_height}vh;"
+                            
+                            if staff.get('status') == "ON_BREAK":
+                                st.markdown(f"""
+                                <div class="serving-card-break" style="{style_str}">
+                                    <p style="font-size: {30*font_scale}px;">{station_name}</p>
+                                    <h3 style="margin:0; font-size:{50*font_scale}px; color:#92400E;">ON BREAK</h3>
+                                    <span style="font-size: {24*font_scale}px;">{nickname}</span>
+                                </div>""", unsafe_allow_html=True)
+                            elif staff.get('status') == "ACTIVE":
+                                active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station_name), None)
+                                if active_t:
+                                    is_blinking = ""
+                                    if active_t.get('start_time'):
+                                        start_dt = datetime.datetime.fromisoformat(active_t['start_time'])
+                                        if (datetime.datetime.now() - start_dt).total_seconds() < 20: is_blinking = "blink-active"
+                                    b_color = "#DC2626" if active_t['lane'] == "T" else ("#16A34A" if active_t['lane'] == "A" else "#2563EB")
                                     st.markdown(f"""
-                                    <div class="serving-card-break" style="{style_str}">
+                                    <div class="serving-card-small" style="border-left: 25px solid {b_color}; {style_str}">
                                         <p style="font-size: {30*font_scale}px;">{station_name}</p>
-                                        <h3 style="margin:0; font-size:{50*font_scale}px; color:#92400E;">ON BREAK</h3>
+                                        <h2 style="color:{b_color}; font-size: {100*font_scale}px;" class="{is_blinking}">{active_t['number']}</h2>
                                         <span style="font-size: {24*font_scale}px;">{nickname}</span>
                                     </div>""", unsafe_allow_html=True)
-                                elif staff.get('status') == "ACTIVE":
-                                    active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station_name), None)
-                                    if active_t:
-                                        is_blinking = ""
-                                        if active_t.get('start_time'):
-                                            start_dt = datetime.datetime.fromisoformat(active_t['start_time'])
-                                            if (datetime.datetime.now() - start_dt).total_seconds() < 20: is_blinking = "blink-active"
-                                        b_color = "#DC2626" if active_t['lane'] == "T" else ("#16A34A" if active_t['lane'] == "A" else "#2563EB")
-                                        st.markdown(f"""
-                                        <div class="serving-card-small" style="border-left: 25px solid {b_color}; {style_str}">
-                                            <p style="font-size: {30*font_scale}px;">{station_name}</p>
-                                            <h2 style="color:{b_color}; font-size: {100*font_scale}px;" class="{is_blinking}">{active_t['number']}</h2>
-                                            <span style="font-size: {24*font_scale}px;">{nickname}</span>
-                                        </div>""", unsafe_allow_html=True)
-                                    else:
-                                        st.markdown(f"""
-                                        <div class="serving-card-small" style="border-left: 25px solid #ccc; {style_str}">
-                                            <p style="font-size: {30*font_scale}px;">{station_name}</p>
-                                            <h2 style="color:#22c55e; font-size: {70*font_scale}px;">READY</h2>
-                                            <span style="font-size: {24*font_scale}px;">{nickname}</span>
-                                        </div>""", unsafe_allow_html=True)
+                                else:
+                                    st.markdown(f"""
+                                    <div class="serving-card-small" style="border-left: 25px solid #ccc; {style_str}">
+                                        <p style="font-size: {30*font_scale}px;">{station_name}</p>
+                                        <h2 style="color:#22c55e; font-size: {70*font_scale}px;">READY</h2>
+                                        <span style="font-size: {24*font_scale}px;">{nickname}</span>
+                                    </div>""", unsafe_allow_html=True)
 
             st.markdown("---")
             c_queue, c_park = st.columns([3, 1])
@@ -747,17 +743,32 @@ def render_admin_panel(user):
 
     elif active == "Exemptions":
         st.subheader("Manage Exemption Warnings")
-        claim_type = st.selectbox("Claim Type", ["Retirement", "Death", "Funeral"])
-        current_list = local_db['exemptions'].get(claim_type, [])
-        st.write(f"Current Exemptions for **{claim_type}**:")
-        for i, ex in enumerate(current_list):
-            c1, c2 = st.columns([4, 1])
-            c1.text(f"• {ex}")
-            if c2.button("🗑", key=f"ex_del_{i}"): local_db['exemptions'][claim_type].pop(i); save_db(local_db); st.rerun()
-        new_ex = st.text_input("Add New Exemption Condition")
-        if st.button("Add Exemption"):
-            if claim_type not in local_db['exemptions']: local_db['exemptions'][claim_type] = []
-            local_db['exemptions'][claim_type].append(new_ex); save_db(local_db); st.success("Added!"); st.rerun()
+        st.info("These warnings appear when a user selects Retirement, Death, or Funeral in the Kiosk.")
+        
+        # TABBED INTERFACE FOR EXEMPTIONS (V22.9 UPGRADE)
+        t_ret, t_death, t_fun = st.tabs(["Retirement", "Death", "Funeral"])
+        
+        # Helper to render exemption list per tab
+        def render_exemption_tab(claim_type):
+            current_list = local_db['exemptions'].get(claim_type, [])
+            st.write(f"Current Exemptions for **{claim_type}**:")
+            for i, ex in enumerate(current_list):
+                c1, c2 = st.columns([4, 1])
+                c1.text(f"• {ex}")
+                if c2.button("🗑", key=f"del_{claim_type}_{i}"):
+                    local_db['exemptions'][claim_type].pop(i)
+                    save_db(local_db); st.rerun()
+            
+            st.markdown("---")
+            new_ex = st.text_input(f"Add New {claim_type} Exemption", key=f"new_{claim_type}")
+            if st.button(f"Add to {claim_type}", key=f"add_{claim_type}"):
+                if claim_type not in local_db['exemptions']: local_db['exemptions'][claim_type] = []
+                local_db['exemptions'][claim_type].append(new_ex)
+                save_db(local_db); st.success("Added!"); st.rerun()
+
+        with t_ret: render_exemption_tab("Retirement")
+        with t_death: render_exemption_tab("Death")
+        with t_fun: render_exemption_tab("Funeral")
 
     elif active == "Users":
         st.subheader("Manage Users"); h1, h2, h3, h4, h5 = st.columns([1.5, 3, 2, 1, 0.5]); h1.markdown("**ID**"); h2.markdown("**Name**"); h3.markdown("**Station**")
