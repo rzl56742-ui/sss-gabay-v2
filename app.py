@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v21.9 - BRANCH OPERATING SYSTEM (POLITE EFFICIENCY EDITION)
+# SSS G-ABAY v22.0 - BRANCH OPERATING SYSTEM (ZERO-COMPLAINT UX)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -15,14 +15,14 @@ import os
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v21.9", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v22.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 
 # --- DEFAULT DATA ---
 DEFAULT_DATA = {
     "system_date": datetime.datetime.now().strftime("%Y-%m-%d"),
-    "latest_announcement": {"text": "", "id": ""}, # NEW: For Audio Sync
+    "latest_announcement": {"text": "", "id": ""},
     "tickets": [],
     "history": [],
     "breaks": [],
@@ -154,12 +154,20 @@ function startTimer(duration, displayId) {
     .header-text { text-align: center; font-family: sans-serif; }
     .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
     
+    /* SMART BLINK ANIMATION */
+    @keyframes blink { 
+        0% { opacity: 1; transform: scale(1); } 
+        50% { opacity: 0.5; transform: scale(1.05); color: #dc2626; } 
+        100% { opacity: 1; transform: scale(1); } 
+    }
+    .blink-active { animation: blink 1.5s infinite; }
+    
     /* TV DISPLAY CARDS */
     .serving-card-small {
         background: white; border-left: 20px solid #2563EB; padding: 20px;
         border-radius: 15px; box-shadow: 0 10px 15px rgba(0,0,0,0.1); text-align: center;
         display: flex; flex-direction: column; justify-content: center; height: 100%;
-        animation: fadeIn 0.5s;
+        transition: all 0.3s ease;
     }
     .serving-card-break {
         background: #FEF3C7; border-left: 20px solid #D97706; padding: 20px;
@@ -168,10 +176,10 @@ function startTimer(duration, displayId) {
         animation: fadeIn 0.5s;
     }
     
-    /* TEXT HIERARCHY (PER CLIENT REQUEST) */
-    .serving-card-small h2 { margin: 0; font-size: 80px; color: #0038A8; font-weight: 900; line-height: 1.0; } /* TICKET */
-    .serving-card-small p { margin: 0; font-size: 24px; color: #111; font-weight: bold; text-transform: uppercase; } /* COUNTER */
-    .serving-card-small span { font-size: 20px; color: #777; font-weight: normal; margin-top: 5px; } /* STAFF */
+    /* TEXT HIERARCHY */
+    .serving-card-small h2 { margin: 0; font-size: 80px; color: #0038A8; font-weight: 900; line-height: 1.0; }
+    .serving-card-small p { margin: 0; font-size: 24px; color: #111; font-weight: bold; text-transform: uppercase; }
+    .serving-card-small span { font-size: 20px; color: #777; font-weight: normal; margin-top: 5px; }
     
     /* SWIMLANES */
     .swim-col { background: #f8f9fa; border-radius: 10px; padding: 10px; border-top: 10px solid #ccc; height: 100%; }
@@ -279,13 +287,8 @@ def get_next_ticket(queue, surge_mode):
     return queue[0]
 
 def trigger_audio(ticket_num, counter_name):
-    """Updates database to trigger audio on TV."""
     local_db = load_db()
-    # PHONETIC SPELLING: T-R-0-0-5 -> "T... R... Zero... Zero... Five"
-    # Logic: Split letters and numbers.
     spoken_text = f"Priority Ticket... " if "P" in ticket_num else "Ticket... "
-    
-    # CHAR BY CHAR BREAKDOWN for clarity
     clean_num = ticket_num.replace("-", " ")
     spelled_out = ""
     for char in clean_num:
@@ -294,12 +297,10 @@ def trigger_audio(ticket_num, counter_name):
             else: spelled_out += f"{char}... "
         else:
             spelled_out += f"{char}... "
-            
     spoken_text += f"{spelled_out} please proceed to... {counter_name}."
-    
     local_db['latest_announcement'] = {
         "text": spoken_text,
-        "id": str(uuid.uuid4()) # Unique ID forces TV to play
+        "id": str(uuid.uuid4())
     }
     save_db(local_db)
 
@@ -400,14 +401,13 @@ def render_kiosk():
             if st.button("🖨️ PRINT", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
 
 def render_display():
-    # REAL-TIME DISPLAY: Using an empty container + Loop to force updates
     placeholder = st.empty()
     last_audio_id = ""
     
     while True:
         local_db = load_db()
         
-        # --- AUDIO TRIGGER (JS INJECTION) ---
+        # --- AUDIO TRIGGER ---
         audio_script = ""
         current_audio = local_db.get('latest_announcement', {})
         if current_audio.get('id') != last_audio_id and current_audio.get('text'):
@@ -420,7 +420,6 @@ def render_display():
                 msg.rate = 1.0;
                 msg.pitch = 1.1;
                 var voices = window.speechSynthesis.getVoices();
-                // Try to find female voices
                 var fVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Zira') || v.name.includes('Google UK English Female'));
                 if(fVoice) msg.voice = fVoice;
                 window.speechSynthesis.speak(msg);
@@ -432,23 +431,20 @@ def render_display():
             
             st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
             
-            # --- DYNAMIC FLUID GRID (SIDE-BY-SIDE 6 MAX) ---
             online_staff = [s for s in local_db['staff'].values() if s.get('online') is True]
             
             if not online_staff:
                 st.warning("Waiting for staff to log in...")
             else:
-                # MAX 6 per row logic
                 for i in range(0, len(online_staff), 6):
                     batch = online_staff[i:i+6]
-                    cols = st.columns(len(batch)) # Fluid width
+                    cols = st.columns(len(batch))
                     
                     for idx, staff in enumerate(batch):
                         with cols[idx]:
                             nickname = format_nickname(staff['name'])
                             station_name = staff.get('default_station', 'Unassigned')
                             
-                            # 1. Check if ON BREAK
                             if staff.get('status') == "ON_BREAK":
                                 st.markdown(f"""
                                 <div class="serving-card-break">
@@ -457,28 +453,32 @@ def render_display():
                                     <span>{nickname}</span>
                                 </div>""", unsafe_allow_html=True)
                             
-                            # 2. Check if ACTIVE
                             elif staff.get('status') == "ACTIVE":
                                 active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station_name), None)
                                 
                                 if active_t:
+                                    # SMART BLINK LOGIC
+                                    is_blinking = ""
+                                    if active_t.get('start_time'):
+                                        start_dt = datetime.datetime.fromisoformat(active_t['start_time'])
+                                        sec_diff = (datetime.datetime.now() - start_dt).total_seconds()
+                                        if sec_diff < 20: is_blinking = "blink-active"
+                                    
                                     b_color = "#DC2626" if active_t['lane'] == "T" else ("#16A34A" if active_t['lane'] == "A" else "#2563EB")
                                     st.markdown(f"""
                                     <div class="serving-card-small" style="border-left: 20px solid {b_color};">
                                         <p>{station_name}</p>
-                                        <h2 style="color:{b_color}">{active_t['number']}</h2>
+                                        <h2 style="color:{b_color}" class="{is_blinking}">{active_t['number']}</h2>
                                         <span>{nickname}</span>
                                     </div>""", unsafe_allow_html=True)
                                 else:
-                                    # ACTIVE BUT WAITING (OPEN)
                                     st.markdown(f"""
                                     <div class="serving-card-small" style="border-left: 20px solid #ccc;">
                                         <p>{station_name}</p>
-                                        <h2 style="color:#888;">OPEN</h2>
+                                        <h2 style="color:#22c55e;">READY</h2>
                                         <span>{nickname}</span>
                                     </div>""", unsafe_allow_html=True)
 
-            # --- QUEUES & PARKED ---
             st.markdown("---")
             c_queue, c_park = st.columns([3, 1])
             with c_queue:
@@ -519,7 +519,7 @@ def render_display():
             txt = " | ".join(local_db['announcements'])
             st.markdown(f"<div style='background: #FFD700; color: black; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%; font-size:20px;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
         
-        time.sleep(3) # Refresh every 3 seconds
+        time.sleep(3)
 
 def render_counter(user):
     local_db = load_db()
@@ -635,7 +635,6 @@ def render_counter(user):
                     with c_col2:
                         if st.form_submit_button("❌ CANCEL"): st.session_state['refer_modal'] = False; st.rerun()
             else:
-                # --- CONTROL BUTTONS ---
                 st.markdown("<br>", unsafe_allow_html=True)
                 b1, b2, b3 = st.columns(3)
                 if b1.button("✅ COMPLETE", use_container_width=True): 
@@ -644,12 +643,18 @@ def render_counter(user):
                 if b2.button("🅿️ PARK", use_container_width=True): 
                     current["status"] = "PARKED"; current["park_timestamp"] = datetime.datetime.now().isoformat(); 
                     save_db(local_db); st.rerun()
-                
-                # RE-CALL BUTTON (BELL)
                 if b3.button("🔔 RE-CALL", use_container_width=True):
-                    # Trigger Audio Only
+                    # SYNC RE-CALL: UPDATE TIME TO TRIGGER BLINK AGAIN
+                    current["start_time"] = datetime.datetime.now().isoformat()
+                    # Find and update in DB by ID
+                    for i, t in enumerate(local_db['tickets']):
+                        if t['id'] == current['id']:
+                            local_db['tickets'][i]['start_time'] = current["start_time"]
+                            break
                     trigger_audio(current['number'], st.session_state['my_station'])
+                    save_db(local_db)
                     st.toast(f"Re-calling {current['number']}...")
+                    time.sleep(0.5); st.rerun()
                     
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("🔄 REFER", use_container_width=True): st.session_state['refer_modal'] = True; st.rerun()
@@ -662,7 +667,6 @@ def render_counter(user):
                         db_ticket["status"] = "SERVING"
                         db_ticket["served_by"] = st.session_state['my_station']
                         db_ticket["start_time"] = datetime.datetime.now().isoformat()
-                        # TRIGGER AUDIO
                         trigger_audio(db_ticket['number'], st.session_state['my_station'])
                         save_db(local_db); st.rerun()
                 else: st.warning(f"No tickets for {station_type}.")
@@ -675,6 +679,7 @@ def render_counter(user):
         for p in parked:
             if st.button(f"🔊 {p['number']}", key=p['id']):
                 p["status"] = "SERVING"; p["served_by"] = st.session_state['my_station']; 
+                p["start_time"] = datetime.datetime.now().isoformat() # Reset for blink
                 trigger_audio(p['number'], st.session_state['my_station'])
                 save_db(local_db); st.rerun()
 
@@ -783,7 +788,6 @@ elif mode == "staff":
             if acct: 
                 if acct['pass'] == p: 
                     st.session_state['user'] = acct
-                    # SET ONLINE STATE
                     local_db['staff'][acct_key]['online'] = True
                     save_db(local_db)
                     st.rerun()
@@ -824,7 +828,7 @@ else:
                         """, unsafe_allow_html=True)
                         st.warning("⚠ TICKET PARKED. Please return to counter immediately.")
                     else: 
-                        st.error("❌ TICKET FORFEITED (NO SHOW).")
+                        st.error("❌ YOUR TICKET HAS EXPIRED.")
                         st.markdown("<h3 style='text-align:center; color:red;'>Please get a new ticket.</h3>", unsafe_allow_html=True)
                 else:
                     st.info(f"Status: {t['status']}")
