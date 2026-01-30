@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v22.5 - BRANCH OPERATING SYSTEM (STABLE RELEASE)
+# SSS G-ABAY v22.6 - BRANCH OPERATING SYSTEM (AUTO-CORRECTION)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -15,7 +15,7 @@ import os
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v22.5", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v22.6", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 
@@ -100,6 +100,7 @@ def load_db():
         with open(DATA_FILE, "r") as f:
             try:
                 data = json.load(f)
+                # Ensure fields exist
                 if "exemptions" not in data: data["exemptions"] = DEFAULT_DATA["exemptions"]
                 if "breaks" not in data: data["breaks"] = []
                 if "latest_announcement" not in data: data["latest_announcement"] = {"text": "", "id": ""}
@@ -117,20 +118,23 @@ def load_db():
                         if 'break_reason' in data['staff'][uid]: del data['staff'][uid]['break_reason']
                         if 'break_start_time' in data['staff'][uid]: del data['staff'][uid]['break_start_time']
                 
-                # AUTO-MIGRATION
+                # --- AUTO-CORRECTION MIGRATION (RUNS EVERY TIME) ---
+                # Fix Menu "GATE" Lanes
                 if "menu" in data and "Benefits" in data['menu']:
                     new_benefits = []
                     for lbl, code, lane in data['menu']['Benefits']:
+                        # Force update old "C" lanes to "GATE" for specific items
                         if lbl in ["Retirement", "Death", "Funeral"] and lane != "GATE":
                             new_benefits.append((lbl, code, "GATE"))
                         else:
                             new_benefits.append((lbl, code, lane))
                     data['menu']['Benefits'] = new_benefits
 
+                # Fix Assignments
                 if "Counter" not in data['config']['assignments']:
                     data['config']['assignments']['Counter'] = ["C", "F", "E"]
                 
-                # Ensure online field exists
+                # Fix Online Fields
                 for uid in data['staff']:
                     if 'online' not in data['staff'][uid]: data['staff'][uid]['online'] = False
                     
@@ -178,12 +182,26 @@ function startTimer(duration, displayId) {
     @keyframes blink { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.05); color: #dc2626; } 100% { opacity: 1; transform: scale(1); } }
     .blink-active { animation: blink 1.5s infinite; }
     
-    .serving-card-small { background: white; border-left: 20px solid #2563EB; padding: 20px; border-radius: 15px; box-shadow: 0 10px 15px rgba(0,0,0,0.1); text-align: center; display: flex; flex-direction: column; justify-content: center; height: 100%; transition: all 0.3s ease; }
-    .serving-card-break { background: #FEF3C7; border-left: 20px solid #D97706; padding: 20px; border-radius: 15px; box-shadow: 0 10px 15px rgba(0,0,0,0.1); text-align: center; display: flex; flex-direction: column; justify-content: center; height: 100%; animation: fadeIn 0.5s; }
+    /* DISPLAY CARDS - RESIZED FOR VISIBILITY */
+    .serving-card-small {
+        background: white; border-left: 25px solid #2563EB; padding: 20px;
+        border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center;
+        display: flex; flex-direction: column; justify-content: center;
+        height: 35vh; /* DYNAMIC HEIGHT: 35% of Viewport Height */
+        transition: all 0.3s ease;
+    }
+    .serving-card-break {
+        background: #FEF3C7; border-left: 25px solid #D97706; padding: 20px;
+        border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center;
+        display: flex; flex-direction: column; justify-content: center;
+        height: 35vh; /* DYNAMIC HEIGHT */
+        animation: fadeIn 0.5s;
+    }
     
-    .serving-card-small h2 { margin: 0; font-size: 80px; color: #0038A8; font-weight: 900; line-height: 1.0; }
-    .serving-card-small p { margin: 0; font-size: 24px; color: #111; font-weight: bold; text-transform: uppercase; }
-    .serving-card-small span { font-size: 20px; color: #777; font-weight: normal; margin-top: 5px; }
+    /* HUGE TEXT FOR VISIBILITY */
+    .serving-card-small h2 { margin: 0; font-size: 100px; color: #0038A8; font-weight: 900; line-height: 1.0; }
+    .serving-card-small p { margin: 0; font-size: 30px; color: #111; font-weight: bold; text-transform: uppercase; }
+    .serving-card-small span { font-size: 24px; color: #555; font-weight: normal; margin-top: 10px; }
     
     .swim-col { background: #f8f9fa; border-radius: 10px; padding: 10px; border-top: 10px solid #ccc; height: 100%; }
     .swim-col h3 { text-align: center; margin-bottom: 10px; font-size: 18px; text-transform: uppercase; color: #333; }
@@ -490,7 +508,8 @@ def render_display():
                     cols = st.columns(len(batch))
                     for idx, staff in enumerate(batch):
                         with cols[idx]:
-                            if staff['role'] == "ADMIN": continue
+                            # FILTER SYSTEM USERS
+                            if staff['role'] == "ADMIN" or staff['name'] == "System Admin": continue
                             
                             nickname = format_nickname(staff['name'])
                             station_name = staff.get('default_station', 'Unassigned')
@@ -504,9 +523,9 @@ def render_display():
                                         start_dt = datetime.datetime.fromisoformat(active_t['start_time'])
                                         if (datetime.datetime.now() - start_dt).total_seconds() < 20: is_blinking = "blink-active"
                                     b_color = "#DC2626" if active_t['lane'] == "T" else ("#16A34A" if active_t['lane'] == "A" else "#2563EB")
-                                    st.markdown(f"""<div class="serving-card-small" style="border-left: 20px solid {b_color};"><p>{station_name}</p><h2 style="color:{b_color}" class="{is_blinking}">{active_t['number']}</h2><span>{nickname}</span></div>""", unsafe_allow_html=True)
+                                    st.markdown(f"""<div class="serving-card-small" style="border-left: 25px solid {b_color};"><p>{station_name}</p><h2 style="color:{b_color}" class="{is_blinking}">{active_t['number']}</h2><span>{nickname}</span></div>""", unsafe_allow_html=True)
                                 else:
-                                    st.markdown(f"""<div class="serving-card-small" style="border-left: 20px solid #ccc;"><p>{station_name}</p><h2 style="color:#22c55e;">READY</h2><span>{nickname}</span></div>""", unsafe_allow_html=True)
+                                    st.markdown(f"""<div class="serving-card-small" style="border-left: 25px solid #ccc;"><p>{station_name}</p><h2 style="color:#22c55e;">READY</h2><span>{nickname}</span></div>""", unsafe_allow_html=True)
 
             st.markdown("---")
             c_queue, c_park = st.columns([3, 1])
