@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v21.6 - BRANCH OPERATING SYSTEM (PRECISION & RESET)
+# SSS G-ABAY v21.7 - BRANCH OPERATING SYSTEM (REAL-TIME ENGINE FIX)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -15,13 +15,13 @@ import os
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v21.6", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v21.7", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 
 # --- DEFAULT DATA ---
 DEFAULT_DATA = {
-    "system_date": datetime.datetime.now().strftime("%Y-%m-%d"), # TRACKS DAILY RESET
+    "system_date": datetime.datetime.now().strftime("%Y-%m-%d"),
     "tickets": [],
     "history": [],
     "breaks": [],
@@ -85,31 +85,30 @@ DEFAULT_DATA = {
     }
 }
 
-# --- REAL-TIME DATABASE ENGINE & DAILY RESET ---
+# --- DATABASE ENGINE ---
 def load_db():
     current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-    
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r") as f:
             try:
                 data = json.load(f)
-                
-                # V21.6 AUTO-MIGRATION & FIXES
                 if "breaks" not in data: data["breaks"] = []
                 if "system_date" not in data: data["system_date"] = current_date
                 
-                # DAILY RESET LOGIC (Midnight Reset)
+                # DAILY RESET
                 if data["system_date"] != current_date:
-                    # It's a new day! Reset queues.
-                    data["history"] = [] # Optional: In a real DB we'd archive this, but file-based needs cleanup
+                    data["history"] = [] 
                     data["tickets"] = []
                     data["breaks"] = []
                     data["system_date"] = current_date
-                    # Reset staff status
                     for uid in data['staff']:
                         data['staff'][uid]['status'] = "ACTIVE"
                         if 'break_reason' in data['staff'][uid]: del data['staff'][uid]['break_reason']
                         if 'break_start_time' in data['staff'][uid]: del data['staff'][uid]['break_start_time']
+                
+                # REPAIR ASSIGNMENTS IF MISSING
+                if "Counter" not in data['config']['assignments']:
+                    data['config']['assignments']['Counter'] = ["C", "F", "E"]
                 
                 return data
             except:
@@ -151,40 +150,29 @@ function startTimer(duration, displayId) {
     .header-text { text-align: center; font-family: sans-serif; }
     .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
     
-    /* TV DISPLAY */
-    .serving-row { display: flex; flex-direction: row; flex-wrap: wrap; gap: 20px; justify-content: center; width: 100%; margin-bottom: 20px; }
+    /* SERVING CARDS */
     .serving-card-small {
-        background: white; border-left: 15px solid #2563EB; padding: 20px;
-        border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.15); text-align: center;
-        flex: 1 1 300px; min-width: 250px; animation: fadeIn 0.5s;
+        background: white; border-left: 15px solid #2563EB; padding: 15px;
+        border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center;
+        height: 100%;
     }
     .serving-card-break {
-        background: #FEF3C7; border-left: 15px solid #D97706; padding: 20px;
-        border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.15); text-align: center;
-        flex: 1 1 300px; min-width: 250px; animation: fadeIn 0.5s;
+        background: #FEF3C7; border-left: 15px solid #D97706; padding: 15px;
+        border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center;
+        height: 100%;
     }
-    
-    /* PARKED COUNTDOWN */
-    .park-row {
-        background: #fff3cd; color: #333; padding: 10px; margin-bottom: 5px; border-radius: 5px;
-        font-weight: bold; display: flex; justify-content: space-between; border-left: 5px solid #ffc107;
-    }
-    .park-danger { 
-        background: #fee2e2; color: #b91c1c; border-left: 5px solid #ef4444; 
-        animation: pulse 2s infinite; display: flex; justify-content: space-between; padding: 10px; border-radius: 5px; font-weight: bold;
-    }
+    .serving-card-small h2 { margin: 0; font-size: 40px; color: #0038A8; font-weight: 900; }
+    .serving-card-small p { margin: 0; font-size: 20px; color: #333; font-weight: bold; }
+    .serving-card-small span { font-size: 16px; color: #555; }
     
     /* SWIMLANES */
     .swim-col { background: #f8f9fa; border-radius: 10px; padding: 10px; border-top: 10px solid #ccc; height: 100%; }
     .swim-col h3 { text-align: center; margin-bottom: 10px; font-size: 18px; text-transform: uppercase; color: #333; }
     .queue-item { 
-        background: white; border-bottom: 1px solid #ddd; padding: 15px; margin-bottom: 5px;
+        background: white; border-bottom: 1px solid #ddd; padding: 12px; margin-bottom: 5px;
         border-radius: 5px; display: flex; justify-content: space-between;
     }
-    .queue-item span { font-size: 24px; font-weight: 900; color: #111; }
-    
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+    .queue-item span { font-size: 20px; font-weight: 900; color: #111; }
     
     /* KIOSK */
     .gate-btn > button { height: 350px !important; width: 100% !important; font-size: 40px !important; font-weight: 900 !important; border-radius: 30px !important; }
@@ -195,6 +183,11 @@ function startTimer(duration, displayId) {
     .head-orange { background-color: #EA580C; } .border-orange > button { border-left: 20px solid #EA580C !important; }
     .head-green { background-color: #16A34A; } .border-green > button { border-left: 20px solid #16A34A !important; }
     .head-blue { background-color: #2563EB; } .border-blue > button { border-left: 20px solid #2563EB !important; }
+    
+    /* PARKED */
+    .park-row { background: #fff3cd; color: #333; padding: 8px; margin-bottom: 5px; border-radius: 5px; border-left: 5px solid #ffc107; font-weight:bold; display:flex; justify-content:space-between; }
+    .park-danger { background: #fee2e2; color: #b91c1c; border-left: 5px solid #ef4444; animation: pulse 2s infinite; padding: 8px; border-radius: 5px; font-weight:bold; display:flex; justify-content:space-between;}
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
 </style>
 """, unsafe_allow_html=True)
 
@@ -202,23 +195,16 @@ function startTimer(duration, displayId) {
 # 3. CORE LOGIC
 # ==========================================
 def format_nickname(full_name):
-    """Extracts first name from 'Last, First M.' format or uses first word."""
     try:
-        if "," in full_name:
-            # "Tayo, Razel P." -> "Razel"
-            return full_name.split(",")[1].strip().split(" ")[0]
+        if "," in full_name: return full_name.split(",")[1].strip().split(" ")[0]
         return full_name.split(" ")[0]
-    except:
-        return full_name
+    except: return full_name
 
 def generate_ticket(service, lane_code, is_priority, is_appt=False, appt_name=None, appt_time=None):
     local_db = load_db()
     prefix = "A" if is_appt else ("P" if is_priority else "R")
-    
-    # COUNT LOGIC FIX: Count Active + History for TODAY to keep numbers sequential
     today_count = len([t for t in local_db['tickets'] if t["lane"] == lane_code]) + \
                   len([t for t in local_db['history'] if t["lane"] == lane_code]) + 1
-                  
     ticket_num = f"{lane_code}{prefix}-{today_count:03d}"
     
     new_t = {
@@ -289,12 +275,6 @@ def get_next_ticket(queue, surge_mode):
 # ==========================================
 
 def render_kiosk():
-    st.markdown("""
-        <div class='header-text'>
-            <div style='font-size: 14px; color: #555; text-transform: uppercase; letter-spacing: 2px;'>Republic of the Philippines</div>
-            <div style='font-size: 40px; font-weight: 900; color: #0038A8; text-transform: uppercase; font-style: italic;'>SOCIAL SECURITY SYSTEM</div>
-        </div>
-    """, unsafe_allow_html=True)
     st.markdown(f"<div class='header-text header-branch'>{db['config']['branch_name']}</div>", unsafe_allow_html=True)
     st.markdown("<div style='text-align:center; color:#555;'>Gabay sa bawat miyembro. Mangyaring pumili ng uri ng serbisyo.</div><br>", unsafe_allow_html=True)
 
@@ -365,26 +345,16 @@ def render_kiosk():
         t = st.session_state['last_ticket']
         bg = "#FFC107" if t['type'] == 'PRIORITY' else "#2563EB"
         col = "#0038A8" if t['type'] == 'PRIORITY' else "white"
-        
-        prio_text = ""
-        if t['type'] == 'PRIORITY':
-            prio_text = "**⚠ PRIORITY LANE:** For Seniors, PWDs, Pregnant ONLY. Non-qualified users will be sent to END of queue."
-        
-        # ISSUE #3 FIX: ADD DATE AND TIME TO PRINT
+        prio_text = "**⚠ PRIORITY LANE:** For Seniors, PWDs, Pregnant ONLY." if t['type'] == 'PRIORITY' else ""
         print_dt = datetime.datetime.now().strftime("%B %d, %Y - %I:%M %p")
         
         st.markdown(f"""
         <div class="ticket-card no-print" style='background:{bg}; color:{col}; padding:40px; border-radius:20px; text-align:center; margin:20px 0;'>
-            <h1>{t['number']}</h1>
-            <h3>{t['service']}</h3>
-            <p style="font-size:18px; margin-top:10px;">{print_dt}</p>
-            <p>Please wait for the voice call.</p>
+            <h1>{t['number']}</h1><h3>{t['service']}</h3><p style="font-size:18px;">{print_dt}</p>
         </div>
         """, unsafe_allow_html=True)
-        
         if prio_text: st.error(prio_text)
         st.info("**POLICY:** Ticket forfeited if parked for 30 mins.")
-        
         c1, c2, c3 = st.columns(3)
         with c1: 
             if st.button("❌ CANCEL", use_container_width=True): 
@@ -398,88 +368,85 @@ def render_kiosk():
             if st.button("🖨️ PRINT", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
 
 def render_display():
-    local_db = load_db()
-    st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
+    # REAL-TIME DISPLAY: Using an empty container + Loop to force updates
+    placeholder = st.empty()
     
-    # ISSUE #1 FIX: COUNTER-BASED DISPLAY LOGIC (Prevent Duplicates, Show Breaks)
-    counters = local_db['config']['counter_map']
-    st.markdown('<div class="serving-row">', unsafe_allow_html=True)
-    
-    for counter in counters:
-        # Find staff at this counter
-        staff = next((s for s in local_db['staff'].values() if s.get('default_station') == counter['name']), None)
-        
-        if staff:
-            nickname = format_nickname(staff['name']) # ISSUE #1: NICKNAME
+    while True:
+        local_db = load_db()
+        with placeholder.container():
+            st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
             
-            # Check Status
-            if staff.get('status') == "ON_BREAK":
-                st.markdown(f"""
-                <div class="serving-card-break">
-                    <h2 style="color:#92400E; font-size:30px;">ON BREAK</h2>
-                    <p>{counter['name']}</p>
-                    <span>{nickname}</span>
-                </div>""", unsafe_allow_html=True)
+            # --- SERVING GRID ---
+            counters = local_db['config']['counter_map']
             
-            # Check if Serving
-            elif staff.get('status') == "ACTIVE":
-                # Find active ticket for this counter
-                active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == counter['name']), None)
-                if active_t:
-                    b_color = "#DC2626" if active_t['lane'] == "T" else ("#16A34A" if active_t['lane'] == "A" else "#2563EB")
-                    st.markdown(f"""
-                    <div class="serving-card-small" style="border-left: 15px solid {b_color};">
-                        <h2 style="color:{b_color}">{active_t['number']}</h2>
-                        <p>{counter['name']}</p>
-                        <span>{nickname} - {active_t['service']}</span>
-                    </div>""", unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+            # Use native Columns for Side-by-Side (Calculates rows automatically)
+            # Create batches of 3 counters per row
+            for i in range(0, len(counters), 3):
+                cols = st.columns(3)
+                batch = counters[i:i+3]
+                
+                for idx, counter in enumerate(batch):
+                    with cols[idx]:
+                        staff = next((s for s in local_db['staff'].values() if s.get('default_station') == counter['name']), None)
+                        if staff:
+                            nickname = format_nickname(staff['name'])
+                            if staff.get('status') == "ON_BREAK":
+                                st.markdown(f"""
+                                <div class="serving-card-break">
+                                    <h2 style="color:#92400E;">ON BREAK</h2>
+                                    <p>{counter['name']}</p><span>{nickname}</span>
+                                </div>""", unsafe_allow_html=True)
+                            elif staff.get('status') == "ACTIVE":
+                                active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == counter['name']), None)
+                                if active_t:
+                                    b_color = "#DC2626" if active_t['lane'] == "T" else ("#16A34A" if active_t['lane'] == "A" else "#2563EB")
+                                    st.markdown(f"""
+                                    <div class="serving-card-small" style="border-left: 15px solid {b_color};">
+                                        <h2 style="color:{b_color}">{active_t['number']}</h2>
+                                        <p>{counter['name']}</p><span>{nickname} - {active_t['service']}</span>
+                                    </div>""", unsafe_allow_html=True)
+                                else:
+                                    # Show Empty Counter
+                                    st.markdown(f"""<div class="serving-card-small" style="border-left: 15px solid #ccc; opacity:0.5;"><h2>OPEN</h2><p>{counter['name']}</p><span>{nickname}</span></div>""", unsafe_allow_html=True)
+
+            # --- QUEUES & PARKED ---
+            st.markdown("---")
+            c_queue, c_park = st.columns([3, 1])
+            with c_queue:
+                q1, q2, q3 = st.columns(3)
+                waiting = [t for t in local_db['tickets'] if t["status"] == "WAITING"]
+                waiting.sort(key=get_prio_score)
+                with q1:
+                    st.markdown(f"<div class='swim-col' style='border-top-color:#DC2626;'><h3>💳 PAYMENTS</h3>", unsafe_allow_html=True)
+                    for t in [x for x in waiting if x['lane'] == 'T'][:5]:
+                        st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+                with q2:
+                    st.markdown(f"<div class='swim-col' style='border-top-color:#16A34A;'><h3>💼 EMPLOYERS</h3>", unsafe_allow_html=True)
+                    for t in [x for x in waiting if x['lane'] == 'A'][:5]:
+                        st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+                with q3:
+                    st.markdown(f"<div class='swim-col' style='border-top-color:#2563EB;'><h3>👤 SERVICES</h3>", unsafe_allow_html=True)
+                    for t in [x for x in waiting if x['lane'] in ['C','E','F']][:5]:
+                        st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+            with c_park:
+                st.markdown("### 🅿️ PARKED")
+                parked = [t for t in local_db['tickets'] if t["status"] == "PARKED"]
+                for p in parked:
+                    park_time = datetime.datetime.fromisoformat(p['park_timestamp'])
+                    remaining = datetime.timedelta(minutes=30) - (datetime.datetime.now() - park_time)
+                    if remaining.total_seconds() > 0:
+                        mins, secs = divmod(remaining.total_seconds(), 60)
+                        css_class = "park-danger" if mins < 5 else "park-row"
+                        st.markdown(f"""<div class="{css_class}"><span>{p['number']}</span><span>{int(mins):02d}:{int(secs):02d}</span></div>""", unsafe_allow_html=True)
+            
+            txt = " | ".join(local_db['announcements'])
+            st.markdown(f"<div style='background: #FFD700; color: black; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%; font-size:20px;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
         
-    c_queue, c_park = st.columns([3, 1])
-    with c_queue:
-        q1, q2, q3 = st.columns(3)
-        waiting = [t for t in local_db['tickets'] if t["status"] == "WAITING"]
-        waiting.sort(key=get_prio_score)
-        with q1:
-            st.markdown(f"<div class='swim-col' style='border-top-color:#DC2626;'><h3>💳 PAYMENTS</h3>", unsafe_allow_html=True)
-            for t in [x for x in waiting if x['lane'] == 'T'][:5]:
-                st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-        with q2:
-            st.markdown(f"<div class='swim-col' style='border-top-color:#16A34A;'><h3>💼 EMPLOYERS</h3>", unsafe_allow_html=True)
-            for t in [x for x in waiting if x['lane'] == 'A'][:5]:
-                st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-        with q3:
-            st.markdown(f"<div class='swim-col' style='border-top-color:#2563EB;'><h3>👤 SERVICES</h3>", unsafe_allow_html=True)
-            for t in [x for x in waiting if x['lane'] in ['C','E','F']][:5]:
-                st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-    with c_park:
-        st.markdown("### 🅿️ PARKED")
-        parked = [t for t in local_db['tickets'] if t["status"] == "PARKED"]
-        for p in parked:
-            park_time = datetime.datetime.fromisoformat(p['park_timestamp'])
-            elapsed = datetime.datetime.now() - park_time
-            remaining = datetime.timedelta(minutes=30) - elapsed
-            if remaining.total_seconds() <= 0:
-                p["status"] = "NO_SHOW"
-                save_db(local_db)
-                st.rerun()
-            else:
-                mins, secs = divmod(remaining.total_seconds(), 60)
-                css_class = "park-danger" if mins < 5 else "park-row"
-                st.markdown(f"""
-                <div class="{css_class}">
-                    <span>{p['number']}</span>
-                    <span>{int(mins):02d}:{int(secs):02d}</span>
-                </div>""", unsafe_allow_html=True)
-
-    txt = " | ".join(local_db['announcements'])
-    st.markdown(f"<div style='background: #FFD700; color: black; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%; font-size:20px;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
-    time.sleep(3); st.rerun()
+        time.sleep(3) # Refresh every 3 seconds
 
 def render_counter(user):
     local_db = load_db()
@@ -731,16 +698,10 @@ else:
     t1, t2, t3 = st.tabs(["🎫 Tracker", "💬 Ask G-ABAY", "⭐ Rate Us"])
     with t1:
         tn = st.text_input("Enter Ticket #")
-        # ISSUE #2 FIX: REAL-TIME REFRESH
-        if tn:
-            time.sleep(2) # AUTO-REFRESH HACK FOR REAL-TIME UPDATES
-            st.rerun()
-            
+        
         if tn:
             local_db = load_db()
             t = next((x for x in local_db['tickets'] if x["number"] == tn), None)
-            
-            # ISSUE #2 FIX: CHECK HISTORY FOR COMPLETED TICKETS
             t_hist = next((x for x in local_db['history'] if x["number"] == tn), None)
             
             if t:
@@ -768,10 +729,11 @@ else:
             elif t_hist:
                 st.success("✅ TRANSACTION COMPLETE. Thank you for visiting SSS Gingoog!")
             else: st.error("Not Found")
+            
     with t2:
         st.markdown("### 🤖 Chatbot")
         now = datetime.datetime.now()
-        is_offline = not (8 <= now.hour < 17) # 8AM to 5PM
+        is_offline = not (8 <= now.hour < 17) 
         if "messages" not in st.session_state: st.session_state.messages = []
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]): st.markdown(msg["content"])
@@ -779,7 +741,7 @@ else:
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"): st.markdown(prompt)
             if is_offline:
-                resp = "Hello! I am currently offline. My operating hours are Monday to Friday, 8:00 AM to 5:00 PM. For immediate assistance, please visit the official SSS website at www.sss.gov.ph"
+                resp = "Hello! I am currently offline. My operating hours are Monday to Friday, 8:00 AM to 5:00 PM."
             else:
                 found = False
                 for kb in db['knowledge_base']:
@@ -796,3 +758,8 @@ else:
                 local_db['reviews'].append({"rating": rate, "personnel": pers, "comment": comm})
                 save_db(local_db)
                 st.success("Thanks!")
+            
+    # NON-BLOCKING AUTO-REFRESH SCRIPT (Placed at end)
+    # This checks for updates every 5 seconds without freezing input
+    time.sleep(5)
+    st.rerun()
