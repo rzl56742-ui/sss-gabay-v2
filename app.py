@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v22.9 - BRANCH OPERATING SYSTEM (GRANULAR CONTROL EDITION)
+# SSS G-ABAY v22.11 - BRANCH OPERATING SYSTEM (CORRECTED HIERARCHY)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -16,7 +16,7 @@ import math
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v22.9", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v22.11", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 
@@ -63,13 +63,14 @@ DEFAULT_DATA = {
             {"name": "eCenter", "type": "eCenter"}
         ]
     },
+    # CORRECTED MENU STRUCTURE (V22.11)
     "menu": {
         "Benefits": [
             ("Maternity / Sickness", "Ben-Mat/Sick", "E"),
-            ("Retirement", "Ben-Retirement", "GATE"),
-            ("Death", "Ben-Death", "GATE"),
-            ("Funeral", "Ben-Funeral", "GATE"),
-            ("Disability / Unemployment", "Ben-Dis/Unemp", "E")
+            ("Disability / Unemployment", "Ben-Dis/Unemp", "E"),
+            ("Retirement", "Ben-Retirement", "GATE"), # Gate Logic Active
+            ("Death", "Ben-Death", "GATE"),       # Gate Logic Active
+            ("Funeral", "Ben-Funeral", "GATE")    # Gate Logic Active
         ],
         "Loans": [
             ("Salary / Conso", "Ln-Sal/Conso", "E"),
@@ -118,15 +119,33 @@ def load_db():
                         if 'break_reason' in data['staff'][uid]: del data['staff'][uid]['break_reason']
                         if 'break_start_time' in data['staff'][uid]: del data['staff'][uid]['break_start_time']
                 
-                # AUTO-CORRECTION
-                if "menu" in data and "Benefits" in data['menu']:
-                    new_benefits = []
+                # --- V22.11 RE-MERGE MIGRATION ---
+                # Detect if menu was split in v22.10 and merge back to "Benefits"
+                if "menu" in data:
+                    # 1. Ensure "Benefits" exists
+                    if "Benefits" not in data['menu']: data['menu']['Benefits'] = []
+                    
+                    # 2. Check for fragmented keys and merge them back
+                    fragments = ["Retirement", "Death", "Funeral", "Benefits (Short-Term)"]
+                    for frag in fragments:
+                        if frag in data['menu']:
+                            # Move items to Benefits
+                            for item in data['menu'][frag]:
+                                # Avoid duplicates
+                                if item not in data['menu']['Benefits']:
+                                    data['menu']['Benefits'].append(item)
+                            # Remove fragment
+                            del data['menu'][frag]
+                    
+                    # 3. Ensure GATE lanes are set for key transactions
+                    # Re-scan Benefits to enforce GATE logic
+                    updated_benefits = []
                     for lbl, code, lane in data['menu']['Benefits']:
                         if ("Retirement" in lbl or "Death" in lbl or "Funeral" in lbl) and lane != "GATE":
-                            new_benefits.append((lbl, code, "GATE"))
+                            updated_benefits.append((lbl, code, "GATE"))
                         else:
-                            new_benefits.append((lbl, code, lane))
-                    data['menu']['Benefits'] = new_benefits
+                            updated_benefits.append((lbl, code, lane))
+                    data['menu']['Benefits'] = updated_benefits
 
                 if "Counter" not in data['config']['assignments']:
                     data['config']['assignments']['Counter'] = ["C", "F", "E"]
@@ -177,12 +196,25 @@ function startTimer(duration, displayId) {
     @keyframes blink { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.05); color: #dc2626; } 100% { opacity: 1; transform: scale(1); } }
     .blink-active { animation: blink 1.5s infinite; }
     
-    .serving-card-small { background: white; border-left: 25px solid #2563EB; padding: 20px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center; display: flex; flex-direction: column; justify-content: center; height: 100%; transition: all 0.3s ease; width: 100%; }
-    .serving-card-break { background: #FEF3C7; border-left: 25px solid #D97706; padding: 20px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center; display: flex; flex-direction: column; justify-content: center; transition: all 0.3s ease; width: 100%; }
+    /* SERVING CARDS */
+    .serving-card-small {
+        background: white; border-left: 25px solid #2563EB; padding: 20px;
+        border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center;
+        display: flex; flex-direction: column; justify-content: center;
+        transition: all 0.3s ease;
+        width: 100%;
+    }
+    .serving-card-break {
+        background: #FEF3C7; border-left: 25px solid #D97706; padding: 20px;
+        border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center;
+        display: flex; flex-direction: column; justify-content: center;
+        transition: all 0.3s ease;
+        width: 100%;
+    }
     
-    .serving-card-small h2 { margin: 0; font-size: 80px; color: #0038A8; font-weight: 900; line-height: 1.0; }
-    .serving-card-small p { margin: 0; font-size: 24px; color: #111; font-weight: bold; text-transform: uppercase; }
-    .serving-card-small span { font-size: 20px; color: #777; font-weight: normal; margin-top: 5px; }
+    /* DYNAMIC FONT SIZES HANDLED IN RENDER */
+    .serving-card-small p { margin: 0; font-weight: bold; text-transform: uppercase; color: #111; }
+    .serving-card-small span { font-weight: normal; color: #555; }
     
     .swim-col { background: #f8f9fa; border-radius: 10px; padding: 10px; border-top: 10px solid #ccc; height: 100%; }
     .swim-col h3 { text-align: center; margin-bottom: 10px; font-size: 18px; text-transform: uppercase; color: #333; }
@@ -387,7 +419,7 @@ def render_kiosk():
                 
                 for label, code, lane in db['menu'].get(cat_name, []):
                     if st.button(label, key=label):
-                        # GATEKEEPER FIX: Force logic even if DB says otherwise
+                        # GATEKEEPER FIX: Check for GATE transaction
                         is_gate_trans = (lane == "GATE") or any(x in label for x in ["Retirement", "Death", "Funeral"])
                         
                         if is_gate_trans:
@@ -495,25 +527,17 @@ def render_display():
                 num_rows = math.ceil(count / 6)
                 
                 # 3. Dynamic Height Formula:
-                # Available Height = 65vh. Distribute evenly.
-                # If 1 row -> 65vh. If 2 rows -> 32vh. If 3 rows -> 21vh.
                 card_height = 65 // num_rows
-                
-                # Adjust font size for multiple rows to prevent clutter
                 font_scale = 1.0 if num_rows == 1 else (0.8 if num_rows == 2 else 0.6)
                 
                 for i in range(0, count, 6):
                     batch = online_staff[i:i+6]
-                    # 4. Use st.columns(len(batch)) to STRETCH items to fill width
                     cols = st.columns(len(batch))
                     
                     for idx, staff in enumerate(batch):
                         with cols[idx]:
                             nickname = format_nickname(staff['name'])
                             station_name = staff.get('default_station', 'Unassigned')
-                            
-                            # DYNAMIC CSS INJECTION PER CARD
-                            # Note: We inject a div with specific style height
                             style_str = f"height: {card_height}vh;"
                             
                             if staff.get('status') == "ON_BREAK":
@@ -743,12 +767,10 @@ def render_admin_panel(user):
 
     elif active == "Exemptions":
         st.subheader("Manage Exemption Warnings")
-        st.info("These warnings appear when a user selects Retirement, Death, or Funeral in the Kiosk.")
         
-        # TABBED INTERFACE FOR EXEMPTIONS (V22.9 UPGRADE)
+        # TABBED INTERFACE (V22.9)
         t_ret, t_death, t_fun = st.tabs(["Retirement", "Death", "Funeral"])
         
-        # Helper to render exemption list per tab
         def render_exemption_tab(claim_type):
             current_list = local_db['exemptions'].get(claim_type, [])
             st.write(f"Current Exemptions for **{claim_type}**:")
@@ -758,7 +780,6 @@ def render_admin_panel(user):
                 if c2.button("🗑", key=f"del_{claim_type}_{i}"):
                     local_db['exemptions'][claim_type].pop(i)
                     save_db(local_db); st.rerun()
-            
             st.markdown("---")
             new_ex = st.text_input(f"Add New {claim_type} Exemption", key=f"new_{claim_type}")
             if st.button(f"Add to {claim_type}", key=f"add_{claim_type}"):
