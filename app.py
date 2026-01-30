@@ -63,13 +63,14 @@ DEFAULT_DATA = {
             {"name": "eCenter", "type": "eCenter"}
         ]
     },
+    # CORRECTED MENU STRUCTURE (V22.12 - 5 Items under Benefits)
     "menu": {
         "Benefits": [
             ("Maternity / Sickness", "Ben-Mat/Sick", "E"),
             ("Disability / Unemployment", "Ben-Dis/Unemp", "E"),
-            ("Retirement", "Ben-Retirement", "GATE"),
-            ("Death", "Ben-Death", "GATE"),
-            ("Funeral", "Ben-Funeral", "GATE")
+            ("Retirement", "Ben-Retirement", "GATE"), 
+            ("Death", "Ben-Death", "GATE"),       
+            ("Funeral", "Ben-Funeral", "GATE")    
         ],
         "Loans": [
             ("Salary / Conso", "Ln-Sal/Conso", "E"),
@@ -118,23 +119,32 @@ def load_db():
                         if 'break_reason' in data['staff'][uid]: del data['staff'][uid]['break_reason']
                         if 'break_start_time' in data['staff'][uid]: del data['staff'][uid]['break_start_time']
                 
-                # AUTO-CORRECTION: MERGE & GATE
+                # --- V22.12 FORCE-MERGE MIGRATION ---
+                # This fixes the split menu issues from v22.10
                 if "menu" in data:
                     if "Benefits" not in data['menu']: data['menu']['Benefits'] = []
+                    
+                    # Merge scattered keys back to Benefits
                     fragments = ["Retirement", "Death", "Funeral", "Benefits (Short-Term)"]
                     for frag in fragments:
                         if frag in data['menu']:
                             for item in data['menu'][frag]:
-                                if item not in data['menu']['Benefits']:
+                                # Check if item already exists by code to prevent duplicates
+                                exists = any(existing[1] == item[1] for existing in data['menu']['Benefits'])
+                                if not exists:
                                     data['menu']['Benefits'].append(item)
                             del data['menu'][frag]
                     
+                    # Force GATE logic on the 3 critical items
                     updated_benefits = []
                     for lbl, code, lane in data['menu']['Benefits']:
                         if ("Retirement" in lbl or "Death" in lbl or "Funeral" in lbl) and lane != "GATE":
                             updated_benefits.append((lbl, code, "GATE"))
                         else:
                             updated_benefits.append((lbl, code, lane))
+                    
+                    # Sort to ensure order: Mat, Dis, Ret, Death, Funeral (Optional visual sort)
+                    # For now, just saving the updated list
                     data['menu']['Benefits'] = updated_benefits
 
                 if "Counter" not in data['config']['assignments']:
@@ -178,6 +188,7 @@ function startTimer(duration, displayId) {
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     [data-testid="stSidebar"][aria-expanded="false"] { display: none; }
+    
     .header-text { text-align: center; font-family: sans-serif; }
     .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
     .brand-footer { position: fixed; bottom: 5px; right: 10px; font-family: monospace; font-size: 12px; color: #888; opacity: 0.7; pointer-events: none; z-index: 9999; }
@@ -185,18 +196,34 @@ function startTimer(duration, displayId) {
     @keyframes blink { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.05); color: #dc2626; } 100% { opacity: 1; transform: scale(1); } }
     .blink-active { animation: blink 1.5s infinite; }
     
-    .serving-card-small { background: white; border-left: 25px solid #2563EB; padding: 20px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center; display: flex; flex-direction: column; justify-content: center; transition: all 0.3s ease; width: 100%; }
-    .serving-card-break { background: #FEF3C7; border-left: 25px solid #D97706; padding: 20px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center; display: flex; flex-direction: column; justify-content: center; transition: all 0.3s ease; width: 100%; }
-    .serving-card-small h2 { margin: 0; font-size: 80px; color: #0038A8; font-weight: 900; line-height: 1.0; }
-    .serving-card-small p { margin: 0; font-size: 24px; color: #111; font-weight: bold; text-transform: uppercase; }
-    .serving-card-small span { font-size: 20px; color: #777; font-weight: normal; margin-top: 5px; }
+    /* SERVING CARDS */
+    .serving-card-small {
+        background: white; border-left: 25px solid #2563EB; padding: 10px;
+        border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center;
+        display: flex; flex-direction: column; justify-content: center;
+        transition: all 0.3s ease;
+        width: 100%;
+    }
+    .serving-card-break {
+        background: #FEF3C7; border-left: 25px solid #D97706; padding: 10px;
+        border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center;
+        display: flex; flex-direction: column; justify-content: center;
+        transition: all 0.3s ease;
+        width: 100%;
+    }
+    
+    /* DYNAMIC FONT SIZES HANDLED IN RENDER */
+    .serving-card-small p { margin: 0; font-weight: bold; text-transform: uppercase; color: #111; line-height: 1.2; }
+    .serving-card-small span { font-weight: normal; color: #555; }
     
     .swim-col { background: #f8f9fa; border-radius: 10px; padding: 10px; border-top: 10px solid #ccc; height: 100%; }
     .swim-col h3 { text-align: center; margin-bottom: 10px; font-size: 18px; text-transform: uppercase; color: #333; }
     .queue-item { background: white; border-bottom: 1px solid #ddd; padding: 15px; margin-bottom: 5px; border-radius: 5px; display: flex; justify-content: space-between; }
     .queue-item span { font-size: 24px; font-weight: 900; color: #111; }
+    
     .park-row { background: #fff3cd; color: #333; padding: 8px; margin-bottom: 5px; border-radius: 5px; border-left: 5px solid #ffc107; font-weight:bold; display:flex; justify-content:space-between; }
     .park-danger { background: #fee2e2; color: #b91c1c; border-left: 5px solid #ef4444; animation: pulse 2s infinite; padding: 8px; border-radius: 5px; font-weight:bold; display:flex; justify-content:space-between;}
+    
     .gate-btn > button { height: 350px !important; width: 100% !important; font-size: 40px !important; font-weight: 900 !important; border-radius: 30px !important; }
     .menu-card > button { height: 300px !important; width: 100% !important; font-size: 30px !important; font-weight: 800 !important; border-radius: 20px !important; border: 4px solid #ddd !important; }
     .swim-btn > button { height: 100px !important; width: 100% !important; font-size: 18px !important; font-weight: 700 !important; text-align: left !important; padding-left: 20px !important; }
@@ -263,15 +290,20 @@ def get_prio_score(t):
 def calculate_specific_wait_time(ticket_id, lane_code):
     local_db = load_db()
     recent = [t for t in local_db['history'] if t['lane'] == lane_code and t['end_time']]
-    avg_txn_time = 15
+    avg_txn_time = 15 # Default
     if recent:
         total_sec = sum([datetime.datetime.fromisoformat(t["end_time"]).timestamp() - datetime.datetime.fromisoformat(t["start_time"]).timestamp() for t in recent[-10:]])
         avg_txn_time = (total_sec / len(recent[-10:])) / 60
+    
     waiting_in_lane = [t for t in local_db['tickets'] if t['lane'] == lane_code and t['status'] == "WAITING"]
     waiting_in_lane.sort(key=get_prio_score)
+    
     position = 0
     for i, t in enumerate(waiting_in_lane):
-        if t['id'] == ticket_id: position = i; break
+        if t['id'] == ticket_id:
+            position = i
+            break
+            
     wait_time = round(position * avg_txn_time)
     if wait_time < 2: return "Next"
     return f"{wait_time} min"
@@ -387,7 +419,9 @@ def render_kiosk():
                 
                 for label, code, lane in db['menu'].get(cat_name, []):
                     if st.button(label, key=label):
+                        # GATEKEEPER FIX: Force logic even if DB says otherwise
                         is_gate_trans = (lane == "GATE") or any(x in label for x in ["Retirement", "Death", "Funeral"])
+                        
                         if is_gate_trans:
                             st.session_state['gate_target'] = {"label": label, "code": code}
                             st.session_state['kiosk_step'] = 'gate_check'
@@ -399,35 +433,53 @@ def render_kiosk():
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("⬅ GO BACK", type="secondary", use_container_width=True): st.session_state['kiosk_step'] = 'menu'; st.rerun()
     
+    # NEW: DYNAMIC EXEMPTION GATE
     elif st.session_state['kiosk_step'] == 'gate_check':
         target = st.session_state.get('gate_target', {})
         label = target.get('label', 'Transaction')
+        
         claim_type = "Retirement" if "Retirement" in label else ("Death" if "Death" in label else "Funeral")
         exemptions = db['exemptions'].get(claim_type, [])
+        
         st.warning(f"⚠️ PRE-QUALIFICATION FOR {label.upper()}")
         st.markdown(f"**Do NOT proceed to Online Filing if you have:**")
-        for ex in exemptions: st.markdown(f"- {ex}")
+        for ex in exemptions:
+            st.markdown(f"- {ex}")
+            
         st.markdown("---")
         c1, c2 = st.columns(2)
         with c1:
             if st.button("📂 YES, I have one of these issues", type="primary", use_container_width=True):
-                generate_ticket_callback(f"{label} (Complex)", "C", st.session_state['is_prio']); st.rerun()
+                generate_ticket_callback(f"{label} (Complex)", "C", st.session_state['is_prio'])
+                st.rerun()
         with c2:
             if st.button("💻 NO, none of these apply to me", type="primary", use_container_width=True):
-                generate_ticket_callback(f"{label} (Online)", "E", st.session_state['is_prio']); st.rerun()
+                generate_ticket_callback(f"{label} (Online)", "E", st.session_state['is_prio'])
+                st.rerun()
+        
         if st.button("⬅ CANCEL"): st.session_state['kiosk_step'] = 'mss'; st.rerun()
 
     elif st.session_state['kiosk_step'] == 'ticket':
         t = st.session_state['last_ticket']
         bg = "#FFC107" if t['type'] == 'PRIORITY' else "#2563EB"
         col = "#0038A8" if t['type'] == 'PRIORITY' else "white"
+        prio_text = "**⚠ PRIORITY LANE:** For Seniors, PWDs, Pregnant ONLY." if t['type'] == 'PRIORITY' else ""
         print_dt = datetime.datetime.now().strftime("%B %d, %Y - %I:%M %p")
-        st.markdown(f"""<div class="ticket-card no-print" style='background:{bg}; color:{col}; padding:40px; border-radius:20px; text-align:center; margin:20px 0;'><h1>{t['number']}</h1><h3>{t['service']}</h3><p style="font-size:18px;">{print_dt}</p></div>""", unsafe_allow_html=True)
-        if t['type'] == 'PRIORITY': st.error("**⚠ PRIORITY LANE:** For Seniors, PWDs, Pregnant ONLY.")
+        st.markdown(f"""
+        <div class="ticket-card no-print" style='background:{bg}; color:{col}; padding:40px; border-radius:20px; text-align:center; margin:20px 0;'>
+            <h1>{t['number']}</h1><h3>{t['service']}</h3><p style="font-size:18px;">{print_dt}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        if prio_text: st.error(prio_text)
         st.info("**POLICY:** Ticket forfeited if parked for 30 mins.")
+        
         c1, c2, c3 = st.columns(3)
         with c1: 
-            if st.button("❌ CANCEL", use_container_width=True): curr_db = load_db(); curr_db['tickets'] = [x for x in curr_db['tickets'] if x['id'] != t['id']]; save_db(curr_db); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
+            if st.button("❌ CANCEL", use_container_width=True): 
+                curr_db = load_db()
+                curr_db['tickets'] = [x for x in curr_db['tickets'] if x['id'] != t['id']]
+                save_db(curr_db)
+                del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
         with c2:
             if st.button("✅ DONE", type="primary", use_container_width=True): del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
         with c3:
@@ -446,18 +498,41 @@ def render_display():
         if current_audio.get('id') != last_audio_id and current_audio.get('text'):
             last_audio_id = current_audio['id']
             text_safe = current_audio['text'].replace("'", "")
-            audio_script = f"""<script>var msg = new SpeechSynthesisUtterance(); msg.text = "{text_safe}"; msg.rate = 1.0; msg.pitch = 1.1; var voices = window.speechSynthesis.getVoices(); var fVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Zira')); if(fVoice) msg.voice = fVoice; window.speechSynthesis.speak(msg);</script>"""
+            audio_script = f"""
+            <script>
+                var msg = new SpeechSynthesisUtterance();
+                msg.text = "{text_safe}";
+                msg.rate = 1.0;
+                msg.pitch = 1.1;
+                var voices = window.speechSynthesis.getVoices();
+                var fVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Zira') || v.name.includes('Google UK English Female'));
+                if(fVoice) msg.voice = fVoice;
+                window.speechSynthesis.speak(msg);
+            </script>
+            """
         
         with placeholder.container():
             if audio_script: st.markdown(audio_script, unsafe_allow_html=True)
             st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
             
-            # --- DEDUPLICATION LOGIC ---
+            # --- DEDUPLICATION & PREP ---
             raw_staff = [s for s in local_db['staff'].values() if s.get('online') is True and s['role'] != "ADMIN" and s['name'] != "System Admin"]
-            unique_staff_map = {} # Key: Station Name, Value: Staff Obj
+            
+            # Group by station to remove duplicates
+            unique_staff_map = {} 
             for s in raw_staff:
                 st_name = s.get('default_station', 'Unassigned')
-                unique_staff_map[st_name] = s
+                # Priority: Serving > Active > Break
+                if st_name not in unique_staff_map:
+                    unique_staff_map[st_name] = s
+                else:
+                    curr = unique_staff_map[st_name]
+                    # Upgrade if current is not serving but new one is
+                    is_curr_serving = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == st_name), None)
+                    is_new_serving = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == st_name and t.get('served_by') == s.get('default_station')), None) # Simplified check
+                    
+                    if not is_curr_serving and is_new_serving:
+                        unique_staff_map[st_name] = s
             
             unique_staff = list(unique_staff_map.values())
             
@@ -467,26 +542,47 @@ def render_display():
                 count = len(unique_staff)
                 num_rows = math.ceil(count / 6)
                 card_height = 65 // num_rows
-                font_scale = 1.0 if num_rows == 1 else (0.8 if num_rows == 2 else 0.6)
+                # Adjust font scale slightly
+                font_scale = 1.0 if num_rows == 1 else (0.8 if num_rows == 2 else 0.7)
                 
                 for i in range(0, count, 6):
                     batch = unique_staff[i:i+6]
                     cols = st.columns(len(batch))
+                    
                     for idx, staff in enumerate(batch):
                         with cols[idx]:
                             nickname = format_nickname(staff['name'])
                             station_name = staff.get('default_station', 'Unassigned')
                             style_str = f"height: {card_height}vh;"
+                            
                             if staff.get('status') == "ON_BREAK":
-                                st.markdown(f"""<div class="serving-card-break" style="{style_str}"><p style="font-size: {30*font_scale}px;">{station_name}</p><h3 style="margin:0; font-size:{50*font_scale}px; color:#92400E;">ON BREAK</h3><span style="font-size: {24*font_scale}px;">{nickname}</span></div>""", unsafe_allow_html=True)
+                                st.markdown(f"""
+                                <div class="serving-card-break" style="{style_str}">
+                                    <p style="font-size: {35*font_scale}px;">{station_name}</p>
+                                    <h3 style="margin:0; font-size:{50*font_scale}px; color:#92400E;">ON BREAK</h3>
+                                    <span style="font-size: {24*font_scale}px;">{nickname}</span>
+                                </div>""", unsafe_allow_html=True)
                             elif staff.get('status') == "ACTIVE":
                                 active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station_name), None)
                                 if active_t:
-                                    is_blinking = "blink-active" if active_t.get('start_time') and (datetime.datetime.now() - datetime.datetime.fromisoformat(active_t['start_time'])).total_seconds() < 20 else ""
+                                    is_blinking = ""
+                                    if active_t.get('start_time'):
+                                        start_dt = datetime.datetime.fromisoformat(active_t['start_time'])
+                                        if (datetime.datetime.now() - start_dt).total_seconds() < 20: is_blinking = "blink-active"
                                     b_color = "#DC2626" if active_t['lane'] == "T" else ("#16A34A" if active_t['lane'] == "A" else "#2563EB")
-                                    st.markdown(f"""<div class="serving-card-small" style="border-left: 25px solid {b_color}; {style_str}"><p style="font-size: {30*font_scale}px;">{station_name}</p><h2 style="color:{b_color}; font-size: {100*font_scale}px;" class="{is_blinking}">{active_t['number']}</h2><span style="font-size: {24*font_scale}px;">{nickname}</span></div>""", unsafe_allow_html=True)
+                                    st.markdown(f"""
+                                    <div class="serving-card-small" style="border-left: 25px solid {b_color}; {style_str}">
+                                        <p style="font-size: {35*font_scale}px;">{station_name}</p>
+                                        <h2 style="color:{b_color}; font-size: {110*font_scale}px;" class="{is_blinking}">{active_t['number']}</h2>
+                                        <span style="font-size: {24*font_scale}px;">{nickname}</span>
+                                    </div>""", unsafe_allow_html=True)
                                 else:
-                                    st.markdown(f"""<div class="serving-card-small" style="border-left: 25px solid #ccc; {style_str}"><p style="font-size: {30*font_scale}px;">{station_name}</p><h2 style="color:#22c55e; font-size: {70*font_scale}px;">READY</h2><span style="font-size: {24*font_scale}px;">{nickname}</span></div>""", unsafe_allow_html=True)
+                                    st.markdown(f"""
+                                    <div class="serving-card-small" style="border-left: 25px solid #ccc; {style_str}">
+                                        <p style="font-size: {35*font_scale}px;">{station_name}</p>
+                                        <h2 style="color:#22c55e; font-size: {70*font_scale}px;">READY</h2>
+                                        <span style="font-size: {24*font_scale}px;">{nickname}</span>
+                                    </div>""", unsafe_allow_html=True)
 
             st.markdown("---")
             c_queue, c_park = st.columns([3, 1])
@@ -496,25 +592,32 @@ def render_display():
                 waiting.sort(key=get_prio_score)
                 with q1:
                     st.markdown(f"<div class='swim-col' style='border-top-color:#DC2626;'><h3>💳 PAYMENTS</h3>", unsafe_allow_html=True)
-                    for t in [x for x in waiting if x['lane'] == 'T'][:5]: st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
+                    for t in [x for x in waiting if x['lane'] == 'T'][:5]:
+                        st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
                 with q2:
                     st.markdown(f"<div class='swim-col' style='border-top-color:#16A34A;'><h3>💼 EMPLOYERS</h3>", unsafe_allow_html=True)
-                    for t in [x for x in waiting if x['lane'] == 'A'][:5]: st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
+                    for t in [x for x in waiting if x['lane'] == 'A'][:5]:
+                        st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
                 with q3:
                     st.markdown(f"<div class='swim-col' style='border-top-color:#2563EB;'><h3>👤 SERVICES</h3>", unsafe_allow_html=True)
-                    for t in [x for x in waiting if x['lane'] in ['C','E','F']][:5]: st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
+                    for t in [x for x in waiting if x['lane'] in ['C','E','F']][:5]:
+                        st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
+
             with c_park:
                 st.markdown("### 🅿️ PARKED")
                 parked = [t for t in local_db['tickets'] if t["status"] == "PARKED"]
                 for p in parked:
-                    park_time = datetime.datetime.fromisoformat(p['park_timestamp']); remaining = datetime.timedelta(minutes=30) - (datetime.datetime.now() - park_time)
-                    if remaining.total_seconds() <= 0: p["status"] = "NO_SHOW"; save_db(local_db); st.rerun()
+                    park_time = datetime.datetime.fromisoformat(p['park_timestamp'])
+                    remaining = datetime.timedelta(minutes=30) - (datetime.datetime.now() - park_time)
+                    if remaining.total_seconds() <= 0:
+                        p["status"] = "NO_SHOW"; save_db(local_db); st.rerun()
                     else:
                         mins, secs = divmod(remaining.total_seconds(), 60)
-                        st.markdown(f"""<div class="park-danger" style="background:#fee2e2; color:#b91c1c; border-left:5px solid #ef4444; padding:10px;"><span>{p['number']}</span><span>{int(mins):02d}:{int(secs):02d}</span></div>""", unsafe_allow_html=True)
+                        css_class = "park-danger" if mins < 5 else "park-row"
+                        st.markdown(f"""<div class="{css_class}"><span>{p['number']}</span><span>{int(mins):02d}:{int(secs):02d}</span></div>""", unsafe_allow_html=True)
             
             txt = " | ".join(local_db['announcements'])
             st.markdown(f"<div style='background: #FFD700; color: black; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%; font-size:20px;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
