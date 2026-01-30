@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v22.2 - BRANCH OPERATING SYSTEM (FUTURE-READY EDITION)
+# SSS G-ABAY v22.3 - BRANCH OPERATING SYSTEM (SYNTAX REPAIR & STABILITY)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -15,7 +15,7 @@ import os
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v22.2", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v22.3", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 
@@ -31,7 +31,7 @@ DEFAULT_DATA = {
         {"topic": "Office Hours", "content": "We are open Monday to Friday, 8:00 AM to 5:00 PM."}
     ],
     "announcements": ["Welcome to SSS Gingoog. Operating Hours: 8:00 AM - 5:00 PM."],
-    "exemptions": { # NEW: Dynamic Exemptions
+    "exemptions": {
         "Retirement": ["Dropped/Cancelled SS Number", "Multiple SS Numbers", "Portability (SGS)", "Maintenance/Adjustment of records"],
         "Death": ["Dropped/Cancelled SS Number", "Multiple SS Numbers", "Claimant is not legal spouse/child", "Pending Case"],
         "Funeral": ["Dropped/Cancelled SS Number", "Multiple SS Numbers", "Receipt Issues"]
@@ -62,13 +62,12 @@ DEFAULT_DATA = {
             {"name": "eCenter", "type": "eCenter"}
         ]
     },
-    # DEFAULT MENU (Now Dynamic)
     "menu": {
         "Benefits": [
             ("Maternity / Sickness", "Ben-Mat/Sick", "E"),
-            ("Retirement", "Ben-Retirement", "GATE"), # Special GATE Logic
-            ("Death", "Ben-Death", "GATE"), # Special GATE Logic
-            ("Funeral", "Ben-Funeral", "GATE"), # Special GATE Logic
+            ("Retirement", "Ben-Retirement", "GATE"),
+            ("Death", "Ben-Death", "GATE"),
+            ("Funeral", "Ben-Funeral", "GATE"),
             ("Disability / Unemployment", "Ben-Dis/Unemp", "E")
         ],
         "Loans": [
@@ -101,7 +100,6 @@ def load_db():
         with open(DATA_FILE, "r") as f:
             try:
                 data = json.load(f)
-                # MIGRATION: Ensure all new fields exist
                 if "exemptions" not in data: data["exemptions"] = DEFAULT_DATA["exemptions"]
                 if "breaks" not in data: data["breaks"] = []
                 if "latest_announcement" not in data: data["latest_announcement"] = {"text": "", "id": ""}
@@ -119,7 +117,6 @@ def load_db():
                         if 'break_reason' in data['staff'][uid]: del data['staff'][uid]['break_reason']
                         if 'break_start_time' in data['staff'][uid]: del data['staff'][uid]['break_start_time']
                 
-                # REPAIR
                 for uid in data['staff']:
                     if 'online' not in data['staff'][uid]: data['staff'][uid]['online'] = False
                 if "Counter" not in data['config']['assignments']:
@@ -202,7 +199,6 @@ def format_nickname(full_name):
         return full_name.split(" ")[0]
     except: return full_name
 
-# V22.2: INSTANT TICKET GENERATION (LAG FIX)
 def generate_ticket_callback(service, lane_code, is_priority):
     local_db = load_db()
     prefix = "P" if is_priority else "R"
@@ -224,7 +220,6 @@ def generate_ticket_callback(service, lane_code, is_priority):
     st.session_state['kiosk_step'] = 'ticket'
 
 def generate_ticket_manual(service, lane_code, is_priority, is_appt=False, appt_name=None, appt_time=None):
-    # Wrapper for non-callback calls (Admin booking)
     local_db = load_db()
     prefix = "A" if is_appt else ("P" if is_priority else "R")
     today_count = len([t for t in local_db['tickets'] if t["lane"] == lane_code]) + \
@@ -355,8 +350,8 @@ def render_kiosk():
     elif st.session_state['kiosk_step'] == 'mss':
         st.markdown("### 👤 Member Services")
         cols = st.columns(4, gap="small")
-        categories = list(db['menu'].keys()) # DYNAMIC CATEGORIES
-        colors = ["red", "orange", "green", "blue", "red", "orange"] # Cycling colors
+        categories = list(db['menu'].keys())
+        colors = ["red", "orange", "green", "blue", "red", "orange"]
         icons = ["🏥", "💰", "📝", "💻", "❓", "⚙️"]
         
         for i, cat_name in enumerate(categories):
@@ -368,7 +363,7 @@ def render_kiosk():
                 
                 for label, code, lane in db['menu'].get(cat_name, []):
                     if st.button(label, key=label):
-                        if lane == "GATE": # SPECIAL GATE LOGIC
+                        if lane == "GATE":
                             st.session_state['gate_target'] = {"label": label, "code": code}
                             st.session_state['kiosk_step'] = 'gate_check'
                             st.rerun()
@@ -384,7 +379,6 @@ def render_kiosk():
         target = st.session_state.get('gate_target', {})
         label = target.get('label', 'Transaction')
         
-        # Determine Claim Type for Exemptions
         claim_type = "Retirement" if "Retirement" in label else ("Death" if "Death" in label else "Funeral")
         exemptions = db['exemptions'].get(claim_type, [])
         
@@ -396,12 +390,10 @@ def render_kiosk():
         st.markdown("---")
         c1, c2 = st.columns(2)
         with c1:
-            # MANUAL (Counter C)
             if st.button("📂 YES, I have one of these issues", type="primary", use_container_width=True):
                 generate_ticket_callback(f"{label} (Complex)", "C", st.session_state['is_prio'])
                 st.rerun()
         with c2:
-            # ONLINE (eCenter E)
             if st.button("💻 NO, none of these apply to me", type="primary", use_container_width=True):
                 generate_ticket_callback(f"{label} (Online)", "E", st.session_state['is_prio'])
                 st.rerun()
@@ -656,7 +648,6 @@ def render_admin_panel(user):
     st.title("🛠 Admin & Brain Console")
     if st.sidebar.button("⬅ LOGOUT"): local_db['staff'][next((k for k,v in local_db['staff'].items() if v['name'] == user['name']), None)]['online'] = False; save_db(local_db); del st.session_state['user']; st.rerun()
     
-    # PERMISSIONS
     if user['role'] == "ADMIN": tabs = ["Users", "Counters", "Menu", "Exemptions", "Brain (KB)", "Announcements", "Backup"]
     elif user['role'] in ["BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]: tabs = ["Users", "Counters", "Menu", "Exemptions", "Brain (KB)", "Announcements", "Backup", "Analytics"]
     else: st.error("Access Denied"); return
@@ -664,63 +655,42 @@ def render_admin_panel(user):
     active = st.radio("Module", tabs, horizontal=True)
     st.divider()
     
-    # --- NEW: DYNAMIC MENU MANAGER ---
     if active == "Menu":
         st.subheader("Manage Services Menu")
         c1, c2 = st.columns([1, 2])
         with c1:
             st.info("Edit Transaction Types")
-            # Select Category
             cat_list = list(local_db['menu'].keys())
             sel_cat = st.selectbox("Select Category", cat_list)
-            
-            # Edit Items in Category
             items = local_db['menu'][sel_cat]
             for i, (label, code, lane) in enumerate(items):
                 with st.expander(f"{label} ({code})"):
                     new_label = st.text_input("Label", label, key=f"l_{i}")
                     new_code = st.text_input("Code", code, key=f"c_{i}")
                     new_lane = st.selectbox("Lane", ["C", "E", "F", "T", "A", "GATE"], index=["C", "E", "F", "T", "A", "GATE"].index(lane), key=f"ln_{i}")
-                    if st.button("Update", key=f"up_{i}"):
-                        local_db['menu'][sel_cat][i] = (new_label, new_code, new_lane)
-                        save_db(local_db); st.success("Updated!"); st.rerun()
-                    if st.button("Delete", key=f"del_{i}"):
-                        local_db['menu'][sel_cat].pop(i)
-                        save_db(local_db); st.rerun()
-            
-            # Add New Item
+                    if st.button("Update", key=f"up_{i}"): local_db['menu'][sel_cat][i] = (new_label, new_code, new_lane); save_db(local_db); st.success("Updated!"); st.rerun()
+                    if st.button("Delete", key=f"del_{i}"): local_db['menu'][sel_cat].pop(i); save_db(local_db); st.rerun()
             st.markdown("---")
             st.write("Add New Transaction")
             add_lbl = st.text_input("New Label")
             add_code = st.text_input("New Code")
             add_lane = st.selectbox("Target Lane", ["C", "E", "F", "T", "A", "GATE"])
-            if st.button("Add Transaction"):
-                local_db['menu'][sel_cat].append((add_lbl, add_code, add_lane))
-                save_db(local_db); st.success("Added!"); st.rerun()
+            if st.button("Add Transaction"): local_db['menu'][sel_cat].append((add_lbl, add_code, add_lane)); save_db(local_db); st.success("Added!"); st.rerun()
 
-    # --- NEW: EXEMPTIONS MANAGER ---
     elif active == "Exemptions":
         st.subheader("Manage Exemption Warnings")
-        st.info("These bullet points appear when a user selects a GATE transaction (Retirement/Death/Funeral).")
-        
         claim_type = st.selectbox("Claim Type", ["Retirement", "Death", "Funeral"])
         current_list = local_db['exemptions'].get(claim_type, [])
-        
         st.write(f"Current Exemptions for **{claim_type}**:")
         for i, ex in enumerate(current_list):
             c1, c2 = st.columns([4, 1])
             c1.text(f"• {ex}")
-            if c2.button("🗑", key=f"ex_del_{i}"):
-                local_db['exemptions'][claim_type].pop(i)
-                save_db(local_db); st.rerun()
-        
+            if c2.button("🗑", key=f"ex_del_{i}"): local_db['exemptions'][claim_type].pop(i); save_db(local_db); st.rerun()
         new_ex = st.text_input("Add New Exemption Condition")
         if st.button("Add Exemption"):
             if claim_type not in local_db['exemptions']: local_db['exemptions'][claim_type] = []
-            local_db['exemptions'][claim_type].append(new_ex)
-            save_db(local_db); st.success("Added!"); st.rerun()
+            local_db['exemptions'][claim_type].append(new_ex); save_db(local_db); st.success("Added!"); st.rerun()
 
-    # (OTHER ADMIN TABS KEPT COMPACT)
     elif active == "Users":
         st.subheader("Manage Users"); h1, h2, h3, h4, h5 = st.columns([1.5, 3, 2, 1, 0.5]); h1.markdown("**ID**"); h2.markdown("**Name**"); h3.markdown("**Station**")
         for uid, u in list(local_db['staff'].items()):
@@ -731,31 +701,22 @@ def render_admin_panel(user):
         if uid_to_edit:
             with st.form("user_form"):
                 u_id = st.text_input("ID", uid_to_edit); u_name = st.text_input("Name", local_db['staff'][uid_to_edit]['name'])
-                u_role = st.selectbox("Role", ["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "ADMIN"]); st.form_submit_button("Save") # (Simplified logic for brevity)
+                u_role = st.selectbox("Role", ["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "ADMIN"]); st.form_submit_button("Save")
 
     elif active == "Counters":
-        for i, c in enumerate(local_db['config']['counter_map']):
-            st.text(f"{c['name']} ({c['type']})") 
-            if st.button("Delete", key=f"dc_{i}"): local_db['config']['counter_map'].pop(i); save_db(local_db); st.rerun()
-        with st.form("add_counter"):
-            cn = st.text_input("Name"); ct = st.selectbox("Type", ["Counter", "Teller", "Employer", "eCenter"])
-            if st.form_submit_button("Add"): local_db['config']['counter_map'].append({"name": cn, "type": ct}); save_db(local_db); st.rerun()
+        for i, c in enumerate(local_db['config']['counter_map']): st.text(f"{c['name']} ({c['type']})"); st.button("Delete", key=f"dc_{i}")
+        with st.form("add_counter"): cn = st.text_input("Name"); ct = st.selectbox("Type", ["Counter", "Teller", "Employer", "eCenter"]); st.form_submit_button("Add")
 
     elif active == "Brain (KB)":
         for i, kb in enumerate(local_db['knowledge_base']): st.write(f"**{kb['topic']}**: {kb['content']}")
-        with st.form("new_kb"):
-            t = st.text_input("Topic"); c = st.text_area("Content")
-            if st.form_submit_button("Add"): local_db['knowledge_base'].append({"topic": t, "content": c}); save_db(local_db); st.rerun()
+        with st.form("new_kb"): t = st.text_input("Topic"); c = st.text_area("Content"); st.form_submit_button("Add")
 
     elif active == "Announcements":
         curr = " | ".join(local_db['announcements']); new_txt = st.text_area("Marquee", value=curr)
         if st.button("Update"): local_db['announcements'] = [new_txt]; save_db(local_db); st.success("Updated!")
 
-    elif active == "Backup":
-        st.download_button("📥 BACKUP", data=json.dumps(local_db), file_name="sss_backup.json")
-        
-    elif active == "Analytics":
-        st.subheader("Data"); st.dataframe(pd.DataFrame(local_db['history']))
+    elif active == "Backup": st.download_button("📥 BACKUP", data=json.dumps(local_db), file_name="sss_backup.json")
+    elif active == "Analytics": st.subheader("Data"); st.dataframe(pd.DataFrame(local_db['history']))
 
 # ==========================================
 # 5. ROUTER
@@ -806,11 +767,15 @@ else:
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]): st.markdown(msg["content"])
         if prompt := st.chat_input("Ask about SSS..."):
-            st.session_state.messages.append({"role": "user", "content": prompt}); with st.chat_message("user"): st.markdown(prompt)
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
             resp = "Hello! For assistance, please visit the official SSS website at www.sss.gov.ph"
             for kb in db['knowledge_base']:
                 if prompt.lower() in kb['topic'].lower() or prompt.lower() in kb['content'].lower(): resp = f"**Found in {kb['topic']}:**\n{kb['content']}"; break
-            st.session_state.messages.append({"role": "assistant", "content": resp}); with st.chat_message("assistant"): st.markdown(resp)
+            st.session_state.messages.append({"role": "assistant", "content": resp})
+            with st.chat_message("assistant"):
+                st.markdown(resp)
     with t3:
         with st.form("rev"):
             rate = st.slider("Rating", 1, 5); pers = st.text_input("Personnel"); comm = st.text_area("Comments")
