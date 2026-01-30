@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v22.3 - BRANCH OPERATING SYSTEM (SYNTAX REPAIR & STABILITY)
+# SSS G-ABAY v22.4 - BRANCH OPERATING SYSTEM (PRECISION & LAYOUT)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -15,7 +15,7 @@ import os
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v22.3", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v22.4", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 
@@ -117,8 +117,16 @@ def load_db():
                         if 'break_reason' in data['staff'][uid]: del data['staff'][uid]['break_reason']
                         if 'break_start_time' in data['staff'][uid]: del data['staff'][uid]['break_start_time']
                 
-                for uid in data['staff']:
-                    if 'online' not in data['staff'][uid]: data['staff'][uid]['online'] = False
+                # AUTO-MIGRATION: Fix "C" lanes to "GATE" for complex claims (Issue #4)
+                if "menu" in data and "Benefits" in data['menu']:
+                    new_benefits = []
+                    for lbl, code, lane in data['menu']['Benefits']:
+                        if lbl in ["Retirement", "Death", "Funeral"] and lane != "GATE":
+                            new_benefits.append((lbl, code, "GATE"))
+                        else:
+                            new_benefits.append((lbl, code, lane))
+                    data['menu']['Benefits'] = new_benefits
+
                 if "Counter" not in data['config']['assignments']:
                     data['config']['assignments']['Counter'] = ["C", "F", "E"]
                 return data
@@ -243,14 +251,29 @@ def get_prio_score(t):
     bonus = 1800 if t["type"] == "PRIORITY" else 0
     return ts - bonus
 
-def calculate_real_wait_time(lane_code):
+def calculate_specific_wait_time(ticket_id, lane_code):
     local_db = load_db()
+    # 1. Calculate Average Transaction Time (from History)
     recent = [t for t in local_db['history'] if t['lane'] == lane_code and t['end_time']]
-    if not recent: return 15
-    total_sec = sum([datetime.datetime.fromisoformat(t["end_time"]).timestamp() - datetime.datetime.fromisoformat(t["start_time"]).timestamp() for t in recent[-10:]])
-    avg_txn_time = (total_sec / len(recent[-10:])) / 60 
-    queue_len = len([t for t in local_db['tickets'] if t['lane'] == lane_code and t['status'] == "WAITING"])
-    return round(queue_len * avg_txn_time)
+    avg_txn_time = 15 # Default 15 mins if no data
+    if recent:
+        total_sec = sum([datetime.datetime.fromisoformat(t["end_time"]).timestamp() - datetime.datetime.fromisoformat(t["start_time"]).timestamp() for t in recent[-10:]])
+        avg_txn_time = (total_sec / len(recent[-10:])) / 60
+    
+    # 2. Calculate Position in Queue
+    waiting_in_lane = [t for t in local_db['tickets'] if t['lane'] == lane_code and t['status'] == "WAITING"]
+    waiting_in_lane.sort(key=get_prio_score)
+    
+    position = 0
+    for i, t in enumerate(waiting_in_lane):
+        if t['id'] == ticket_id:
+            position = i
+            break
+            
+    # 3. Calculate Specific Wait (Pos * Avg)
+    wait_time = round(position * avg_txn_time)
+    if wait_time < 2: return "Next"
+    return f"{wait_time} min"
 
 def calculate_people_ahead(ticket_id, lane_code):
     local_db = load_db()
@@ -465,6 +488,9 @@ def render_display():
                     cols = st.columns(len(batch))
                     for idx, staff in enumerate(batch):
                         with cols[idx]:
+                            # ISSUE #1: GHOST USER FILTER
+                            if staff['role'] == "ADMIN": continue
+                            
                             nickname = format_nickname(staff['name'])
                             station_name = staff.get('default_station', 'Unassigned')
                             if staff.get('status') == "ON_BREAK":
@@ -697,15 +723,39 @@ def render_admin_panel(user):
             c1, c2, c3, c4, c5 = st.columns([1.5, 3, 2, 0.5, 0.5]); c1.text(uid); c2.text(f"{u['name']} ({u['role']})"); c3.text(u.get('default_station', '-'))
             if c4.button("✏️", key=f"ed_{uid}"): st.session_state['edit_uid'] = uid; st.rerun()
             if c5.button("🗑", key=f"del_{uid}"): del local_db['staff'][uid]; save_db(local_db); st.rerun()
+        
+        # ISSUE #3 FIX: ADD USER FORM OUTSIDE LOOP
+        st.markdown("---")
         uid_to_edit = st.session_state.get('edit_uid', None)
         if uid_to_edit:
-            with st.form("user_form"):
-                u_id = st.text_input("ID", uid_to_edit); u_name = st.text_input("Name", local_db['staff'][uid_to_edit]['name'])
-                u_role = st.selectbox("Role", ["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "ADMIN"]); st.form_submit_button("Save")
+            st.write(f"**Edit User: {uid_to_edit}**")
+            with st.form("edit_user_form"):
+                u_name = st.text_input("Name", local_db['staff'][uid_to_edit]['name'])
+                u_role = st.selectbox("Role", ["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "ADMIN"], index=["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "ADMIN"].index(local_db['staff'][uid_to_edit]['role']))
+                if st.form_submit_button("Save Changes"):
+                    local_db['staff'][uid_to_edit]['name'] = u_name
+                    local_db['staff'][uid_to_edit]['role'] = u_role
+                    save_db(local_db); del st.session_state['edit_uid']; st.success("Saved!"); st.rerun()
+        else:
+            st.write("**Add New User**")
+            with st.form("add_user_form"):
+                new_id = st.text_input("User ID (Login)")
+                new_name = st.text_input("Display Name")
+                new_role = st.selectbox("Role", ["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "ADMIN"])
+                if st.form_submit_button("Create User"):
+                    if new_id and new_name:
+                        local_db['staff'][new_id] = {"pass": "123", "role": new_role, "name": new_name, "default_station": "Counter 1", "status": "ACTIVE", "online": False}
+                        save_db(local_db); st.success("Created!"); st.rerun()
 
     elif active == "Counters":
-        for i, c in enumerate(local_db['config']['counter_map']): st.text(f"{c['name']} ({c['type']})"); st.button("Delete", key=f"dc_{i}")
-        with st.form("add_counter"): cn = st.text_input("Name"); ct = st.selectbox("Type", ["Counter", "Teller", "Employer", "eCenter"]); st.form_submit_button("Add")
+        # ISSUE #2 FIX: COUNTER LAYOUT
+        for i, c in enumerate(local_db['config']['counter_map']): 
+            c1, c2, c3 = st.columns([3, 2, 1])
+            c1.text(c['name']); c2.text(c['type'])
+            if c3.button("🗑", key=f"dc_{i}"): local_db['config']['counter_map'].pop(i); save_db(local_db); st.rerun()
+        with st.form("add_counter"): 
+            cn = st.text_input("Name"); ct = st.selectbox("Type", ["Counter", "Teller", "Employer", "eCenter"])
+            if st.form_submit_button("Add"): local_db['config']['counter_map'].append({"name": cn, "type": ct}); save_db(local_db); st.rerun()
 
     elif active == "Brain (KB)":
         for i, kb in enumerate(local_db['knowledge_base']): st.write(f"**{kb['topic']}**: {kb['content']}")
@@ -758,7 +808,13 @@ else:
                         st.markdown(f"""<div id="mob_timer_{t['id']}" style="font-size:30px; font-weight:bold; color:#b91c1c; text-align:center;">{int(mins):02d}:{int(secs):02d}</div><script>startTimer({remaining.total_seconds()}, "mob_timer_{t['id']}");</script>""", unsafe_allow_html=True); st.warning("⚠ TICKET PARKED. Please return to counter immediately.")
                     else: st.error("❌ YOUR TICKET HAS EXPIRED."); st.markdown("<h3 style='text-align:center; color:red;'>Please get a new ticket.</h3>", unsafe_allow_html=True)
                 else:
-                    st.info(f"Status: {t['status']}"); est = calculate_real_wait_time(t['lane']); people_ahead = calculate_people_ahead(t['id'], t['lane']); c1, c2 = st.columns(2); c1.metric("Est. Wait", f"{est} mins"); c2.metric("People Ahead", f"{people_ahead}")
+                    st.info(f"Status: {t['status']}")
+                    # ISSUE #5 FIX: INDIVIDUAL WAIT TIME CALCULATION
+                    wait_str = calculate_specific_wait_time(t['id'], t['lane'])
+                    people_ahead = calculate_people_ahead(t['id'], t['lane'])
+                    c1, c2 = st.columns(2)
+                    c1.metric("Est. Wait", wait_str)
+                    c2.metric("People Ahead", f"{people_ahead}")
             elif t_hist: st.success("✅ TRANSACTION COMPLETE. Thank you for visiting SSS Gingoog!")
             else: st.error("Not Found")
             st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026</div>", unsafe_allow_html=True)
@@ -767,15 +823,11 @@ else:
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]): st.markdown(msg["content"])
         if prompt := st.chat_input("Ask about SSS..."):
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
+            st.session_state.messages.append({"role": "user", "content": prompt}); with st.chat_message("user"): st.markdown(prompt)
             resp = "Hello! For assistance, please visit the official SSS website at www.sss.gov.ph"
             for kb in db['knowledge_base']:
                 if prompt.lower() in kb['topic'].lower() or prompt.lower() in kb['content'].lower(): resp = f"**Found in {kb['topic']}:**\n{kb['content']}"; break
-            st.session_state.messages.append({"role": "assistant", "content": resp})
-            with st.chat_message("assistant"):
-                st.markdown(resp)
+            st.session_state.messages.append({"role": "assistant", "content": resp}); with st.chat_message("assistant"): st.markdown(resp)
     with t3:
         with st.form("rev"):
             rate = st.slider("Rating", 1, 5); pers = st.text_input("Personnel"); comm = st.text_area("Comments")
