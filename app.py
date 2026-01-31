@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v22.14 - BRANCH OPERATING SYSTEM (BRAIN UPGRADE & LAYOUT FIX)
+# SSS G-ABAY v22.15 - BRANCH OPERATING SYSTEM (INFO HUB EDITION)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -12,18 +12,11 @@ import uuid
 import json
 import os
 import math
-import io
-
-# TRY IMPORTING PDF LIBRARY (Graceful fallback if missing)
-try:
-    import PyPDF2
-except ImportError:
-    PyPDF2 = None
 
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v22.14", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v22.15", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 
@@ -35,8 +28,14 @@ DEFAULT_DATA = {
     "history": [],
     "breaks": [],
     "reviews": [],
-    "knowledge_base": [
-        {"topic": "Office Hours", "content": "We are open Monday to Friday, 8:00 AM to 5:00 PM."}
+    # NEW: Default Resources for Info Hub
+    "resources": [
+        {"type": "LINK", "label": "🌐 SSS Official Website", "value": "https://www.sss.gov.ph"},
+        {"type": "LINK", "label": "💻 My.SSS Member Portal", "value": "https://member.sss.gov.ph/members/"},
+        {"type": "LINK", "label": "📖 Citizen's Charter", "value": "https://www.sss.gov.ph/sss/DownloadContent?fileName=SSS_Citizens_Charter_2024.pdf"},
+        {"type": "LINK", "label": "📥 Downloadable Forms", "value": "https://www.sss.gov.ph/sss/appmanager/viewArticle.jsp?page=forms"},
+        {"type": "FAQ", "label": "How to reset My.SSS password?", "value": "Please visit our e-Center for assistance or use the 'Forgot User ID/Password' feature on the My.SSS portal."},
+        {"type": "FAQ", "label": "What are the requirements for Funeral Claim?", "value": "1. Death Certificate (LCR certified)\n2. Official Receipt of Funeral Expenses\n3. Valid ID of claimant"}
     ],
     "announcements": ["Welcome to SSS Gingoog. Operating Hours: 8:00 AM - 5:00 PM."],
     "exemptions": {
@@ -108,6 +107,7 @@ def load_db():
         with open(DATA_FILE, "r") as f:
             try:
                 data = json.load(f)
+                if "resources" not in data: data["resources"] = DEFAULT_DATA["resources"]
                 if "exemptions" not in data: data["exemptions"] = DEFAULT_DATA["exemptions"]
                 if "breaks" not in data: data["breaks"] = []
                 if "latest_announcement" not in data: data["latest_announcement"] = {"text": "", "id": ""}
@@ -125,11 +125,9 @@ def load_db():
                         if 'break_reason' in data['staff'][uid]: del data['staff'][uid]['break_reason']
                         if 'break_start_time' in data['staff'][uid]: del data['staff'][uid]['break_start_time']
                 
-                # --- V22.13 MENU SPLITTER MIGRATION (PRESERVED) ---
+                # MENU PRESERVATION (V22.13 Logic)
                 if "menu" in data:
                     if "Benefits" not in data['menu']: data['menu']['Benefits'] = []
-                    
-                    # Merge fragmented keys back
                     fragments = ["Retirement", "Death", "Funeral", "Benefits (Short-Term)"]
                     for frag in fragments:
                         if frag in data['menu']:
@@ -137,29 +135,13 @@ def load_db():
                                 if not any(existing[1] == item[1] for existing in data['menu']['Benefits']):
                                     data['menu']['Benefits'].append(item)
                             del data['menu'][frag]
-                    
-                    # Clean and Explode Logic
-                    final_benefits = []
-                    has_ret, has_death, has_fun = False, False, False
-                    
+                    updated_benefits = []
                     for lbl, code, lane in data['menu']['Benefits']:
-                        if "Retirement" in lbl and "Death" in lbl: continue # Delete combined
-                        
-                        if "Retirement" in lbl: has_ret = True
-                        if "Death" in lbl: has_death = True
-                        if "Funeral" in lbl: has_fun = True
-                        
-                        if "Retirement" in lbl and lane != "GATE": lane = "GATE"
-                        if "Death" in lbl and lane != "GATE": lane = "GATE"
-                        if "Funeral" in lbl and lane != "GATE": lane = "GATE"
-                        
-                        final_benefits.append((lbl, code, lane))
-                    
-                    if not has_ret: final_benefits.append(("Retirement", "Ben-Retirement", "GATE"))
-                    if not has_death: final_benefits.append(("Death", "Ben-Death", "GATE"))
-                    if not has_fun: final_benefits.append(("Funeral", "Ben-Funeral", "GATE"))
-                    
-                    data['menu']['Benefits'] = final_benefits
+                        if ("Retirement" in lbl or "Death" in lbl or "Funeral" in lbl) and lane != "GATE":
+                            updated_benefits.append((lbl, code, "GATE"))
+                        else:
+                            updated_benefits.append((lbl, code, lane))
+                    data['menu']['Benefits'] = updated_benefits
 
                 if "Counter" not in data['config']['assignments']:
                     data['config']['assignments']['Counter'] = ["C", "F", "E"]
@@ -209,12 +191,13 @@ function startTimer(duration, displayId) {
     @keyframes blink { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.05); color: #dc2626; } 100% { opacity: 1; transform: scale(1); } }
     .blink-active { animation: blink 1.5s infinite; }
     
+    /* SERVING CARDS */
     .serving-card-small { background: white; border-left: 25px solid #2563EB; padding: 10px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center; display: flex; flex-direction: column; justify-content: center; transition: all 0.3s ease; width: 100%; }
     .serving-card-break { background: #FEF3C7; border-left: 25px solid #D97706; padding: 10px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center; display: flex; flex-direction: column; justify-content: center; transition: all 0.3s ease; width: 100%; }
     
-    .serving-card-small h2 { margin: 0; font-size: 80px; color: #0038A8; font-weight: 900; line-height: 1.0; }
-    .serving-card-small p { margin: 0; font-size: 24px; color: #111; font-weight: bold; text-transform: uppercase; }
-    .serving-card-small span { font-size: 20px; color: #777; font-weight: normal; margin-top: 5px; }
+    /* DYNAMIC FONT SIZES */
+    .serving-card-small p { margin: 0; font-weight: bold; text-transform: uppercase; color: #111; line-height: 1.2; }
+    .serving-card-small span { font-weight: normal; color: #555; }
     
     .swim-col { background: #f8f9fa; border-radius: 10px; padding: 10px; border-top: 10px solid #ccc; height: 100%; }
     .swim-col h3 { text-align: center; margin-bottom: 10px; font-size: 18px; text-transform: uppercase; color: #333; }
@@ -225,6 +208,11 @@ function startTimer(duration, displayId) {
     .gate-btn > button { height: 350px !important; width: 100% !important; font-size: 40px !important; font-weight: 900 !important; border-radius: 30px !important; }
     .menu-card > button { height: 300px !important; width: 100% !important; font-size: 30px !important; font-weight: 800 !important; border-radius: 20px !important; border: 4px solid #ddd !important; }
     .swim-btn > button { height: 100px !important; width: 100% !important; font-size: 18px !important; font-weight: 700 !important; text-align: left !important; padding-left: 20px !important; }
+    
+    /* INFO HUB BUTTONS */
+    .info-link { text-decoration: none; display: block; padding: 15px; background: #f0f2f6; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #2563EB; color: #333; font-weight: bold; transition: 0.2s; }
+    .info-link:hover { background: #e0e7ff; }
+    
     .head-red { background-color: #DC2626; } .border-red > button { border-left: 20px solid #DC2626 !important; }
     .head-orange { background-color: #EA580C; } .border-orange > button { border-left: 20px solid #EA580C !important; }
     .head-green { background-color: #16A34A; } .border-green > button { border-left: 20px solid #16A34A !important; }
@@ -483,15 +471,12 @@ def render_display():
             unique_staff_map = {} 
             for s in raw_staff:
                 st_name = s.get('default_station', 'Unassigned')
-                # Priority: Serving > Active > Break
                 if st_name not in unique_staff_map:
                     unique_staff_map[st_name] = s
                 else:
                     curr = unique_staff_map[st_name]
-                    # Check if new staff is serving while current is not
                     is_curr_serving = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == st_name), None)
                     is_new_serving = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == st_name and t.get('served_by') == s.get('default_station')), None) 
-                    
                     if not is_curr_serving and is_new_serving:
                         unique_staff_map[st_name] = s
             
@@ -681,11 +666,11 @@ def render_counter(user):
 
 def render_admin_panel(user):
     local_db = load_db()
-    st.title("🛠 Admin & Brain Console")
+    st.title("🛠 Admin & Resources Manager")
     if st.sidebar.button("⬅ LOGOUT"): local_db['staff'][next((k for k,v in local_db['staff'].items() if v['name'] == user['name']), None)]['online'] = False; save_db(local_db); del st.session_state['user']; st.rerun()
     
-    if user['role'] == "ADMIN": tabs = ["Users", "Counters", "Menu", "Exemptions", "Brain (KB)", "Announcements", "Backup"]
-    elif user['role'] in ["BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]: tabs = ["Users", "Counters", "Menu", "Exemptions", "Brain (KB)", "Announcements", "Backup", "Analytics"]
+    if user['role'] == "ADMIN": tabs = ["Users", "Counters", "Menu", "Exemptions", "Resources", "Announcements", "Backup"]
+    elif user['role'] in ["BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]: tabs = ["Users", "Counters", "Menu", "Exemptions", "Resources", "Announcements", "Backup", "Analytics"]
     else: st.error("Access Denied"); return
     
     active = st.radio("Module", tabs, horizontal=True)
@@ -756,46 +741,34 @@ def render_admin_panel(user):
                     if new_id and new_name: local_db['staff'][new_id] = {"pass": "123", "role": new_role, "name": new_name, "default_station": "Counter 1", "status": "ACTIVE", "online": False}; save_db(local_db); st.success("Created!"); st.rerun()
 
     elif active == "Counters":
-        # FIXED: Enforced Columns for Alignment
         for i, c in enumerate(local_db['config']['counter_map']): 
             c1, c2, c3 = st.columns([3, 2, 1])
-            c1.text(c['name']); c2.text(c['type']); 
+            c1.text(c['name']); c2.text(c['type'])
             if c3.button("🗑", key=f"dc_{i}"): local_db['config']['counter_map'].pop(i); save_db(local_db); st.rerun()
         with st.form("add_counter"): 
-            cn = st.text_input("Name"); ct = st.selectbox("Type", ["Counter", "Teller", "Employer", "eCenter"]); st.form_submit_button("Add")
+            cn = st.text_input("Name"); ct = st.selectbox("Type", ["Counter", "Teller", "Employer", "eCenter"])
+            if st.form_submit_button("Add"): local_db['config']['counter_map'].append({"name": cn, "type": ct}); save_db(local_db); st.rerun()
 
-    elif active == "Brain (KB)":
-        # PDF UPLOADER
-        st.info("Upload source documents (PDF) to train the chatbot.")
-        if PyPDF2:
-            up_file = st.file_uploader("Upload Citizen's Charter (PDF)", type="pdf")
-            if up_file:
-                if st.button("Process & Learn PDF"):
-                    with st.spinner("Reading document..."):
-                        try:
-                            pdf_reader = PyPDF2.PdfReader(up_file)
-                            text = ""
-                            for page in pdf_reader.pages:
-                                text += page.extract_text() + "\n"
-                            
-                            local_db['knowledge_base'].append({
-                                "topic": f"DOC: {up_file.name}",
-                                "content": text
-                            })
-                            save_db(local_db)
-                            st.success(f"Learned {len(pdf_reader.pages)} pages from {up_file.name}!")
-                        except Exception as e:
-                            st.error(f"Error reading PDF: {e}")
-        else:
-            st.error("PyPDF2 library not installed. Please add 'PyPDF2' to requirements.txt")
-
-        st.divider()
-        for i, kb in enumerate(local_db['knowledge_base']): 
-            with st.expander(f"📚 {kb['topic']}"):
-                st.write(kb['content'][:500] + "..." if len(kb['content']) > 500 else kb['content'])
-                if st.button("Delete", key=f"kb_del_{i}"): local_db['knowledge_base'].pop(i); save_db(local_db); st.rerun()
+    # --- V22.15 RESOURCES MANAGER (REPLACING BRAIN) ---
+    elif active == "Resources":
+        st.subheader("Manage Info Hub Content")
         
-        with st.form("new_kb"): t = st.text_input("Topic"); c = st.text_area("Content"); st.form_submit_button("Add")
+        # Display Current Resources
+        for i, res in enumerate(local_db.get('resources', [])):
+            with st.expander(f"{'🔗' if res['type'] == 'LINK' else '❓'} {res['label']}"):
+                st.write(f"**Value:** {res['value']}")
+                if st.button("Delete", key=f"res_del_{i}"): local_db['resources'].pop(i); save_db(local_db); st.rerun()
+        
+        st.markdown("---")
+        st.write("**Add New Resource**")
+        with st.form("new_res"):
+            r_type = st.selectbox("Type", ["LINK", "FAQ"])
+            r_label = st.text_input("Label / Question")
+            r_value = st.text_area("URL / Answer")
+            if st.form_submit_button("Add Resource"):
+                if "resources" not in local_db: local_db['resources'] = []
+                local_db['resources'].append({"type": r_type, "label": r_label, "value": r_value})
+                save_db(local_db); st.success("Added!"); st.rerun()
 
     elif active == "Announcements":
         curr = " | ".join(local_db['announcements']); new_txt = st.text_area("Marquee", value=curr)
@@ -831,7 +804,7 @@ elif mode == "display": render_display()
 else:
     if db['config']["logo_url"].startswith("http"): st.image(db['config']["logo_url"], width=50)
     st.title("G-ABAY Mobile Tracker")
-    t1, t2, t3 = st.tabs(["🎫 Tracker", "💬 Ask G-ABAY", "⭐ Rate Us"])
+    t1, t2, t3 = st.tabs(["🎫 Tracker", "ℹ️ Info Hub", "⭐ Rate Us"])
     with t1:
         tn = st.text_input("Enter Ticket #")
         if tn:
@@ -848,20 +821,24 @@ else:
             elif t_hist: st.success("✅ TRANSACTION COMPLETE. Thank you for visiting SSS Gingoog!")
             else: st.error("Not Found")
             st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026</div>", unsafe_allow_html=True)
+    
+    # --- V22.15 INFO HUB (NEW) ---
     with t2:
-        if "messages" not in st.session_state: st.session_state.messages = []
-        for msg in st.session_state.messages:
-            with st.chat_message(msg["role"]): st.markdown(msg["content"])
-        if prompt := st.chat_input("Ask about SSS..."):
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
-            resp = "Hello! For assistance, please visit the official SSS website at www.sss.gov.ph"
-            for kb in db['knowledge_base']:
-                if prompt.lower() in kb['topic'].lower() or prompt.lower() in kb['content'].lower(): resp = f"**Found in {kb['topic']}:**\n{kb['content']}"; break
-            st.session_state.messages.append({"role": "assistant", "content": resp})
-            with st.chat_message("assistant"):
-                st.markdown(resp)
+        st.subheader("Member Resources")
+        
+        # 1. Links
+        st.markdown("### 🔗 Quick Links")
+        links = [r for r in db.get('resources', []) if r['type'] == 'LINK']
+        for l in links:
+            st.markdown(f"""<a href="{l['value']}" target="_blank" class="info-link">{l['label']}</a>""", unsafe_allow_html=True)
+        
+        # 2. FAQs
+        st.markdown("### ❓ Frequently Asked Questions")
+        faqs = [r for r in db.get('resources', []) if r['type'] == 'FAQ']
+        for f in faqs:
+            with st.expander(f['label']):
+                st.write(f['value'])
+
     with t3:
         with st.form("rev"):
             rate = st.slider("Rating", 1, 5); pers = st.text_input("Personnel"); comm = st.text_area("Comments")
