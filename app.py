@@ -186,7 +186,10 @@ function startTimer(duration, displayId) {
     [data-testid="stSidebar"][aria-expanded="false"] { display: none; }
     .header-text { text-align: center; font-family: sans-serif; }
     .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
-    .brand-footer { position: fixed; bottom: 5px; right: 10px; font-family: monospace; font-size: 12px; color: #888; opacity: 0.7; pointer-events: none; z-index: 9999; }
+    
+    /* V23.4 UPDATED FOOTER POSITION */
+    .brand-footer { position: fixed; bottom: 5px; left: 10px; font-family: monospace; font-size: 12px; color: #888; opacity: 0.7; pointer-events: none; z-index: 9999; }
+    
     @keyframes blink { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.05); color: #dc2626; } 100% { opacity: 1; transform: scale(1); } }
     .blink-active { animation: blink 1.5s infinite; }
     .serving-card-small { background: white; border-left: 25px solid #2563EB; padding: 10px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center; display: flex; flex-direction: column; justify-content: center; transition: all 0.3s ease; width: 100%; }
@@ -750,12 +753,30 @@ def render_admin_panel(user):
                 fig_pie = px.pie(svc_stats, names='label', values='count', title=f'{lane_filter} Transaction Mix', hole=0.4)
                 st.plotly_chart(fig_pie, use_container_width=True)
                 
-            # GRAPH 2: HOURLY HEATMAP (Better for Single Lane Analysis)
+            # GRAPH 2: WAIT TIME PER CATEGORY (V23.4 TRAFFIC LIGHT)
             with c2:
-                df['hour'] = df['timestamp'].apply(lambda x: datetime.datetime.fromisoformat(x).hour)
-                hourly = df.groupby('hour').agg(count=('id','count')).reset_index()
-                fig_bar = px.bar(hourly, x='hour', y='count', title=f'Peak Hours: {lane_filter}', labels={'hour':'Hour of Day', 'count':'Clients Served'})
-                st.plotly_chart(fig_bar, use_container_width=True)
+                if lane_filter == "All Lanes":
+                    lane_map = {'T':'Teller', 'A':'Employer', 'C':'Counter', 'E':'eCenter', 'F':'Fast Lane'}
+                    df['lane_name'] = df['lane'].map(lane_map)
+                    lane_stats = df.groupby('lane_name')['wait_sec'].mean().reset_index()
+                    lane_stats['wait_min'] = (lane_stats['wait_sec']/60).round(1)
+                    
+                    # Traffic Light Colors
+                    def get_color(val):
+                        if val < 15: return "green"
+                        elif val < 30: return "orange"
+                        else: return "red"
+                    
+                    fig_bar = px.bar(lane_stats, x='lane_name', y='wait_min', title='Bottleneck Check: Avg Wait per Lane',
+                                     color='wait_min', color_continuous_scale=['green', 'orange', 'red'])
+                    st.plotly_chart(fig_bar, use_container_width=True)
+                else:
+                    # If specific lane selected, show hourly trend instead
+                    df['hour'] = df['timestamp'].apply(lambda x: datetime.datetime.fromisoformat(x).hour)
+                    hourly = df.groupby('hour').agg(wait=('wait_sec','mean')).reset_index()
+                    hourly['wait_min'] = (hourly['wait']/60).round(1)
+                    fig_bar = px.bar(hourly, x='hour', y='wait_min', title=f'Hourly Wait Times: {lane_filter}', labels={'hour':'Hour', 'wait_min':'Wait (mins)'})
+                    st.plotly_chart(fig_bar, use_container_width=True)
                 
             # TABLE: STAFF LEADERBOARD
             st.markdown("### 🏆 Performance Leaderboard")
