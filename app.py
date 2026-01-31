@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v22.15 - BRANCH OPERATING SYSTEM (INFO HUB EDITION)
+# SSS G-ABAY v23.0 - BRANCH OPERATING SYSTEM (MANAGEMENT INTELLIGENCE)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -12,13 +12,15 @@ import uuid
 import json
 import os
 import math
+import plotly.express as px
 
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v22.15", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v23.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
+ARCHIVE_FILE = "sss_archive.json"
 
 # --- DEFAULT DATA ---
 DEFAULT_DATA = {
@@ -28,7 +30,6 @@ DEFAULT_DATA = {
     "history": [],
     "breaks": [],
     "reviews": [],
-    # NEW: Default Resources for Info Hub
     "resources": [
         {"type": "LINK", "label": "🌐 SSS Official Website", "value": "https://www.sss.gov.ph"},
         {"type": "LINK", "label": "💻 My.SSS Member Portal", "value": "https://member.sss.gov.ph/members/"},
@@ -69,6 +70,7 @@ DEFAULT_DATA = {
             {"name": "eCenter", "type": "eCenter"}
         ]
     },
+    # STABLE MENU STRUCTURE (V22.13 Standard)
     "menu": {
         "Benefits": [
             ("Maternity / Sickness", "Ben-Mat/Sick", "E"),
@@ -103,55 +105,64 @@ DEFAULT_DATA = {
 # --- DATABASE ENGINE ---
 def load_db():
     current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+    
+    # 1. Load Main Data
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r") as f:
             try:
                 data = json.load(f)
-                if "resources" not in data: data["resources"] = DEFAULT_DATA["resources"]
-                if "exemptions" not in data: data["exemptions"] = DEFAULT_DATA["exemptions"]
-                if "breaks" not in data: data["breaks"] = []
-                if "latest_announcement" not in data: data["latest_announcement"] = {"text": "", "id": ""}
-                if "system_date" not in data: data["system_date"] = current_date
-                
-                # DAILY RESET
-                if data["system_date"] != current_date:
-                    data["history"] = [] 
-                    data["tickets"] = []
-                    data["breaks"] = []
-                    data["system_date"] = current_date
-                    for uid in data['staff']:
-                        data['staff'][uid]['status'] = "ACTIVE"
-                        data['staff'][uid]['online'] = False
-                        if 'break_reason' in data['staff'][uid]: del data['staff'][uid]['break_reason']
-                        if 'break_start_time' in data['staff'][uid]: del data['staff'][uid]['break_start_time']
-                
-                # MENU PRESERVATION (V22.13 Logic)
-                if "menu" in data:
-                    if "Benefits" not in data['menu']: data['menu']['Benefits'] = []
-                    fragments = ["Retirement", "Death", "Funeral", "Benefits (Short-Term)"]
-                    for frag in fragments:
-                        if frag in data['menu']:
-                            for item in data['menu'][frag]:
-                                if not any(existing[1] == item[1] for existing in data['menu']['Benefits']):
-                                    data['menu']['Benefits'].append(item)
-                            del data['menu'][frag]
-                    updated_benefits = []
-                    for lbl, code, lane in data['menu']['Benefits']:
-                        if ("Retirement" in lbl or "Death" in lbl or "Funeral" in lbl) and lane != "GATE":
-                            updated_benefits.append((lbl, code, "GATE"))
-                        else:
-                            updated_benefits.append((lbl, code, lane))
-                    data['menu']['Benefits'] = updated_benefits
-
-                if "Counter" not in data['config']['assignments']:
-                    data['config']['assignments']['Counter'] = ["C", "F", "E"]
-                for uid in data['staff']:
-                    if 'online' not in data['staff'][uid]: data['staff'][uid]['online'] = False
-                    
-                return data
             except:
-                return DEFAULT_DATA
-    return DEFAULT_DATA
+                data = DEFAULT_DATA
+    else:
+        data = DEFAULT_DATA
+
+    # 2. Schema Validation (Ensure keys exist)
+    for key in DEFAULT_DATA:
+        if key not in data:
+            data[key] = DEFAULT_DATA[key]
+
+    # 3. DAILY RESET & ARCHIVING (V23.0 PERFORMANCE FIX)
+    if data["system_date"] != current_date:
+        # Load Archive
+        archive_data = []
+        if os.path.exists(ARCHIVE_FILE):
+            with open(ARCHIVE_FILE, "r") as af:
+                try: archive_data = json.load(af)
+                except: archive_data = []
+        
+        # Move yesterday's history/reviews to archive
+        archive_entry = {
+            "date": data["system_date"],
+            "history": data["history"],
+            "reviews": data["reviews"],
+            "breaks": data["breaks"]
+        }
+        archive_data.append(archive_entry)
+        
+        # Save Archive
+        with open(ARCHIVE_FILE, "w") as af:
+            json.dump(archive_data, af, default=str)
+            
+        # Reset Active Data
+        data["history"] = []
+        data["tickets"] = []
+        data["breaks"] = []
+        data["reviews"] = [] # Clear daily reviews
+        data["system_date"] = current_date
+        
+        # Reset Staff Status
+        for uid in data['staff']:
+            data['staff'][uid]['status'] = "ACTIVE"
+            data['staff'][uid]['online'] = False
+            if 'break_reason' in data['staff'][uid]: del data['staff'][uid]['break_reason']
+            if 'break_start_time' in data['staff'][uid]: del data['staff'][uid]['break_start_time']
+
+    # 4. Session Hygiene (Duplicate Killer Backend)
+    # Ensure online users have valid stations
+    if "Counter" not in data['config']['assignments']:
+        data['config']['assignments']['Counter'] = ["C", "F", "E"]
+        
+    return data
 
 def save_db(data):
     with open(DATA_FILE, "w") as f:
@@ -195,9 +206,9 @@ function startTimer(duration, displayId) {
     .serving-card-small { background: white; border-left: 25px solid #2563EB; padding: 10px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center; display: flex; flex-direction: column; justify-content: center; transition: all 0.3s ease; width: 100%; }
     .serving-card-break { background: #FEF3C7; border-left: 25px solid #D97706; padding: 10px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center; display: flex; flex-direction: column; justify-content: center; transition: all 0.3s ease; width: 100%; }
     
-    /* DYNAMIC FONT SIZES */
-    .serving-card-small p { margin: 0; font-weight: bold; text-transform: uppercase; color: #111; line-height: 1.2; }
-    .serving-card-small span { font-weight: normal; color: #555; }
+    .serving-card-small h2 { margin: 0; font-size: 80px; color: #0038A8; font-weight: 900; line-height: 1.0; }
+    .serving-card-small p { margin: 0; font-size: 24px; color: #111; font-weight: bold; text-transform: uppercase; }
+    .serving-card-small span { font-size: 20px; color: #777; font-weight: normal; margin-top: 5px; }
     
     .swim-col { background: #f8f9fa; border-radius: 10px; padding: 10px; border-top: 10px solid #ccc; height: 100%; }
     .swim-col h3 { text-align: center; margin-bottom: 10px; font-size: 18px; text-transform: uppercase; color: #333; }
@@ -217,6 +228,11 @@ function startTimer(duration, displayId) {
     .head-orange { background-color: #EA580C; } .border-orange > button { border-left: 20px solid #EA580C !important; }
     .head-green { background-color: #16A34A; } .border-green > button { border-left: 20px solid #16A34A !important; }
     .head-blue { background-color: #2563EB; } .border-blue > button { border-left: 20px solid #2563EB !important; }
+    
+    /* DASHBOARD METRICS */
+    .metric-card { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; border-top: 5px solid #2563EB; }
+    .metric-card h3 { font-size: 36px; margin: 0; color: #1E3A8A; font-weight: 900; }
+    .metric-card p { margin: 0; color: #666; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -400,7 +416,8 @@ def render_kiosk():
                 
                 for label, code, lane in db['menu'].get(cat_name, []):
                     if st.button(label, key=label):
-                        is_gate_trans = (lane == "GATE") or any(x in label for x in ["Retirement", "Death", "Funeral"])
+                        # V23.0 ROBUST GATE CHECK
+                        is_gate_trans = (lane == "GATE")
                         if is_gate_trans:
                             st.session_state['gate_target'] = {"label": label, "code": code}
                             st.session_state['kiosk_step'] = 'gate_check'
@@ -666,17 +683,75 @@ def render_counter(user):
 
 def render_admin_panel(user):
     local_db = load_db()
-    st.title("🛠 Admin & Resources Manager")
+    st.title("🛠 Admin & Management Intelligence")
     if st.sidebar.button("⬅ LOGOUT"): local_db['staff'][next((k for k,v in local_db['staff'].items() if v['name'] == user['name']), None)]['online'] = False; save_db(local_db); del st.session_state['user']; st.rerun()
     
-    if user['role'] == "ADMIN": tabs = ["Users", "Counters", "Menu", "Exemptions", "Resources", "Announcements", "Backup"]
-    elif user['role'] in ["BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]: tabs = ["Users", "Counters", "Menu", "Exemptions", "Resources", "Announcements", "Backup", "Analytics"]
+    if user['role'] == "ADMIN": tabs = ["Dashboard", "Users", "Counters", "Menu", "Exemptions", "Resources", "Announcements", "Backup"]
+    elif user['role'] in ["BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]: tabs = ["Dashboard", "Users", "Counters", "Menu", "Exemptions", "Resources", "Announcements", "Backup"]
     else: st.error("Access Denied"); return
     
     active = st.radio("Module", tabs, horizontal=True)
     st.divider()
     
-    if active == "Menu":
+    # --- V23.0 MANAGEMENT INTELLIGENCE DASHBOARD ---
+    if active == "Dashboard":
+        st.subheader("📊 G-ABAY Branch Pulse")
+        
+        # 1. CALCULATE METRICS
+        today_txns = local_db['history']
+        total_served = len(today_txns)
+        
+        avg_wait_mins = 0
+        avg_handle_mins = 0
+        
+        if total_served > 0:
+            total_wait = sum([(datetime.datetime.fromisoformat(t['start_time']) - datetime.datetime.fromisoformat(t['timestamp'])).total_seconds() for t in today_txns])
+            total_handle = sum([(datetime.datetime.fromisoformat(t['end_time']) - datetime.datetime.fromisoformat(t['start_time'])).total_seconds() for t in today_txns])
+            avg_wait_mins = round((total_wait / total_served) / 60)
+            avg_handle_mins = round((total_handle / total_served) / 60)
+            
+        # Calc CSAT
+        reviews = local_db.get('reviews', [])
+        avg_rating = 0
+        if reviews:
+            avg_rating = round(sum([r['rating'] for r in reviews]) / len(reviews), 1)
+            
+        # 2. RENDER HEADLINES
+        m1, m2, m3, m4 = st.columns(4)
+        m1.markdown(f"<div class='metric-card'><h3>{total_served}</h3><p>Total Served</p></div>", unsafe_allow_html=True)
+        m2.markdown(f"<div class='metric-card'><h3>{avg_wait_mins}m</h3><p>Avg Wait Time</p></div>", unsafe_allow_html=True)
+        m3.markdown(f"<div class='metric-card'><h3>{avg_handle_mins}m</h3><p>Avg Handle Time</p></div>", unsafe_allow_html=True)
+        m4.markdown(f"<div class='metric-card'><h3>{avg_rating}⭐</h3><p>Cust. Satisfaction</p></div>", unsafe_allow_html=True)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # 3. VISUALS (Graphs)
+        if total_served > 0:
+            g1, g2 = st.columns(2)
+            with g1:
+                st.write("**Transaction Mix**")
+                df_hist = pd.DataFrame(today_txns)
+                fig_mix = px.pie(df_hist, names='service', title='Transactions by Type', hole=0.4)
+                st.plotly_chart(fig_mix, use_container_width=True)
+            with g2:
+                st.write("**Staff Leaderboard**")
+                leaderboard = df_hist['served_by'].value_counts().reset_index()
+                leaderboard.columns = ['Staff', 'Count']
+                st.dataframe(leaderboard, use_container_width=True)
+        else:
+            st.info("Waiting for data to populate graphs...")
+            
+        # 4. VOICE OF CUSTOMER
+        st.markdown("---")
+        st.write("**🗣 Voice of the Customer**")
+        if reviews:
+            for r in reviews:
+                with st.chat_message("user"):
+                    st.write(f"**{r['rating']}⭐** ({r['personnel']}): {r['comment']}")
+        else:
+            st.write("No feedback received yet today.")
+
+    elif active == "Menu":
         st.subheader("Manage Services Menu")
         c1, c2 = st.columns([1, 2])
         with c1:
@@ -749,33 +824,25 @@ def render_admin_panel(user):
             cn = st.text_input("Name"); ct = st.selectbox("Type", ["Counter", "Teller", "Employer", "eCenter"])
             if st.form_submit_button("Add"): local_db['config']['counter_map'].append({"name": cn, "type": ct}); save_db(local_db); st.rerun()
 
-    # --- V22.15 RESOURCES MANAGER (REPLACING BRAIN) ---
     elif active == "Resources":
         st.subheader("Manage Info Hub Content")
-        
-        # Display Current Resources
         for i, res in enumerate(local_db.get('resources', [])):
             with st.expander(f"{'🔗' if res['type'] == 'LINK' else '❓'} {res['label']}"):
                 st.write(f"**Value:** {res['value']}")
                 if st.button("Delete", key=f"res_del_{i}"): local_db['resources'].pop(i); save_db(local_db); st.rerun()
-        
         st.markdown("---")
         st.write("**Add New Resource**")
         with st.form("new_res"):
-            r_type = st.selectbox("Type", ["LINK", "FAQ"])
-            r_label = st.text_input("Label / Question")
-            r_value = st.text_area("URL / Answer")
+            r_type = st.selectbox("Type", ["LINK", "FAQ"]); r_label = st.text_input("Label / Question"); r_value = st.text_area("URL / Answer")
             if st.form_submit_button("Add Resource"):
                 if "resources" not in local_db: local_db['resources'] = []
-                local_db['resources'].append({"type": r_type, "label": r_label, "value": r_value})
-                save_db(local_db); st.success("Added!"); st.rerun()
+                local_db['resources'].append({"type": r_type, "label": r_label, "value": r_value}); save_db(local_db); st.success("Added!"); st.rerun()
 
     elif active == "Announcements":
         curr = " | ".join(local_db['announcements']); new_txt = st.text_area("Marquee", value=curr)
         if st.button("Update"): local_db['announcements'] = [new_txt]; save_db(local_db); st.success("Updated!")
 
     elif active == "Backup": st.download_button("📥 BACKUP", data=json.dumps(local_db), file_name="sss_backup.json")
-    elif active == "Analytics": st.subheader("Data"); st.dataframe(pd.DataFrame(local_db['history']))
 
 # ==========================================
 # 5. ROUTER
@@ -822,25 +889,24 @@ else:
             else: st.error("Not Found")
             st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026</div>", unsafe_allow_html=True)
     
-    # --- V22.15 INFO HUB (NEW) ---
     with t2:
         st.subheader("Member Resources")
-        
-        # 1. Links
         st.markdown("### 🔗 Quick Links")
         links = [r for r in db.get('resources', []) if r['type'] == 'LINK']
-        for l in links:
-            st.markdown(f"""<a href="{l['value']}" target="_blank" class="info-link">{l['label']}</a>""", unsafe_allow_html=True)
-        
-        # 2. FAQs
+        for l in links: st.markdown(f"""<a href="{l['value']}" target="_blank" class="info-link">{l['label']}</a>""", unsafe_allow_html=True)
         st.markdown("### ❓ Frequently Asked Questions")
         faqs = [r for r in db.get('resources', []) if r['type'] == 'FAQ']
         for f in faqs:
-            with st.expander(f['label']):
-                st.write(f['value'])
+            with st.expander(f['label']): st.write(f['value'])
 
     with t3:
         with st.form("rev"):
-            rate = st.slider("Rating", 1, 5); pers = st.text_input("Personnel"); comm = st.text_area("Comments")
-            if st.form_submit_button("Submit"): local_db = load_db(); local_db['reviews'].append({"rating": rate, "personnel": pers, "comment": comm}); save_db(local_db); st.success("Thanks!")
+            rate = st.slider("Rating", 1, 5)
+            # V23.0 UPGRADE: DYNAMIC STAFF DROPDOWN
+            local_db = load_db()
+            active_staff = [s['name'] for s in local_db['staff'].values() if s.get('online')]
+            if not active_staff: active_staff = ["General Feedback"]
+            pers = st.selectbox("Personnel Served You", active_staff)
+            comm = st.text_area("Comments")
+            if st.form_submit_button("Submit"): local_db['reviews'].append({"rating": rate, "personnel": pers, "comment": comm}); save_db(local_db); st.success("Thanks!")
     time.sleep(5); st.rerun()
