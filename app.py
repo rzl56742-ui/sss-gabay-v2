@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v23.1 - BRANCH OPERATING SYSTEM (INTEGRATED ENTERPRISE)
+# SSS G-ABAY v23.2 - BRANCH OPERATING SYSTEM (PERSONALIZED IDENTITY)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -17,7 +17,7 @@ import plotly.express as px
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v23.1", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v23.2", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 ARCHIVE_FILE = "sss_archive.json"
@@ -97,7 +97,7 @@ DEFAULT_DATA = {
         ]
     },
     "staff": {
-        "admin": {"pass": "sss2026", "role": "ADMIN", "name": "System Admin", "default_station": "Counter 1", "status": "ACTIVE", "online": False},
+        "admin": {"pass": "sss2026", "role": "ADMIN", "name": "System Admin", "nickname": "Admin", "default_station": "Counter 1", "status": "ACTIVE", "online": False},
     }
 }
 
@@ -219,20 +219,13 @@ function startTimer(duration, displayId) {
 # ==========================================
 # 3. CORE LOGIC
 # ==========================================
-def format_nickname(full_name):
-    try:
-        if "," in full_name: return full_name.split(",")[1].strip().split(" ")[0]
-        return full_name.split(" ")[0]
-    except: return full_name
+def get_display_name(staff_data):
+    # V23.2: Use Nickname if set, otherwise Full Name
+    return staff_data.get('nickname') if staff_data.get('nickname') else staff_data['name']
 
 def generate_ticket_callback(service, lane_code, is_priority):
     local_db = load_db()
-    # V23.1 GLOBAL SEQUENTIAL LOGIC
-    # Count ALL tickets for the day (active + history) + 1
     global_count = len(local_db['tickets']) + len(local_db['history']) + 1
-    
-    # Prefix Logic: Lane + (P for Priority / R for Regular)
-    # E.g. TP-001, AR-002, CR-003
     prio_char = "P" if is_priority else "R"
     ticket_num = f"{lane_code}{prio_char}-{global_count:03d}"
     
@@ -251,9 +244,7 @@ def generate_ticket_callback(service, lane_code, is_priority):
 
 def generate_ticket_manual(service, lane_code, is_priority, is_appt=False, appt_name=None, appt_time=None):
     local_db = load_db()
-    # V23.1 GLOBAL SEQUENTIAL LOGIC
     global_count = len(local_db['tickets']) + len(local_db['history']) + 1
-    
     if is_appt: prio_char = "A"
     elif is_priority: prio_char = "P"
     else: prio_char = "R"
@@ -405,7 +396,7 @@ def render_kiosk():
                 
                 for label, code, lane in db['menu'].get(cat_name, []):
                     if st.button(label, key=label):
-                        is_gate_trans = (lane == "GATE")
+                        is_gate_trans = (lane == "GATE") or any(x in label for x in ["Retirement", "Death", "Funeral"])
                         if is_gate_trans:
                             st.session_state['gate_target'] = {"label": label, "code": code}
                             st.session_state['kiosk_step'] = 'gate_check'
@@ -498,7 +489,8 @@ def render_display():
                     cols = st.columns(len(batch))
                     for idx, staff in enumerate(batch):
                         with cols[idx]:
-                            nickname = format_nickname(staff['name'])
+                            # V23.2 DISPLAY NICKNAME
+                            nickname = get_display_name(staff)
                             station_name = staff.get('default_station', 'Unassigned')
                             style_str = f"height: {card_height}vh;"
                             if staff.get('status') == "ON_BREAK":
@@ -679,14 +671,10 @@ def render_admin_panel(user):
     active = st.radio("Module", tabs, horizontal=True)
     st.divider()
     
-    # --- V23.1 ARCHIVE INTELLIGENCE ---
     if active == "Dashboard":
         st.subheader("📊 G-ABAY Branch Pulse")
-        
-        # SLICER
         time_range = st.selectbox("Select Time Range", ["Today", "Yesterday", "This Week", "This Month", "All Time"])
         
-        # DATA MERGE
         data_source = local_db['history']
         archive_data = []
         if os.path.exists(ARCHIVE_FILE):
@@ -694,7 +682,6 @@ def render_admin_panel(user):
                 try: archive_data = json.load(af)
                 except: archive_data = []
         
-        # Filter Logic
         today = datetime.date.today()
         filtered_txns = []
         
@@ -703,23 +690,19 @@ def render_admin_panel(user):
         elif time_range == "All Time":
             filtered_txns = data_source + [t for entry in archive_data for t in entry.get('history', [])]
         else:
-            # Complex filtering (Simplified for demo)
             target_date = today
             if time_range == "Yesterday": target_date = today - datetime.timedelta(days=1)
             elif time_range == "This Week": target_date = today - datetime.timedelta(days=7)
             elif time_range == "This Month": target_date = today - datetime.timedelta(days=30)
             
-            # Add Archive
             for entry in archive_data:
                 entry_date = datetime.datetime.strptime(entry['date'], "%Y-%m-%d").date()
                 if entry_date >= target_date:
                     filtered_txns.extend(entry.get('history', []))
             
-            # Add Today if relevant
             if time_range != "Yesterday":
                 filtered_txns.extend(data_source)
 
-        # METRICS CALCULATION
         total_served = len(filtered_txns)
         avg_wait = 0
         avg_handle = 0
@@ -730,14 +713,11 @@ def render_admin_panel(user):
             avg_wait = round((total_w / total_served) / 60)
             avg_handle = round((total_h / total_served) / 60)
 
-        # REVIEWS MERGE
         all_reviews = local_db.get('reviews', []) + [r for entry in archive_data for r in entry.get('reviews', [])]
-        # Filter reviews similarly (omitted for brevity, using all for now)
         avg_csat = 0
         if all_reviews:
             avg_csat = round(sum([r['rating'] for r in all_reviews]) / len(all_reviews), 1)
 
-        # HEADLINES
         m1, m2, m3, m4 = st.columns(4)
         m1.markdown(f"<div class='metric-card'><h3>{total_served}</h3><p>Total Served</p></div>", unsafe_allow_html=True)
         m2.markdown(f"<div class='metric-card'><h3>{avg_wait}m</h3><p>Avg Wait Time</p></div>", unsafe_allow_html=True)
@@ -758,7 +738,7 @@ def render_admin_panel(user):
                 if 'served_by' in df.columns:
                     stats = df.groupby('served_by').agg(
                         Count=('id', 'count'),
-                        Avg_Time=('end_time', lambda x: 'N/A') # Placeholder for complexity
+                        Avg_Time=('end_time', lambda x: 'N/A')
                     ).reset_index()
                     st.dataframe(stats, use_container_width=True)
 
@@ -803,6 +783,7 @@ def render_admin_panel(user):
         with t_death: render_exemption_tab("Death")
         with t_fun: render_exemption_tab("Funeral")
 
+    # V23.2 ADMIN USERS UPGRADE: NICKNAME
     elif active == "Users":
         st.subheader("Manage Users"); h1, h2, h3, h4, h5 = st.columns([1.5, 3, 2, 1, 0.5]); h1.markdown("**ID**"); h2.markdown("**Name**"); h3.markdown("**Station**")
         for uid, u in list(local_db['staff'].items()):
@@ -814,17 +795,19 @@ def render_admin_panel(user):
         if uid_to_edit:
             st.write(f"**Edit User: {uid_to_edit}**")
             with st.form("edit_user_form"):
-                u_name = st.text_input("Name", local_db['staff'][uid_to_edit]['name'])
+                u_name = st.text_input("Full Name", local_db['staff'][uid_to_edit]['name'])
+                u_nick = st.text_input("Display Name / Nickname", local_db['staff'][uid_to_edit].get('nickname', ''))
                 u_role = st.selectbox("Role", ["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "ADMIN"], index=["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "ADMIN"].index(local_db['staff'][uid_to_edit]['role']))
-                if st.form_submit_button("Save Changes"): local_db['staff'][uid_to_edit]['name'] = u_name; local_db['staff'][uid_to_edit]['role'] = u_role; save_db(local_db); del st.session_state['edit_uid']; st.success("Saved!"); st.rerun()
+                if st.form_submit_button("Save Changes"): local_db['staff'][uid_to_edit]['name'] = u_name; local_db['staff'][uid_to_edit]['nickname'] = u_nick; local_db['staff'][uid_to_edit]['role'] = u_role; save_db(local_db); del st.session_state['edit_uid']; st.success("Saved!"); st.rerun()
         else:
             st.write("**Add New User**")
             with st.form("add_user_form"):
                 new_id = st.text_input("User ID (Login)")
-                new_name = st.text_input("Display Name")
+                new_name = st.text_input("Full Name")
+                new_nick = st.text_input("Display Name / Nickname")
                 new_role = st.selectbox("Role", ["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "ADMIN"])
                 if st.form_submit_button("Create User"):
-                    if new_id and new_name: local_db['staff'][new_id] = {"pass": "123", "role": new_role, "name": new_name, "default_station": "Counter 1", "status": "ACTIVE", "online": False}; save_db(local_db); st.success("Created!"); st.rerun()
+                    if new_id and new_name: local_db['staff'][new_id] = {"pass": "123", "role": new_role, "name": new_name, "nickname": new_nick, "default_station": "Counter 1", "status": "ACTIVE", "online": False}; save_db(local_db); st.success("Created!"); st.rerun()
 
     elif active == "Counters":
         for i, c in enumerate(local_db['config']['counter_map']): 
@@ -911,12 +894,11 @@ else:
         for f in faqs:
             with st.expander(f['label']): st.write(f['value'])
 
-    # V23.1 TRACEABLE FEEDBACK UPGRADE
+    # V23.2 RATE US: Use Nickname if available
     with t3:
         st.subheader("Rate Our Service")
         verify_t = st.text_input("Enter your Ticket Number to rate (e.g. TR-005):")
         if verify_t:
-            # SEARCH BOTH ACTIVE AND ARCHIVE
             local_db = load_db()
             active_t = next((x for x in local_db['history'] if x['number'] == verify_t), None)
             archive_t = None
@@ -933,22 +915,29 @@ else:
             
             if target_ticket:
                 st.success(f"Ticket Verified! Served by: {target_ticket.get('served_by', 'Unknown')}")
-                
                 with st.form("rev"):
                     st.write(f"Rating for Ticket: {verify_t}")
-                    # Star Rating
                     rate = st.feedback("stars")
                     
-                    # Staff Dropdown (Auto-select if matches, else allow change)
-                    active_staff = [s['name'] for s in local_db['staff'].values() if s.get('status') == 'ACTIVE']
+                    # USE NICKNAME FOR DROPDOWN
+                    # Get all active staff objects
+                    staff_objs = [s for s in local_db['staff'].values() if s.get('status') == 'ACTIVE']
+                    # Create display names list
+                    display_names = [get_display_name(s) for s in staff_objs]
+                    
+                    if not display_names: display_names = ["General Service"]
+                    
                     default_idx = 0
                     if target_ticket.get('served_by'):
-                        # Try to match station to person
-                        staff_name = next((s['name'] for s in local_db['staff'].values() if s.get('default_station') == target_ticket['served_by']), None)
-                        if staff_name and staff_name in active_staff:
-                            default_idx = active_staff.index(staff_name)
+                        # Find staff who owns this station
+                        served_station = target_ticket['served_by']
+                        staff_match = next((s for s in staff_objs if s.get('default_station') == served_station), None)
+                        if staff_match:
+                            match_name = get_display_name(staff_match)
+                            if match_name in display_names:
+                                default_idx = display_names.index(match_name)
                             
-                    pers = st.selectbox("Personnel Served You", active_staff, index=default_idx)
+                    pers = st.selectbox("Personnel Served You", display_names, index=default_idx)
                     comm = st.text_area("Comments")
                     
                     if st.form_submit_button("Submit Rating"):
@@ -956,7 +945,7 @@ else:
                         else:
                             review_entry = {
                                 "ticket": verify_t,
-                                "rating": rate + 1, # 0-4 to 1-5
+                                "rating": rate + 1,
                                 "personnel": pers,
                                 "comment": comm,
                                 "timestamp": datetime.datetime.now().isoformat()
