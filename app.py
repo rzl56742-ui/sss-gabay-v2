@@ -1,14 +1,7 @@
 # ==============================================================================
-# SSS G-ABAY v23.7 - BRANCH OPERATING SYSTEM (PHASE 1: CRITICAL STABILITY)
-# UPGRADE FROM: v23.6 (GOLD)
+# SSS G-ABAY v23.8 - BRANCH OPERATING SYSTEM (PLATINUM EDITION)
+# "Visuals: V23.4 | Backend: V23.5 | Security: V23.7 | Integrity: V23.8"
 # COPYRIGHT: © 2026 rpt/sssgingoog
-# ==============================================================================
-# PHASE 1 FIXES APPLIED:
-#   FIX-v23.7-001: File Locking (Race Condition Prevention)
-#   FIX-v23.7-002: Display Module Controlled Refresh (No Infinite Loop)
-#   FIX-v23.7-003: Session Timeout (30-min Inactivity Auto-Logout)
-#   FIX-v23.7-004: Orphaned Ticket Handling on Logout
-#   FIX-v23.7-005: Midnight Rollover Auto-Complete Active Transactions
 # ==============================================================================
 
 import streamlit as st
@@ -19,49 +12,62 @@ import uuid
 import json
 import os
 import math
+import re
 import plotly.express as px
 import urllib.parse
 import io
 import base64
 import shutil
+import glob
 
 # ==============================================================================
 # FIX-v23.7-001: FILE LOCKING IMPORTS
-# Purpose: Prevent race condition when multiple users access JSON simultaneously
 # ==============================================================================
 try:
     from filelock import FileLock, Timeout
     FILE_LOCK_AVAILABLE = True
 except ImportError:
     FILE_LOCK_AVAILABLE = False
-    # Graceful degradation - system works without filelock but logs warning
 
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v23.7", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v23.8", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 BACKUP_FILE = "sss_data.bak"
 ARCHIVE_FILE = "sss_archive.json"
-LOCK_FILE = "sss_data.json.lock"  # FIX-v23.7-001: Lock file path
-
-# ==============================================================================
-# FIX-v23.7-003: SESSION TIMEOUT CONFIGURATION
-# Purpose: Auto-logout after 30 minutes of inactivity
-# ==============================================================================
+LOCK_FILE = "sss_data.json.lock"
+BACKUP_DIR = "backups"
+MAX_HOURLY_BACKUPS = 24
+ARCHIVE_RETENTION_DAYS = 365
 SESSION_TIMEOUT_MINUTES = 30
 
-# --- DEFAULT MASTER LIST (Staff IOMS Logging - Backend) ---
+# ==============================================================================
+# FIX-v23.8-001: PHILIPPINE TIME STANDARD (UTC+8)
+# Purpose: Ensure midnight rollover happens at PH Midnight, not Server UTC
+# ==============================================================================
+def get_ph_time():
+    """Get current Philippine Time (UTC+8) for consistent logging."""
+    return datetime.datetime.utcnow() + datetime.timedelta(hours=8)
+
+# --- USER VALIDATION ---
+USER_ID_PATTERN = re.compile(r'^[a-zA-Z0-9]{3,20}$')
+def validate_user_id(user_id):
+    if not user_id: return False, "User ID cannot be empty"
+    if not USER_ID_PATTERN.match(user_id): return False, "User ID must be 3-20 alphanumeric characters"
+    return True, "Valid"
+
+# --- DEFAULT MASTER LIST ---
 DEFAULT_TRANSACTIONS = {
     "PAYMENTS": ["Contribution Payment", "Loan Payment", "Miscellaneous Payment", "Status Inquiry (Payments)"],
     "EMPLOYERS": ["Employer Registration", "Employee Update (R1A)", "Contribution/Loan List", "Status Inquiry (Employer)"],
     "MEMBER SERVICES": ["Sickness/Maternity Claim", "Pension Claim", "Death/Funeral Claim", "Salary Loan Application", "Calamity Loan", "Verification/Static Info", "UMID/Card Inquiry", "My.SSS Reset"]
 }
 
-# --- DEFAULT DATA (V23.4 Kiosk Structure - Visuals) ---
+# --- DEFAULT DATA ---
 DEFAULT_DATA = {
-    "system_date": datetime.datetime.now().strftime("%Y-%m-%d"),
+    "system_date": get_ph_time().strftime("%Y-%m-%d"),
     "branch_status": "NORMAL", 
     "latest_announcement": {"text": "", "id": ""},
     "tickets": [],
@@ -69,6 +75,7 @@ DEFAULT_DATA = {
     "breaks": [],
     "reviews": [],
     "incident_log": [],
+    "audit_log": [],
     "transaction_master": DEFAULT_TRANSACTIONS,
     "resources": [
         {"type": "LINK", "label": "🌐 SSS Official Website", "value": "https://www.sss.gov.ph"},
@@ -139,202 +146,198 @@ DEFAULT_DATA = {
     }
 }
 
-# ==============================================================================
-# FIX-v23.7-001: FILE LOCKING DATABASE ENGINE
-# Purpose: Wrap file operations with lock to prevent concurrent write corruption
-# ==============================================================================
+# --- AUDIT LOG ---
+def log_audit(action, user_name, details=None, target=None):
+    local_db = load_db()
+    if 'audit_log' not in local_db: local_db['audit_log'] = []
+    entry = {
+        "timestamp": get_ph_time().isoformat(),
+        "action": action,
+        "user": user_name,
+        "target": target,
+        "details": details,
+        "session_id": st.session_state.get('session_id', 'unknown')
+    }
+    local_db['audit_log'].append(entry)
+    if len(local_db['audit_log']) > 10000: local_db['audit_log'] = local_db['audit_log'][-10000:]
+    save_db(local_db)
+
+# --- BACKUP ---
+def create_hourly_backup():
+    if not os.path.exists(BACKUP_DIR): os.makedirs(BACKUP_DIR)
+    timestamp = get_ph_time().strftime("%Y%m%d_%H")
+    backup_file = os.path.join(BACKUP_DIR, f"sss_data_{timestamp}.json")
+    if os.path.exists(DATA_FILE) and not os.path.exists(backup_file):
+        shutil.copy2(DATA_FILE, backup_file)
+    backups = sorted(glob.glob(os.path.join(BACKUP_DIR, "sss_data_*.json")))
+    while len(backups) > MAX_HOURLY_BACKUPS:
+        try: os.remove(backups.pop(0))
+        except: pass
+
+# --- FILE LOCK ---
 def acquire_file_lock(timeout=10):
-    """Acquire file lock for safe database operations."""
-    if FILE_LOCK_AVAILABLE:
-        lock = FileLock(LOCK_FILE, timeout=timeout)
-        return lock
+    if FILE_LOCK_AVAILABLE: return FileLock(LOCK_FILE, timeout=timeout)
     return None
 
+# ==============================================================================
+# FIX-v23.8-002: DATABASE ENGINE WITH MIDNIGHT SWEEPER & PH TIME
+# ==============================================================================
 def load_db():
-    """Load database with file locking protection."""
-    current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+    current_date = get_ph_time().strftime("%Y-%m-%d")
     
-    # FIX-v23.7-001: Acquire lock before reading
     lock = acquire_file_lock()
     try:
-        if lock:
-            lock.acquire()
+        if lock: lock.acquire()
         
         if os.path.exists(DATA_FILE):
             with open(DATA_FILE, "r") as f:
-                try: 
-                    data = json.load(f)
+                try: data = json.load(f)
                 except: 
                     if os.path.exists(BACKUP_FILE):
-                        with open(BACKUP_FILE, "r") as bf: 
-                            data = json.load(bf)
-                    else: 
-                        data = DEFAULT_DATA
-        else:
-            data = DEFAULT_DATA
+                        with open(BACKUP_FILE, "r") as bf: data = json.load(bf)
+                    else: data = DEFAULT_DATA
+        else: data = DEFAULT_DATA
 
-        if "PAYMENTS" in data.get("menu", {}): 
-            data["menu"] = DEFAULT_DATA["menu"]
-            
+        if "PAYMENTS" in data.get("menu", {}): data["menu"] = DEFAULT_DATA["menu"]
         for key in DEFAULT_DATA:
-            if key not in data: 
-                data[key] = DEFAULT_DATA[key]
-        
-        if "branch_code" not in data['config']: 
-            data['config']['branch_code'] = "H07"
-        if "transaction_master" not in data: 
-            data['transaction_master'] = DEFAULT_TRANSACTIONS
+            if key not in data: data[key] = DEFAULT_DATA[key]
+        if "branch_code" not in data['config']: data['config']['branch_code'] = "H07"
+        if "transaction_master" not in data: data['transaction_master'] = DEFAULT_TRANSACTIONS
+        if "audit_log" not in data: data['audit_log'] = []
 
-        # ==============================================================================
-        # FIX-v23.7-005: MIDNIGHT ROLLOVER - AUTO-COMPLETE ACTIVE TRANSACTIONS
-        # Purpose: Force-complete any SERVING tickets before archiving day's data
-        # ==============================================================================
+        # --- MIDNIGHT SWEEPER PROTOCOL ---
         if data["system_date"] != current_date:
-            # AUTO-COMPLETE any active SERVING tickets before rollover
+            
+            # 1. Force Complete Serving Tickets
             serving_tickets = [t for t in data['tickets'] if t['status'] == 'SERVING']
             for ticket in serving_tickets:
-                ticket['status'] = 'COMPLETED'
-                ticket['end_time'] = datetime.datetime.now().isoformat()
-                ticket['auto_closed'] = True  # Flag for audit trail
+                ticket['status'] = 'SYSTEM_CLOSED'
+                ticket['end_time'] = get_ph_time().isoformat()
+                ticket['auto_closed'] = True
                 ticket['auto_close_reason'] = 'MIDNIGHT_ROLLOVER'
                 data['history'].append(ticket)
             
-            # Remove auto-completed tickets from active queue
-            data['tickets'] = [t for t in data['tickets'] if t['status'] != 'COMPLETED']
-            # END FIX-v23.7-005
+            # 2. Expire Waiting/Parked Tickets (Fixing Data Loss)
+            pending_tickets = [t for t in data['tickets'] if t['status'] in ['WAITING', 'PARKED']]
+            for ticket in pending_tickets:
+                ticket['status'] = 'EXPIRED'
+                ticket['end_time'] = get_ph_time().isoformat() # Mark end time as rollover time
+                ticket['auto_closed'] = True
+                ticket['auto_close_reason'] = 'MIDNIGHT_EXPIRY'
+                data['history'].append(ticket)
             
+            # 3. Archive
             archive_data = []
             if os.path.exists(ARCHIVE_FILE):
                 with open(ARCHIVE_FILE, "r") as af:
-                    try: 
-                        archive_data = json.load(af)
-                    except: 
-                        archive_data = []
+                    try: archive_data = json.load(af)
+                    except: archive_data = []
             
             archive_entry = {
                 "date": data["system_date"],
                 "history": data["history"],
                 "reviews": data["reviews"],
                 "incident_log": data.get("incident_log", []),
+                "audit_log": data.get("audit_log", []),
                 "breaks": data["breaks"]
             }
             archive_data.append(archive_entry)
             
-            with open(ARCHIVE_FILE, "w") as af:
-                json.dump(archive_data, af, default=str)
+            # 365-Day Retention
+            cutoff_date = (get_ph_time() - datetime.timedelta(days=ARCHIVE_RETENTION_DAYS)).strftime("%Y-%m-%d")
+            archive_data = [entry for entry in archive_data if entry.get('date', '9999-99-99') >= cutoff_date]
+            
+            with open(ARCHIVE_FILE, "w") as af: json.dump(archive_data, af, default=str)
                 
+            # 4. Clean Slate
             data["history"] = []
             data["tickets"] = []
             data["breaks"] = []
             data["reviews"] = []
             data["incident_log"] = []
+            data["audit_log"] = []
             data["system_date"] = current_date
             data["branch_status"] = "NORMAL"
             
+            # 5. Force Logout All Staff
             for uid in data['staff']:
                 data['staff'][uid]['status'] = "ACTIVE"
                 data['staff'][uid]['online'] = False
-                if 'break_reason' in data['staff'][uid]: 
-                    del data['staff'][uid]['break_reason']
+                if 'break_reason' in data['staff'][uid]: del data['staff'][uid]['break_reason']
 
         return data
-    
     finally:
-        # FIX-v23.7-001: Always release lock
-        if lock and lock.is_locked:
-            lock.release()
+        if lock and lock.is_locked: lock.release()
 
 def save_db(data):
-    """Save database with file locking protection."""
-    # FIX-v23.7-001: Acquire lock before writing
     lock = acquire_file_lock()
     try:
-        if lock:
-            lock.acquire()
-        
+        if lock: lock.acquire()
+        create_hourly_backup()
         temp_file = f"{DATA_FILE}.tmp"
-        with open(temp_file, "w") as f:
-            json.dump(data, f, default=str)
-        if os.path.exists(DATA_FILE):
-            shutil.copy2(DATA_FILE, BACKUP_FILE)
+        with open(temp_file, "w") as f: json.dump(data, f, default=str)
+        if os.path.exists(DATA_FILE): shutil.copy2(DATA_FILE, BACKUP_FILE)
         os.replace(temp_file, DATA_FILE)
-    
     finally:
-        # FIX-v23.7-001: Always release lock
-        if lock and lock.is_locked:
-            lock.release()
+        if lock and lock.is_locked: lock.release()
 
 db = load_db()
 
 # --- INIT ---
-if 'surge_mode' not in st.session_state: 
-    st.session_state['surge_mode'] = False
+if 'surge_mode' not in st.session_state: st.session_state['surge_mode'] = False
+if 'session_id' not in st.session_state: st.session_state['session_id'] = str(uuid.uuid4())[:8]
 
-# ==============================================================================
-# FIX-v23.7-003: SESSION TIMEOUT - INITIALIZE LAST ACTIVITY TIMESTAMP
-# Purpose: Track user activity for auto-logout
-# ==============================================================================
-if 'last_activity' not in st.session_state:
-    st.session_state['last_activity'] = datetime.datetime.now()
+# --- SESSION TIMEOUT & DATE SYNC ---
+if 'last_activity' not in st.session_state: st.session_state['last_activity'] = get_ph_time()
 
 def update_activity():
-    """Update last activity timestamp on user interaction."""
-    st.session_state['last_activity'] = datetime.datetime.now()
+    st.session_state['last_activity'] = get_ph_time()
 
 def check_session_timeout():
-    """Check if session has timed out due to inactivity."""
-    if 'user' not in st.session_state:
-        return False
+    if 'user' not in st.session_state: return False
     
-    last_activity = st.session_state.get('last_activity', datetime.datetime.now())
-    elapsed = (datetime.datetime.now() - last_activity).total_seconds() / 60
+    # 1. Idle Timeout
+    last_activity = st.session_state.get('last_activity', get_ph_time())
+    elapsed = (get_ph_time() - last_activity).total_seconds() / 60
+    
+    # 2. Date Rollover Check (Stale Session)
+    login_date = st.session_state.get('login_date', '')
+    current_date = get_ph_time().strftime("%Y-%m-%d")
     
     if elapsed >= SESSION_TIMEOUT_MINUTES:
-        # Auto-logout due to inactivity
-        handle_safe_logout()
+        handle_safe_logout(reason="TIMEOUT")
         return True
+        
+    if login_date and login_date != current_date:
+        handle_safe_logout(reason="DATE_ROLLOVER")
+        return True
+        
     return False
 
-# ==============================================================================
-# FIX-v23.7-004: SAFE LOGOUT WITH ORPHAN TICKET HANDLING
-# Purpose: Ensure SERVING tickets are parked before staff logs out
-# ==============================================================================
-def handle_safe_logout():
-    """Safely logout user, handling any orphaned tickets."""
-    if 'user' not in st.session_state:
-        return
-    
+def handle_safe_logout(reason="MANUAL"):
+    if 'user' not in st.session_state: return
     local_db = load_db()
     user = st.session_state['user']
     user_key = next((k for k, v in local_db['staff'].items() if v['name'] == user['name']), None)
     
     if user_key:
-        # Find station for this user
         station = local_db['staff'][user_key].get('default_station', '')
-        
-        # FIX-v23.7-004: Find any SERVING ticket at this station and auto-park
-        serving_ticket = next(
-            (t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station), 
-            None
-        )
+        serving_ticket = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station), None)
         
         if serving_ticket:
             serving_ticket['status'] = 'PARKED'
-            serving_ticket['park_timestamp'] = datetime.datetime.now().isoformat()
-            serving_ticket['auto_parked'] = True  # Flag for audit
-            serving_ticket['auto_park_reason'] = 'STAFF_LOGOUT'
+            serving_ticket['park_timestamp'] = get_ph_time().isoformat()
+            serving_ticket['auto_parked'] = True
+            serving_ticket['auto_park_reason'] = f'STAFF_LOGOUT_{reason}'
         
-        # Mark staff as offline
         local_db['staff'][user_key]['online'] = False
         save_db(local_db)
+        log_audit("LOGOUT", user['name'], details=f"Reason: {reason}", target=station)
     
-    # Clear session
-    if 'user' in st.session_state:
-        del st.session_state['user']
-    if 'my_station' in st.session_state:
-        del st.session_state['my_station']
+    for key in ['refer_modal', 'my_station', 'user', 'login_date']:
+        if key in st.session_state: del st.session_state[key]
 
-# --- CSS (RESTORED V23.4 STYLES) ---
+# --- CSS ---
 st.markdown("""
 <script>
 function startTimer(duration, displayId) {
@@ -367,8 +370,6 @@ function startTimer(duration, displayId) {
     .swim-col h3 { text-align: center; margin-bottom: 10px; font-size: 18px; text-transform: uppercase; color: #333; }
     .queue-item { background: white; border-bottom: 1px solid #ddd; padding: 15px; margin-bottom: 5px; border-radius: 5px; display: flex; justify-content: space-between; }
     .queue-item span { font-size: 24px; font-weight: 900; color: #111; }
-    .park-appt { background: #dbeafe; color: #1e40af; border-left: 5px solid #2563EB; font-weight: bold; padding: 10px; border-radius: 5px; display: flex; justify-content: space-between; margin-bottom: 5px; }
-    .park-danger { background: #fee2e2; color: #b91c1c; border-left: 5px solid #ef4444; animation: pulse 2s infinite; padding: 10px; border-radius: 5px; font-weight:bold; display:flex; justify-content:space-between; margin-bottom: 5px; }
     .gate-btn > button { height: 350px !important; width: 100% !important; font-size: 40px !important; font-weight: 900 !important; border-radius: 30px !important; }
     .menu-card > button { height: 300px !important; width: 100% !important; font-size: 30px !important; font-weight: 800 !important; border-radius: 20px !important; border: 4px solid #ddd !important; white-space: pre-wrap !important;}
     .swim-btn > button { height: 100px !important; width: 100% !important; font-size: 18px !important; font-weight: 700 !important; text-align: left !important; padding-left: 20px !important; }
@@ -386,6 +387,8 @@ function startTimer(duration, displayId) {
     .metric-card h3 { font-size: 36px; margin: 0; color: #1E3A8A; font-weight: 900; }
     .metric-card p { margin: 0; color: #666; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
     .timeout-warning { background: #FEF3C7; border: 2px solid #F59E0B; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 10px; }
+    .park-appt { background: #dbeafe; color: #1e40af; border-left: 5px solid #2563EB; font-weight: bold; padding: 10px; border-radius: 5px; display: flex; justify-content: space-between; margin-bottom: 5px; }
+    .park-danger { background: #fee2e2; color: #b91c1c; border-left: 5px solid #ef4444; animation: pulse 2s infinite; padding: 10px; border-radius: 5px; font-weight:bold; display:flex; justify-content:space-between; margin-bottom: 5px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -405,7 +408,7 @@ def generate_ticket_callback(service, lane_code, is_priority):
     new_t = {
         "id": str(uuid.uuid4()), "number": simple_num, "full_id": full_id, "lane": lane_code, "service": service, 
         "type": "PRIORITY" if is_priority else "REGULAR", "status": "WAITING", 
-        "timestamp": datetime.datetime.now().isoformat(),
+        "timestamp": get_ph_time().isoformat(),
         "start_time": None, "end_time": None, "park_timestamp": None,
         "history": [], "served_by": None, "ref_from": None, "referral_reason": None,
         "appt_name": None, "appt_time": None, "actual_transactions": [] 
@@ -421,12 +424,12 @@ def generate_ticket_manual(service, lane_code, is_priority, is_appt=False, appt_
     branch_code = local_db['config'].get('branch_code', 'H07')
     simple_num = f"{global_count:03d}"
     display_num = f"APT-{simple_num}" if is_appt else simple_num
-    full_id = f"{branch_code}-{lane_code}-{display_num}"  # FIX: Consistent format with lane code
+    full_id = f"{branch_code}-{lane_code}-{display_num}"
     
     new_t = {
         "id": str(uuid.uuid4()), "number": display_num, "full_id": full_id, "lane": lane_code, "service": service, 
         "type": "APPOINTMENT" if is_appt else ("PRIORITY" if is_priority else "REGULAR"),
-        "status": "WAITING", "timestamp": datetime.datetime.now().isoformat(),
+        "status": "WAITING", "timestamp": get_ph_time().isoformat(),
         "start_time": None, "end_time": None, "park_timestamp": None,
         "history": [], "served_by": None, "ref_from": None, "referral_reason": None,
         "appt_name": appt_name, "appt_time": str(appt_time) if appt_time else None,
@@ -439,7 +442,7 @@ def generate_ticket_manual(service, lane_code, is_priority, is_appt=False, appt_
 def log_incident(user_name, status_type):
     local_db = load_db()
     local_db['branch_status'] = status_type
-    entry = {"timestamp": datetime.datetime.now().isoformat(), "staff": user_name, "type": status_type, "action": "Reported Issue" if status_type != "NORMAL" else "Restored System"}
+    entry = {"timestamp": get_ph_time().isoformat(), "staff": user_name, "type": status_type, "action": "Reported Issue" if status_type != "NORMAL" else "Restored System"}
     if 'incident_log' not in local_db: local_db['incident_log'] = []
     local_db['incident_log'].append(entry)
     msg = "System operations restored."
@@ -447,15 +450,13 @@ def log_incident(user_name, status_type):
     elif status_type == "SLOW": msg = "Notice: Intermittent connection."
     local_db['latest_announcement'] = {"text": msg, "id": str(uuid.uuid4())}
     save_db(local_db)
+    log_audit("INCIDENT_REPORT", user_name, details=f"Status changed to {status_type}")
 
 def get_next_ticket(queue, surge_mode, my_station):
     if not queue: return None
-    # Sort queue using unified logic
     queue.sort(key=get_queue_sort_key)
+    now = get_ph_time().time()
     
-    now = datetime.datetime.now().time()
-    
-    # 1. Assigned to Me
     for t in queue:
         if t.get('assigned_to') == my_station:
             if t['type'] == 'APPOINTMENT' and t['appt_time']:
@@ -463,29 +464,23 @@ def get_next_ticket(queue, surge_mode, my_station):
                 if now >= appt_t: return t
             else: return t
             
-    # 2. General Appointments (Time Locked)
     for t in queue:
         if t['type'] == 'APPOINTMENT' and t['appt_time'] and not t.get('assigned_to'):
             appt_t = datetime.datetime.strptime(t['appt_time'], "%H:%M:%S").time()
             if now >= appt_t: return t
     
-    # 3. Surge Mode (Prio Only)
     if surge_mode:
         for t in queue:
             if t['type'] == 'PRIORITY' and not t.get('assigned_to'): return t
             
-    # 4. 2:1 Ratio Logic (Option A - Sliding Window)
-    # Business Rule: After 2 consecutive PRIORITY tickets, force serve 1 REGULAR
-    # This ensures fairness while maintaining priority lane benefits
     local_db = load_db()
     last_2 = local_db['history'][-2:]
     p_count = sum(1 for t in last_2 if t['type'] == 'PRIORITY')
     
-    if p_count == 2:  # Exactly 2 consecutive priority = force regular next
+    if p_count >= 2:
         reg = [t for t in queue if t['type'] == 'REGULAR' and not t.get('assigned_to')]
         if reg: return reg[0]
     
-    # 5. Standard Flow (Using Sorted List)
     for t in queue:
         if not t.get('assigned_to'): return t
     return None
@@ -499,9 +494,7 @@ def trigger_audio(ticket_num, counter_name):
     local_db['latest_announcement'] = {"text": spoken_text, "id": str(uuid.uuid4())}
     save_db(local_db)
 
-# --- WEIGHTED QUEUE CALCULATION (Unified for Staff & Mobile) ---
 def get_queue_sort_key(t):
-    # Order: Assigned > Appt Time > Prio > Regular > Timestamp
     assigned_weight = 0 if t.get('assigned_to') else 1
     type_weight = 1 if t['type'] == 'APPOINTMENT' else (2 if t['type'] == 'PRIORITY' else 3)
     return (assigned_weight, type_weight, t['timestamp'])
@@ -535,7 +528,21 @@ def calculate_people_ahead(ticket_id, lane_code):
 def get_staff_efficiency(staff_name):
     local_db = load_db()
     my_txns = [t for t in local_db['history'] if t.get("served_by") == staff_name]
-    return len(my_txns), "5m"
+    if my_txns:
+        total_handle_time = 0
+        valid_count = 0
+        for t in my_txns:
+            if t.get('start_time') and t.get('end_time'):
+                try:
+                    start = datetime.datetime.fromisoformat(t['start_time'])
+                    end = datetime.datetime.fromisoformat(t['end_time'])
+                    total_handle_time += (end - start).total_seconds()
+                    valid_count += 1
+                except: pass
+        if valid_count > 0:
+            avg_mins = round(total_handle_time / valid_count / 60)
+            return len(my_txns), f"{avg_mins}m"
+    return len(my_txns), "N/A"
 
 def get_allowed_counters(role):
     all_counters = db['config']['counter_map']
@@ -545,6 +552,11 @@ def get_allowed_counters(role):
     elif role == "MSR": target_types = ["Counter", "eCenter", "Help"]
     elif role in ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]: return [c['name'] for c in all_counters] 
     return [c['name'] for c in all_counters if c['type'] in target_types]
+
+def clear_ticket_modal_states():
+    modal_keys = ['refer_modal', 'transfer_in_progress']
+    for key in modal_keys:
+        if key in st.session_state: del st.session_state[key]
 
 # ==========================================
 # 4. MODULES
@@ -612,8 +624,7 @@ def render_kiosk():
     elif st.session_state['kiosk_step'] == 'gate_check':
         target = st.session_state.get('gate_target', {})
         label = target.get('label', 'Transaction')
-        claim_type = "Retirement" if "Retirement" in label else ("Death" if "Death" in label else "Funeral")
-        exemptions = db['exemptions'].get(claim_type, [])
+        exemptions = db['exemptions'].get(target.get('label', ''), [])
         st.warning(f"⚠️ PRE-QUALIFICATION FOR {label.upper()}")
         for ex in exemptions: st.markdown(f"- {ex}")
         st.markdown("---")
@@ -646,138 +657,95 @@ def render_kiosk():
             if st.button("✅ DONE", type="primary", use_container_width=True): del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
         with c3:
             if st.button("🖨️ PRINT", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
-    st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.7</div>", unsafe_allow_html=True)
+    st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.8</div>", unsafe_allow_html=True)
 
-# ==============================================================================
-# FIX-v23.7-002: DISPLAY MODULE - CONTROLLED REFRESH (NO INFINITE LOOP)
-# Purpose: Replace blocking while True with Streamlit-native refresh pattern
-# ==============================================================================
 def render_display():
-    """Render public display with controlled auto-refresh instead of infinite loop."""
+    check_session_timeout()
     local_db = load_db()
-    
-    # Audio handling
     audio_script = ""
     current_audio = local_db.get('latest_announcement', {})
     last_audio_id = st.session_state.get('last_audio_id', "")
-    
     if current_audio.get('id') != last_audio_id and current_audio.get('text'):
         st.session_state['last_audio_id'] = current_audio['id']
         text_safe = current_audio['text'].replace("'", "")
         audio_script = f"""<script>var msg = new SpeechSynthesisUtterance(); msg.text = "{text_safe}"; msg.rate = 1.0; msg.pitch = 1.1; var voices = window.speechSynthesis.getVoices(); var fVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Zira')); if(fVoice) msg.voice = fVoice; window.speechSynthesis.speak(msg);</script>"""
-
-    if audio_script: 
-        st.markdown(audio_script, unsafe_allow_html=True)
-    
-    status = local_db.get('branch_status', 'NORMAL')
-    if status != "NORMAL":
-        color = "red" if status == "OFFLINE" else "orange"
-        text = "⚠ SYSTEM OFFLINE: MANUAL PROCESSING" if status == "OFFLINE" else "⚠ INTERMITTENT CONNECTION"
-        st.markdown(f"<h2 style='text-align:center; color:{color}; animation: blink 1.5s infinite;'>{text}</h2>", unsafe_allow_html=True)
-    
-    st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
-    
-    raw_staff = [s for s in local_db['staff'].values() if s.get('online') is True and s['role'] != "ADMIN" and s['name'] != "System Admin"]
-    unique_staff_map = {} 
-    for s in raw_staff:
-        st_name = s.get('default_station', 'Unassigned')
-        if st_name not in unique_staff_map: 
-            unique_staff_map[st_name] = s
-        else:
-            curr = unique_staff_map[st_name]
-            is_curr_serving = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == st_name), None)
-            is_new_serving = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == st_name and t.get('served_by') == s.get('default_station')), None) 
-            if not is_curr_serving and is_new_serving: 
-                unique_staff_map[st_name] = s
-    
-    unique_staff = list(unique_staff_map.values())
-    
-    if not unique_staff: 
-        st.warning("Waiting for staff to log in...")
-    else:
-        count = len(unique_staff)
-        num_rows = math.ceil(count / 6)
-        card_height = 65 // num_rows
-        font_scale = 1.0 if num_rows == 1 else (0.8 if num_rows == 2 else 0.7)
-        
-        for i in range(0, count, 6):
-            batch = unique_staff[i:i+6]
-            cols = st.columns(len(batch))
-            for idx, staff in enumerate(batch):
-                with cols[idx]:
-                    nickname = get_display_name(staff)
-                    station_name = staff.get('default_station', 'Unassigned')
-                    style_str = f"height: {card_height}vh;"
-                    
-                    if staff.get('status') == "ON_BREAK": 
-                        st.markdown(f"""<div class="serving-card-break" style="{style_str}"><p style="font-size: {35*font_scale}px;">{station_name}</p><h3 style="margin:0; font-size:{50*font_scale}px; color:#92400E;">ON BREAK</h3><span style="font-size: {24*font_scale}px;">{nickname}</span></div>""", unsafe_allow_html=True)
-                    elif staff.get('status') == "ACTIVE":
-                        active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station_name), None)
-                        if active_t:
-                            is_blinking = "blink-active" if active_t.get('start_time') and (datetime.datetime.now() - datetime.datetime.fromisoformat(active_t['start_time'])).total_seconds() < 20 else ""
-                            b_color = "#DC2626" if active_t['lane'] == "T" else ("#16A34A" if active_t['lane'] == "A" else "#2563EB")
-                            st.markdown(f"""<div class="serving-card-small" style="border-left: 25px solid {b_color}; {style_str}"><p style="font-size: {35*font_scale}px;">{station_name}</p><h2 style="color:{b_color}; font-size: {110*font_scale}px;" class="{is_blinking}">{active_t['number']}</h2><span style="font-size: {24*font_scale}px;">{nickname}</span></div>""", unsafe_allow_html=True)
-                        else: 
-                            st.markdown(f"""<div class="serving-card-small" style="border-left: 25px solid #ccc; {style_str}"><p style="font-size: {35*font_scale}px;">{station_name}</p><h2 style="color:#22c55e; font-size: {70*font_scale}px;">READY</h2><span style="font-size: {24*font_scale}px;">{nickname}</span></div>""", unsafe_allow_html=True)
-    
-    st.markdown("---")
-    c_queue, c_park = st.columns([3, 1])
-    
-    with c_queue:
-        q1, q2, q3 = st.columns(3)
-        waiting = [t for t in local_db['tickets'] if t["status"] == "WAITING" and not t.get('appt_time')] 
-        waiting.sort(key=get_queue_sort_key)
-        
-        with q1:
-            st.markdown(f"<div class='swim-col' style='border-top-color:#DC2626;'><h3>💳 PAYMENTS</h3>", unsafe_allow_html=True)
-            for t in [x for x in waiting if x['lane'] == 'T'][:5]: 
-                st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-        with q2:
-            st.markdown(f"<div class='swim-col' style='border-top-color:#16A34A;'><h3>💼 EMPLOYERS</h3>", unsafe_allow_html=True)
-            for t in [x for x in waiting if x['lane'] == 'A'][:5]: 
-                st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-        with q3:
-            st.markdown(f"<div class='swim-col' style='border-top-color:#2563EB;'><h3>👤 SERVICES</h3>", unsafe_allow_html=True)
-            for t in [x for x in waiting if x['lane'] in ['C','E','F']][:5]: 
-                st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-    
-    with c_park:
-        st.markdown("### 🅿️ PARKED")
-        parked = [t for t in local_db['tickets'] if t["status"] == "PARKED"]
-        for p in parked:
-            limit_mins = 60  # Universal 60-minute limit
-            park_time = datetime.datetime.fromisoformat(p['park_timestamp'])
-            remaining = datetime.timedelta(minutes=limit_mins) - (datetime.datetime.now() - park_time)
-            if remaining.total_seconds() <= 0: 
-                p["status"] = "NO_SHOW"
-                save_db(local_db)
+    placeholder = st.empty()
+    with placeholder.container():
+        if audio_script: st.markdown(audio_script, unsafe_allow_html=True)
+        status = local_db.get('branch_status', 'NORMAL')
+        if status != "NORMAL":
+            color = "red" if status == "OFFLINE" else "orange"
+            text = "⚠ SYSTEM OFFLINE: MANUAL PROCESSING" if status == "OFFLINE" else "⚠ INTERMITTENT CONNECTION"
+            st.markdown(f"<h2 style='text-align:center; color:{color}; animation: blink 1.5s infinite;'>{text}</h2>", unsafe_allow_html=True)
+        st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
+        raw_staff = [s for s in local_db['staff'].values() if s.get('online') is True and s['role'] != "ADMIN" and s['name'] != "System Admin"]
+        unique_staff_map = {} 
+        for s in raw_staff:
+            st_name = s.get('default_station', 'Unassigned')
+            if st_name not in unique_staff_map: unique_staff_map[st_name] = s
             else:
-                mins, secs = divmod(remaining.total_seconds(), 60)
-                disp_txt = p['appt_name'] if p.get('appt_name') else p['number']
-                css_class = "park-appt" if p.get('appt_name') else "park-danger"
-                st.markdown(f"""<div class="{css_class}"><span>{disp_txt}</span><span>{int(mins):02d}:{int(secs):02d}</span></div>""", unsafe_allow_html=True)
-    
-    txt = " | ".join(local_db['announcements'])
-    status = local_db.get('branch_status', 'NORMAL')
-    bg_color = "#DC2626" if status == "OFFLINE" else ("#F97316" if status == "SLOW" else "#FFD700")
-    text_color = "white" if status in ["OFFLINE", "SLOW"] else "black"
-    if status != "NORMAL": 
-        txt = f"⚠ NOTICE: We are currently experiencing {status} connection. Please bear with us. {txt}"
-    st.markdown(f"<div style='background: {bg_color}; color: {text_color}; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%; font-size:20px;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
-    st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.7</div>", unsafe_allow_html=True)
-    
-    # FIX-v23.7-002: Controlled refresh using st.rerun() with delay
-    # This replaces the blocking while True loop
-    time.sleep(3)
-    st.rerun()
+                curr = unique_staff_map[st_name]
+                is_curr_serving = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == st_name), None)
+                is_new_serving = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == st_name and t.get('served_by') == s.get('default_station')), None) 
+                if not is_curr_serving and is_new_serving: unique_staff_map[st_name] = s
+        unique_staff = list(unique_staff_map.values())
+        if not unique_staff: st.warning("Waiting for staff to log in...")
+        else:
+            count = len(unique_staff); num_rows = math.ceil(count / 6); card_height = 65 // num_rows; font_scale = 1.0 if num_rows == 1 else (0.8 if num_rows == 2 else 0.7)
+            for i in range(0, count, 6):
+                batch = unique_staff[i:i+6]; cols = st.columns(len(batch))
+                for idx, staff in enumerate(batch):
+                    with cols[idx]:
+                        nickname = get_display_name(staff); station_name = staff.get('default_station', 'Unassigned'); style_str = f"height: {card_height}vh;"
+                        if staff.get('status') == "ON_BREAK": st.markdown(f"""<div class="serving-card-break" style="{style_str}"><p style="font-size: {35*font_scale}px;">{station_name}</p><h3 style="margin:0; font-size:{50*font_scale}px; color:#92400E;">ON BREAK</h3><span style="font-size: {24*font_scale}px;">{nickname}</span></div>""", unsafe_allow_html=True)
+                        elif staff.get('status') == "ACTIVE":
+                            active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station_name), None)
+                            if active_t:
+                                is_blinking = "blink-active" if active_t.get('start_time') and (datetime.datetime.now() - datetime.datetime.fromisoformat(active_t['start_time'])).total_seconds() < 20 else ""
+                                b_color = "#DC2626" if active_t['lane'] == "T" else ("#16A34A" if active_t['lane'] == "A" else "#2563EB")
+                                st.markdown(f"""<div class="serving-card-small" style="border-left: 25px solid {b_color}; {style_str}"><p style="font-size: {35*font_scale}px;">{station_name}</p><h2 style="color:{b_color}; font-size: {110*font_scale}px;" class="{is_blinking}">{active_t['number']}</h2><span style="font-size: {24*font_scale}px;">{nickname}</span></div>""", unsafe_allow_html=True)
+                            else: st.markdown(f"""<div class="serving-card-small" style="border-left: 25px solid #ccc; {style_str}"><p style="font-size: {35*font_scale}px;">{station_name}</p><h2 style="color:#22c55e; font-size: {70*font_scale}px;">READY</h2><span style="font-size: {24*font_scale}px;">{nickname}</span></div>""", unsafe_allow_html=True)
+        st.markdown("---")
+        c_queue, c_park = st.columns([3, 1])
+        with c_queue:
+            q1, q2, q3 = st.columns(3)
+            waiting = [t for t in local_db['tickets'] if t["status"] == "WAITING" and not t.get('appt_time')] 
+            waiting.sort(key=get_queue_sort_key)
+            with q1:
+                st.markdown(f"<div class='swim-col' style='border-top-color:#DC2626;'><h3>💳 PAYMENTS</h3>", unsafe_allow_html=True)
+                for t in [x for x in waiting if x['lane'] == 'T'][:5]: st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with q2:
+                st.markdown(f"<div class='swim-col' style='border-top-color:#16A34A;'><h3>💼 EMPLOYERS</h3>", unsafe_allow_html=True)
+                for t in [x for x in waiting if x['lane'] == 'A'][:5]: st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with q3:
+                st.markdown(f"<div class='swim-col' style='border-top-color:#2563EB;'><h3>👤 SERVICES</h3>", unsafe_allow_html=True)
+                for t in [x for x in waiting if x['lane'] in ['C','E','F']][:5]: st.markdown(f"<div class='queue-item'><span>{t['number']}</span></div>", unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+        with c_park:
+            st.markdown("### 🅿️ PARKED")
+            parked = [t for t in local_db['tickets'] if t["status"] == "PARKED"]
+            for p in parked:
+                limit_mins = 60 
+                park_time = datetime.datetime.fromisoformat(p['park_timestamp']); remaining = datetime.timedelta(minutes=limit_mins) - (get_ph_time() - park_time)
+                if remaining.total_seconds() <= 0: p["status"] = "NO_SHOW"; save_db(local_db)
+                else:
+                    mins, secs = divmod(remaining.total_seconds(), 60)
+                    disp_txt = p['appt_name'] if p.get('appt_name') else p['number']
+                    css_class = "park-appt" if p.get('appt_name') else "park-danger"
+                    st.markdown(f"""<div class="{css_class}"><span>{disp_txt}</span><span>{int(mins):02d}:{int(secs):02d}</span></div>""", unsafe_allow_html=True)
+        txt = " | ".join(local_db['announcements'])
+        status = local_db.get('branch_status', 'NORMAL')
+        bg_color = "#DC2626" if status == "OFFLINE" else ("#F97316" if status == "SLOW" else "#FFD700")
+        text_color = "white" if status in ["OFFLINE", "SLOW"] else "black"
+        if status != "NORMAL": txt = f"⚠ NOTICE: We are currently experiencing {status} connection. Please bear with us. {txt}"
+        st.markdown(f"<div style='background: {bg_color}; color: {text_color}; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%; font-size:20px;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
+        st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.8</div>", unsafe_allow_html=True)
+    time.sleep(3); st.rerun()
 
 def render_counter(user):
-    # FIX-v23.7-003: Update activity on counter access
     update_activity()
-    
     local_db = load_db()
     user_key = next((k for k,v in local_db['staff'].items() if v['name'] == user['name']), None)
     if not user_key: st.error("User Sync Error. Please Relogin."); return
@@ -785,22 +753,12 @@ def render_counter(user):
 
     st.sidebar.title(f"👮 {user['name']}")
     
-    # ==============================================================================
-    # FIX-v23.7-003: SESSION TIMEOUT WARNING DISPLAY
-    # ==============================================================================
-    last_activity = st.session_state.get('last_activity', datetime.datetime.now())
-    elapsed = (datetime.datetime.now() - last_activity).total_seconds() / 60
+    last_activity = st.session_state.get('last_activity', get_ph_time())
+    elapsed = (get_ph_time() - last_activity).total_seconds() / 60
     remaining_mins = SESSION_TIMEOUT_MINUTES - elapsed
+    if remaining_mins <= 5: st.sidebar.markdown(f"""<div class='timeout-warning'>⚠️ Session expires in {int(remaining_mins)} min</div>""", unsafe_allow_html=True)
     
-    if remaining_mins <= 5:
-        st.sidebar.markdown(f"""<div class='timeout-warning'>⚠️ Session expires in {int(remaining_mins)} min</div>""", unsafe_allow_html=True)
-    
-    # ==============================================================================
-    # FIX-v23.7-004: SAFE LOGOUT BUTTON
-    # ==============================================================================
-    if st.sidebar.button("⬅ LOGOUT"):
-        handle_safe_logout()
-        st.rerun()
+    if st.sidebar.button("⬅ LOGOUT"): handle_safe_logout(reason="MANUAL"); st.rerun()
 
     st.sidebar.markdown("---")
     st.session_state['surge_mode'] = st.sidebar.checkbox("🚨 PRIORITY SURGE MODE", value=st.session_state['surge_mode'])
@@ -810,24 +768,18 @@ def render_counter(user):
     with st.sidebar.expander("☕ Go On Break"):
         b_reason = st.selectbox("Reason", ["Lunch Break", "Coffee Break (15m)", "Bio-Break", "Emergency"])
         if st.button("⏸ START BREAK"):
-            # FIX-v23.7-004: Handle serving ticket before break
             station = current_user_state.get('default_station', '')
             serving_ticket = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station), None)
-            if serving_ticket:
-                st.error("⛔ You have an active ticket. Complete or Park it first.")
+            if serving_ticket: st.error("⛔ You have an active ticket. Complete or Park it first.")
             else:
-                local_db['staff'][user_key]['status'] = "ON_BREAK"
-                local_db['staff'][user_key]['break_reason'] = b_reason
-                local_db['staff'][user_key]['break_start_time'] = datetime.datetime.now().isoformat()
-                save_db(local_db)
-                st.session_state['user'] = local_db['staff'][user_key]
-                st.rerun()
+                local_db['staff'][user_key]['status'] = "ON_BREAK"; local_db['staff'][user_key]['break_reason'] = b_reason; local_db['staff'][user_key]['break_start_time'] = get_ph_time().isoformat()
+                save_db(local_db); st.session_state['user'] = local_db['staff'][user_key]; log_audit("BREAK_START", user['name'], details=b_reason); st.rerun()
 
     with st.sidebar.expander("🔒 Change Password"):
         with st.form("pwd_chg"):
             n_pass = st.text_input("New Password", type="password")
             if st.form_submit_button("Update"):
-                if user_key: local_db['staff'][user_key]['pass'] = n_pass; save_db(local_db); st.success("Updated!")
+                if user_key: local_db['staff'][user_key]['pass'] = n_pass; save_db(local_db); log_audit("PASSWORD_CHANGE", user['name'], target=user_key); st.success("Updated!")
 
     st.sidebar.markdown("---")
     st.sidebar.write("**⚠ Report Issue**")
@@ -838,19 +790,15 @@ def render_counter(user):
     
     with st.sidebar.expander("📅 Book Appointment"):
         with st.form("staff_appt"):
-            nm = st.text_input("Client Name")
-            tm = st.time_input("Time Slot")
-            svc = st.text_input("Transaction")
-            ctr = st.selectbox("Assign to Counter (Optional)", [""] + [c['name'] for c in local_db['config']['counter_map']])
+            nm = st.text_input("Client Name"); tm = st.time_input("Time Slot"); svc = st.text_input("Transaction"); ctr = st.selectbox("Assign to Counter (Optional)", [""] + [c['name'] for c in local_db['config']['counter_map']])
             if st.form_submit_button("Book"):
                 generate_ticket_manual(svc, "C", True, is_appt=True, appt_name=nm, appt_time=tm, assign_counter=ctr)
-                st.success("Booked!")
+                log_audit("APPOINTMENT_CREATE", user['name'], details=f"{nm} at {tm}", target=svc); st.success("Booked!")
 
     if current_user_state.get('status') == "ON_BREAK":
         st.warning(f"⛔ YOU ARE CURRENTLY ON BREAK ({current_user_state.get('break_reason', 'Break')})")
         if st.button("▶ RESUME WORK", type="primary"):
-            local_db['staff'][user_key]['status'] = "ACTIVE"
-            save_db(local_db); st.session_state['user'] = local_db['staff'][user_key]; st.rerun()
+            local_db['staff'][user_key]['status'] = "ACTIVE"; save_db(local_db); st.session_state['user'] = local_db['staff'][user_key]; log_audit("BREAK_END", user['name']); st.rerun()
         return
 
     if 'my_station' not in st.session_state: st.session_state['my_station'] = current_user_state.get('default_station', 'Counter 1')
@@ -859,16 +807,13 @@ def render_counter(user):
     if st.session_state['my_station'] not in allowed_counters and allowed_counters: st.session_state['my_station'] = allowed_counters[0]
     new_station = st.selectbox("Switch Station", allowed_counters, index=allowed_counters.index(st.session_state['my_station']) if st.session_state['my_station'] in allowed_counters else 0)
     if new_station != st.session_state['my_station']:
-        st.session_state['my_station'] = new_station; local_db['staff'][user_key]['default_station'] = new_station; save_db(local_db); st.rerun()
+        st.session_state['my_station'] = new_station; local_db['staff'][user_key]['default_station'] = new_station; save_db(local_db); log_audit("STATION_CHANGE", user['name'], target=new_station); st.rerun()
     
     current_counter_obj = next((c for c in local_db['config']['counter_map'] if c['name'] == st.session_state['my_station']), None)
     station_type = current_counter_obj['type'] if current_counter_obj else "Counter"
     my_lanes = local_db['config']["assignments"].get(station_type, ["C"])
     queue = [t for t in local_db['tickets'] if t["status"] == "WAITING" and t["lane"] in my_lanes]
-    
-    # Priority Sort for View Only
     queue.sort(key=get_queue_sort_key)
-    
     current = next((t for t in local_db['tickets'] if t["status"] == "SERVING" and t.get("served_by") == st.session_state['my_station']), None)
     
     c1, c2 = st.columns([2,1])
@@ -878,7 +823,6 @@ def render_counter(user):
             st.markdown(f"""<div style='padding:30px; background:#e0f2fe; border-radius:15px; border-left:10px solid #0369a1;'><h1 style='margin:0; color:#0369a1; font-size: 60px;'>{display_num}</h1><h3>{current['service']}</h3></div>""", unsafe_allow_html=True)
             if current.get("ref_from"): st.markdown(f"""<div style='background:#fee2e2; border-left:5px solid #ef4444; padding:10px; margin-top:10px;'><span style='color:#b91c1c; font-weight:bold;'>↩ REFERRED FROM: {current["ref_from"]}</span><br><span style='color:#b91c1c; font-weight:bold;'>📝 REASON: {current.get("referral_reason", "No reason provided")}</span></div>""", unsafe_allow_html=True)
             
-            # REFER LOGIC
             if st.button("🔄 REFER", use_container_width=True): st.session_state['refer_modal'] = True
             
             if st.session_state.get('refer_modal'):
@@ -895,69 +839,56 @@ def render_counter(user):
                         current["ref_from"] = st.session_state['my_station']
                         current["referral_reason"] = reason
                         save_db(local_db)
-                        st.session_state['refer_modal'] = False
-                        st.rerun()
+                        log_audit("TICKET_REFER", user['name'], details=f"To {target_lane}: {reason}", target=current['number'])
+                        clear_ticket_modal_states(); st.rerun()
                     if c_can.form_submit_button("Cancel"):
-                        st.session_state['refer_modal'] = False
-                        st.rerun()
+                        clear_ticket_modal_states(); st.rerun()
 
             with st.expander("📝 Reality Log (IOMS - Verify & Edit)", expanded=True):
                 all_txns = []
                 for cat, items in local_db.get('transaction_master', {}).items():
                     for item in items: all_txns.append(f"[{cat}] {item}")
-                
                 c_txn, c_btn = st.columns([3, 1])
                 new_txn = c_txn.selectbox("Add Transaction", all_txns)
                 if c_btn.button("➕ Add"):
                     if 'actual_transactions' not in current: current['actual_transactions'] = []
                     clean_txn = new_txn.split("] ")[1] if "]" in new_txn else new_txn
                     category = new_txn.split("] ")[0].replace("[","") if "]" in new_txn else "GENERAL"
-                    current['actual_transactions'].append({"txn": clean_txn, "category": category, "staff": user['name'], "timestamp": datetime.datetime.now().isoformat()})
+                    current['actual_transactions'].append({"txn": clean_txn, "category": category, "staff": user['name'], "timestamp": get_ph_time().isoformat()})
                     save_db(local_db); st.rerun()
-                
                 if 'actual_transactions' in current and current['actual_transactions']:
                     st.write("---")
                     st.caption("Transactions Logged for this Ticket:")
                     for i, txn in enumerate(current['actual_transactions']):
                         col_text, col_del = st.columns([4, 1])
                         col_text.text(f"• {txn['txn']}")
-                        if col_del.button("🗑", key=f"del_txn_{i}"):
-                            current['actual_transactions'].pop(i); save_db(local_db); st.rerun()
+                        if col_del.button("🗑", key=f"del_txn_{i}"): current['actual_transactions'].pop(i); save_db(local_db); st.rerun()
 
             st.markdown("<br>", unsafe_allow_html=True)
             b1, b2, b3 = st.columns(3)
             if b1.button("✅ COMPLETE", use_container_width=True): 
-                if not current.get('actual_transactions'):
-                    st.error("⛔ BLOCKED: You must log at least one Actual Transaction first.")
+                if not current.get('actual_transactions'): st.error("⛔ BLOCKED: You must log at least one Actual Transaction first.")
                 else:
                     current["status"] = "COMPLETED"
-                    current["end_time"] = datetime.datetime.now().isoformat()
+                    current["end_time"] = get_ph_time().isoformat()
                     local_db['history'].append(current)
                     local_db['tickets'] = [t for t in local_db['tickets'] if t['id'] != current['id']]
-                    # FIX-v23.7: Clear refer modal state on complete
-                    if 'refer_modal' in st.session_state:
-                        del st.session_state['refer_modal']
-                    save_db(local_db); st.rerun()
+                    clear_ticket_modal_states(); save_db(local_db); log_audit("TICKET_COMPLETE", user['name'], target=current['number']); st.rerun()
             if b2.button("🅿️ PARK", use_container_width=True): 
-                current["status"] = "PARKED"
-                current["park_timestamp"] = datetime.datetime.now().isoformat()
-                # FIX-v23.7: Clear refer modal state on park
-                if 'refer_modal' in st.session_state:
-                    del st.session_state['refer_modal']
-                save_db(local_db); st.rerun()
+                current["status"] = "PARKED"; current["park_timestamp"] = get_ph_time().isoformat()
+                clear_ticket_modal_states(); save_db(local_db); log_audit("TICKET_PARK", user['name'], target=current['number']); st.rerun()
             if b3.button("🔔 RE-CALL", use_container_width=True):
-                current["start_time"] = datetime.datetime.now().isoformat()
+                current["start_time"] = get_ph_time().isoformat()
                 trigger_audio(current['number'], st.session_state['my_station']); save_db(local_db); st.toast(f"Re-calling {current['number']}..."); time.sleep(0.5); st.rerun()
         else:
             if st.button("🔊 CALL NEXT", type="primary", use_container_width=True):
-                # FIX-v23.7-003: Update activity on action
                 update_activity()
                 nxt = get_next_ticket(queue, st.session_state['surge_mode'], st.session_state['my_station'])
                 if nxt:
                     db_ticket = next((x for x in local_db['tickets'] if x['id'] == nxt['id']), None)
                     if db_ticket:
-                        db_ticket["status"] = "SERVING"; db_ticket["served_by"] = st.session_state['my_station']; db_ticket["start_time"] = datetime.datetime.now().isoformat()
-                        trigger_audio(db_ticket['number'], st.session_state['my_station']); save_db(local_db); st.rerun()
+                        db_ticket["status"] = "SERVING"; db_ticket["served_by"] = st.session_state['my_station']; db_ticket["start_time"] = get_ph_time().isoformat()
+                        trigger_audio(db_ticket['number'], st.session_state['my_station']); save_db(local_db); log_audit("TICKET_CALL", user['name'], target=db_ticket['number']); st.rerun()
                 else: st.warning(f"No tickets for {station_type}.")
     with c2:
         count, avg_time = get_staff_efficiency(user['name'])
@@ -967,26 +898,17 @@ def render_counter(user):
         parked = [t for t in local_db['tickets'] if t["status"] == "PARKED" and t["lane"] in my_lanes]
         for p in parked:
             if st.button(f"🔊 {p['number']}", key=p['id']):
-                # FIX-v23.7-003: Update activity on action
                 update_activity()
-                p["status"] = "SERVING"; p["served_by"] = st.session_state['my_station']; p["start_time"] = datetime.datetime.now().isoformat(); trigger_audio(p['number'], st.session_state['my_station']); save_db(local_db); st.rerun()
+                p["status"] = "SERVING"; p["served_by"] = st.session_state['my_station']; p["start_time"] = get_ph_time().isoformat(); trigger_audio(p['number'], st.session_state['my_station']); save_db(local_db); log_audit("TICKET_RECALL_PARKED", user['name'], target=p['number']); st.rerun()
 
 def render_admin_panel(user):
-    # FIX-v23.7-003: Update activity on admin access
     update_activity()
-    
     local_db = load_db()
     st.title("🛠 Admin & IOMS Center")
-    
-    # ==============================================================================
-    # FIX-v23.7-004: SAFE LOGOUT FOR ADMIN
-    # ==============================================================================
-    if st.sidebar.button("⬅ LOGOUT"): 
-        handle_safe_logout()
-        st.rerun()
+    if st.sidebar.button("⬅ LOGOUT"): handle_safe_logout(reason="MANUAL"); st.rerun()
     
     if user['role'] in ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]:
-        tabs = ["Dashboard", "Reports", "Book Appt", "Kiosk Menu", "IOMS Master", "Counters", "Users", "Resources", "Exemptions", "Announcements", "Backup"]
+        tabs = ["Dashboard", "Reports", "Book Appt", "Kiosk Menu", "IOMS Master", "Counters", "Users", "Resources", "Exemptions", "Announcements", "Audit Log", "Backup"]
     else: st.error("Access Denied"); return
     
     active = st.radio("Module", tabs, horizontal=True)
@@ -1005,7 +927,7 @@ def render_admin_panel(user):
                 try: archive_data = json.load(af)
                 except: archive_data = []
         
-        today = datetime.date.today()
+        today = get_ph_time().date()
         filtered_txns = []
         start_date, end_date = today, today
         
@@ -1015,7 +937,8 @@ def render_admin_panel(user):
             elif time_range == "This Week": start_date = today - datetime.timedelta(days=today.weekday())
             elif time_range == "This Month": start_date = today.replace(day=1)
             elif time_range == "Quarterly": curr_q = (today.month - 1) // 3 + 1; start_date = datetime.date(today.year, 3 * curr_q - 2, 1)
-            
+            elif time_range == "Semestral": start_date = datetime.date(today.year, 1, 1) if today.month <= 6 else datetime.date(today.year, 7, 1)
+            elif time_range == "Annual": start_date = datetime.date(today.year, 1, 1)
             for entry in archive_data:
                 entry_dt = datetime.datetime.strptime(entry['date'], "%Y-%m-%d").date()
                 if start_date <= entry_dt <= end_date: filtered_txns.extend(entry.get('history', []))
@@ -1028,7 +951,6 @@ def render_admin_panel(user):
 
         if filtered_txns:
             df = pd.DataFrame(filtered_txns)
-            
             df['Date'] = df['timestamp'].apply(lambda x: datetime.datetime.fromisoformat(x).strftime('%Y-%m-%d'))
             df['Ticket Number'] = df.apply(lambda x: x.get('full_id', x['number']), axis=1)
             
@@ -1056,8 +978,10 @@ def render_admin_panel(user):
             csv_export = df[export_cols].to_csv(index=False).encode('utf-8')
             st.download_button("📥 Export Raw Data (CSV)", csv_export, "raw_data.csv", "text/csv")
             
-            avg_wait = round(df['Total Waiting Time (Mins)'].mean())
-            avg_handle = round(df['Total Handle Time (Mins)'].mean())
+            # Exclude expired tickets from averages
+            df_valid = df[df['Total Handle Time (Mins)'] > 0]
+            avg_wait = round(df_valid['Total Waiting Time (Mins)'].mean()) if not df_valid.empty else 0
+            avg_handle = round(df_valid['Total Handle Time (Mins)'].mean()) if not df_valid.empty else 0
             
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Volume", len(filtered_txns))
@@ -1081,13 +1005,11 @@ def render_admin_panel(user):
     elif active == "Reports":
         st.subheader("📋 IOMS Report Generator")
         c1, c2 = st.columns(2)
-        d_range = c1.date_input("Date Range", [datetime.date.today(), datetime.date.today()])
+        d_range = c1.date_input("Date Range", [get_ph_time().date(), get_ph_time().date()])
         staff_filter = c2.multiselect("Filter Staff", [s['name'] for s in local_db['staff'].values()])
-        
         if len(d_range) == 2:
             start, end = d_range
             all_txns_flat = []
-            
             def extract_txns(ticket_list):
                 for t in ticket_list:
                     t_date = datetime.datetime.fromisoformat(t['timestamp']).date()
@@ -1096,40 +1018,25 @@ def render_admin_panel(user):
                             for act in t['actual_transactions']:
                                 if not staff_filter or act['staff'] in staff_filter:
                                     all_txns_flat.append({
-                                        "Date": t_date, "Ticket ID": t.get('full_id', t['number']), 
-                                        "Category": act.get('category', 'MEMBER SERVICES'), 
-                                        "Transaction": act['txn'], 
-                                        "Staff": act['staff'], 
-                                        "Number of Transaction": 1
+                                        "Date": t_date, "Ticket ID": t.get('full_id', t['number']), "Category": act.get('category', 'MEMBER SERVICES'), "Transaction": act['txn'], "Staff": act['staff'], "Number of Transaction": 1
                                     })
                         else:
                             if not staff_filter or t.get('served_by') in staff_filter:
                                 cat_map = {"T": "PAYMENTS", "A": "EMPLOYERS", "C": "MEMBER SERVICES", "E": "MEMBER SERVICES", "F": "MEMBER SERVICES"}
-                                category = cat_map.get(t['lane'], "MEMBER SERVICES")
                                 all_txns_flat.append({
-                                    "Date": t_date, "Ticket ID": t.get('full_id', t['number']), 
-                                    "Category": category, 
-                                    "Transaction": t['service'], 
-                                    "Staff": t.get('served_by', 'Unknown'), 
-                                    "Number of Transaction": 1
+                                    "Date": t_date, "Ticket ID": t.get('full_id', t['number']), "Category": cat_map.get(t['lane'], "MEMBER SERVICES"), "Transaction": t['service'], "Staff": t.get('served_by', 'Unknown'), "Number of Transaction": 1
                                 })
-
             extract_txns(local_db['history'])
             if os.path.exists(ARCHIVE_FILE):
                 with open(ARCHIVE_FILE, 'r') as af:
                     try: 
                         for day in json.load(af): extract_txns(day.get('history', []))
                     except: pass
-            
             if all_txns_flat:
                 df_rep = pd.DataFrame(all_txns_flat)
-                st.write("**Summary (Frequency Count)**")
-                summary = df_rep.groupby(['Category', 'Transaction']).size().reset_index(name='Volume')
-                st.dataframe(summary, use_container_width=True)
-                st.write("**Detailed Log**")
-                st.dataframe(df_rep, use_container_width=True)
-                csv = df_rep.to_csv(index=False).encode('utf-8')
-                st.download_button("📥 Download IOMS CSV", csv, "ioms_report.csv", "text/csv")
+                st.write("**Summary**"); st.dataframe(df_rep.groupby(['Category', 'Transaction']).size().reset_index(name='Volume'), use_container_width=True)
+                st.write("**Detailed Log**"); st.dataframe(df_rep, use_container_width=True)
+                st.download_button("📥 Download IOMS CSV", df_rep.to_csv(index=False).encode('utf-8'), "ioms_report.csv", "text/csv")
             else: st.info("No records found.")
 
     elif active == "Book Appt":
@@ -1138,7 +1045,7 @@ def render_admin_panel(user):
             nm = st.text_input("Client Name"); tm = st.time_input("Time Slot"); svc = st.text_input("Transaction"); ctr = st.selectbox("Assign to Counter (Optional)", [""] + [c['name'] for c in local_db['config']['counter_map']])
             if st.form_submit_button("Book Slot"):
                 generate_ticket_manual(svc, "C", True, is_appt=True, appt_name=nm, appt_time=tm, assign_counter=ctr)
-                st.success(f"Booked for {nm} at {tm}")
+                log_audit("APPOINTMENT_CREATE", user['name'], details=f"{nm} at {tm}", target=svc); st.success(f"Booked for {nm} at {tm}")
 
     elif active == "Kiosk Menu":
         st.subheader("Manage Kiosk Buttons")
@@ -1152,8 +1059,11 @@ def render_admin_panel(user):
                     new_label = st.text_input("Label", label, key=f"l_{i}")
                     new_code = st.text_input("Code", code, key=f"c_{i}")
                     new_lane = st.selectbox("Lane", ["C", "E", "F", "T", "A", "GATE"], index=["C", "E", "F", "T", "A", "GATE"].index(lane), key=f"ln_{i}")
-                    if st.button("Update", key=f"up_{i}"): local_db['menu'][sel_cat][i] = (new_label, new_code, new_lane); save_db(local_db); st.success("Updated!"); st.rerun()
-                    if st.button("Delete", key=f"del_{i}"): local_db['menu'][sel_cat].pop(i); save_db(local_db); st.rerun()
+                    if st.button("Update", key=f"up_{i}"): 
+                        local_db['menu'][sel_cat][i] = (new_label, new_code, new_lane)
+                        save_db(local_db); log_audit("KIOSK_MENU_UPDATE", user['name'], details=f"{label} -> {new_label}"); st.success("Updated!"); st.rerun()
+                    if st.button("Delete", key=f"del_{i}"): 
+                        local_db['menu'][sel_cat].pop(i); save_db(local_db); log_audit("KIOSK_MENU_DELETE", user['name'], target=label); st.rerun()
 
     elif active == "Counters":
         for i, c in enumerate(local_db['config']['counter_map']): 
@@ -1168,11 +1078,11 @@ def render_admin_panel(user):
                         for s_key in local_db['staff']:
                             if local_db['staff'][s_key].get('default_station') == old_name:
                                 local_db['staff'][s_key]['default_station'] = new_n
-                        save_db(local_db); st.rerun()
-            if c4.button("🗑", key=f"dc_{i}"): local_db['config']['counter_map'].pop(i); save_db(local_db); st.rerun()
+                        save_db(local_db); log_audit("COUNTER_RENAME", user['name'], details=f"{old_name} -> {new_n}"); st.rerun()
+            if c4.button("🗑", key=f"dc_{i}"): local_db['config']['counter_map'].pop(i); save_db(local_db); log_audit("COUNTER_DELETE", user['name'], target=c['name']); st.rerun()
         with st.form("add_counter"): 
             cn = st.text_input("Name"); ct = st.selectbox("Type", ["Counter", "Teller", "Employer", "eCenter"])
-            if st.form_submit_button("Add"): local_db['config']['counter_map'].append({"name": cn, "type": ct}); save_db(local_db); st.rerun()
+            if st.form_submit_button("Add"): local_db['config']['counter_map'].append({"name": cn, "type": ct}); save_db(local_db); log_audit("COUNTER_CREATE", user['name'], target=cn); st.rerun()
 
     elif active == "IOMS Master":
         st.subheader("Transaction Master List")
@@ -1181,7 +1091,7 @@ def render_admin_panel(user):
         with c1: st.write("**PAYMENTS**"); current_master["PAYMENTS"] = st.data_editor(pd.DataFrame(current_master["PAYMENTS"], columns=["Item"]), num_rows="dynamic")["Item"].tolist()
         with c2: st.write("**EMPLOYERS**"); current_master["EMPLOYERS"] = st.data_editor(pd.DataFrame(current_master["EMPLOYERS"], columns=["Item"]), num_rows="dynamic")["Item"].tolist()
         with c3: st.write("**MEMBER SERVICES**"); current_master["MEMBER SERVICES"] = st.data_editor(pd.DataFrame(current_master["MEMBER SERVICES"], columns=["Item"]), num_rows="dynamic")["Item"].tolist()
-        if st.button("Save Master List"): local_db['transaction_master'] = current_master; save_db(local_db); st.success("Updated!")
+        if st.button("Save Master List"): local_db['transaction_master'] = current_master; save_db(local_db); log_audit("IOMS_MASTER_UPDATE", user['name']); st.success("Updated!")
 
     elif active == "Users":
         st.subheader("Manage Users"); h1, h2, h3, h4, h5 = st.columns([1.5, 3, 2, 1, 0.5]); h1.markdown("**ID**"); h2.markdown("**Name**"); h3.markdown("**Station**")
@@ -1191,16 +1101,12 @@ def render_admin_panel(user):
                 with st.popover("✏️"):
                     with st.form(f"edit_{uid}"):
                         en = st.text_input("Name", u['name'])
-                        enick = st.text_input("Nickname (Display)", u.get('nickname', ''))
+                        enick = st.text_input("Nickname", u.get('nickname', ''))
                         er = st.selectbox("Role", ["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "DIV_HEAD", "ADMIN"], index=["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "DIV_HEAD", "ADMIN"].index(u['role']) if u['role'] in ["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "DIV_HEAD", "ADMIN"] else 0)
-                        current_stat = u.get('default_station', '')
-                        all_stations = [c['name'] for c in local_db['config']['counter_map']]
-                        est = st.selectbox("Station", all_stations, index=all_stations.index(current_stat) if current_stat in all_stations else 0)
-                        if st.form_submit_button("Save"): 
-                            local_db['staff'][uid].update({'name': en, 'nickname': enick, 'role': er, 'default_station': est})
-                            save_db(local_db); st.rerun()
-                    if st.button("🔑 RESET", key=f"rst_{uid}"): local_db['staff'][uid]['pass'] = "sss2026"; save_db(local_db); st.toast("Reset to 'sss2026'")
-            if c5.button("🗑", key=f"del_{uid}"): del local_db['staff'][uid]; save_db(local_db); st.rerun()
+                        est = st.selectbox("Station", [c['name'] for c in local_db['config']['counter_map']], index=[c['name'] for c in local_db['config']['counter_map']].index(u.get('default_station', '')) if u.get('default_station') in [c['name'] for c in local_db['config']['counter_map']] else 0)
+                        if st.form_submit_button("Save"): local_db['staff'][uid].update({'name': en, 'nickname': enick, 'role': er, 'default_station': est}); save_db(local_db); log_audit("USER_UPDATE", user['name'], target=uid); st.rerun()
+                    if st.button("🔑 RESET", key=f"rst_{uid}"): local_db['staff'][uid]['pass'] = "sss2026"; save_db(local_db); log_audit("PASSWORD_RESET", user['name'], target=uid); st.toast("Reset to 'sss2026'")
+            if c5.button("🗑", key=f"del_{uid}"): del local_db['staff'][uid]; save_db(local_db); log_audit("USER_DELETE", user['name'], target=uid); st.rerun()
         st.markdown("---")
         st.write("**Add New User**")
         with st.form("add_user_form"):
@@ -1210,10 +1116,12 @@ def render_admin_panel(user):
             new_role = st.selectbox("Role", ["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "DIV_HEAD", "ADMIN"])
             new_station = st.selectbox("Assign Default Station", [c['name'] for c in local_db['config']['counter_map']])
             if st.form_submit_button("Create User"):
-                if new_id in local_db['staff']: st.error("User ID already exists!")
+                valid, msg = validate_user_id(new_id)
+                if not valid: st.error(f"⛔ {msg}")
+                elif new_id in local_db['staff']: st.error("User ID already exists!")
                 else: 
                     local_db['staff'][new_id] = {"pass": "123", "role": new_role, "name": new_name, "nickname": new_nick if new_nick else new_name.split()[0], "default_station": new_station, "status": "ACTIVE", "online": False}
-                    save_db(local_db); st.success("Created!"); st.rerun()
+                    save_db(local_db); log_audit("USER_CREATE", user['name'], target=new_id); st.success("Created!"); st.rerun()
     
     elif active == "Resources":
         st.subheader("Manage Info Hub Content")
@@ -1242,9 +1150,28 @@ def render_admin_panel(user):
 
     elif active == "Announcements":
         curr = " | ".join(local_db['announcements']); new_txt = st.text_area("Marquee", value=curr)
-        if st.button("Update"): local_db['announcements'] = [new_txt]; save_db(local_db); st.success("Updated!")
+        if st.button("Update"): local_db['announcements'] = [new_txt]; save_db(local_db); log_audit("ANNOUNCEMENT_UPDATE", user['name']); st.success("Updated!")
 
-    elif active == "Backup": st.download_button("📥 BACKUP", data=json.dumps(local_db), file_name="sss_backup.json")
+    elif active == "Audit Log":
+        st.subheader("🔍 Audit Trail Viewer")
+        audit_entries = local_db.get('audit_log', [])
+        if audit_entries:
+            df_audit = pd.DataFrame(audit_entries)
+            df_audit['Time'] = df_audit['timestamp'].apply(lambda x: datetime.datetime.fromisoformat(x).strftime('%Y-%m-%d %I:%M %p'))
+            st.dataframe(df_audit[['Time', 'action', 'user', 'target', 'details']], use_container_width=True, hide_index=True)
+            st.download_button("📥 Export Audit Log", df_audit.to_csv(index=False).encode('utf-8'), "audit_log.csv", "text/csv")
+        else: st.info("No audit entries.")
+
+    elif active == "Backup": 
+        st.subheader("💾 Backup & Recovery")
+        st.download_button("📥 BACKUP NOW", data=json.dumps(local_db), file_name="sss_backup.json")
+        st.markdown("---")
+        st.write("**Hourly Backups (Last 24)**")
+        if os.path.exists(BACKUP_DIR):
+            backups = sorted(glob.glob(os.path.join(BACKUP_DIR, "sss_data_*.json")), reverse=True)
+            if backups:
+                for b in backups[:10]: st.text(f"• {os.path.basename(b)} ({os.path.getsize(b)/1024:.1f} KB)")
+            else: st.info("No hourly backups yet.")
 
 # ==========================================
 # 5. ROUTER
@@ -1252,16 +1179,10 @@ def render_admin_panel(user):
 params = st.query_params
 mode = params.get("mode")
 
-# ==============================================================================
-# FIX-v23.7-003: SESSION TIMEOUT CHECK BEFORE RENDERING
-# ==============================================================================
 if mode == "staff" and 'user' in st.session_state:
-    if check_session_timeout():
-        st.warning("⚠️ Session expired due to inactivity. Please login again.")
-        st.rerun()
+    if check_session_timeout(): st.warning("⚠️ Session expired due to inactivity."); st.rerun()
 
-if mode == "kiosk": 
-    render_kiosk()
+if mode == "kiosk": render_kiosk()
 elif mode == "staff":
     if 'user' not in st.session_state:
         st.title("Staff Login")
@@ -1270,29 +1191,26 @@ elif mode == "staff":
             local_db = load_db()
             acct = next((v for k,v in local_db['staff'].items() if v["name"] == u or k == u), None)
             acct_key = next((k for k,v in local_db['staff'].items() if v["name"] == u or k == u), None)
-            if u == "admin" and not acct: local_db['staff']['admin'] = DEFAULT_DATA['staff']['admin']; save_db(local_db); st.warning("Admin reset. Try again."); st.rerun()
+            if u == "admin" and not acct: local_db['staff']['admin'] = DEFAULT_DATA['staff']['admin']; save_db(local_db); st.warning("Admin reset."); st.rerun()
             if acct and acct['pass'] == p: 
                 st.session_state['user'] = acct
-                st.session_state['last_activity'] = datetime.datetime.now()  # FIX-v23.7-003
+                st.session_state['last_activity'] = get_ph_time()
+                st.session_state['login_date'] = get_ph_time().strftime("%Y-%m-%d")
                 local_db['staff'][acct_key]['online'] = True
                 save_db(local_db)
+                log_audit("LOGIN", acct['name'], target=acct.get('default_station', 'N/A'))
                 st.rerun()
             else: st.error("Invalid")
     else:
         user = st.session_state['user']
-        # FIX: DIV_HEAD is supervisory-only, no counter access
-        if user['role'] in ["ADMIN", "DIV_HEAD"]: 
-            render_admin_panel(user)
+        if user['role'] in ["ADMIN", "DIV_HEAD"]: render_admin_panel(user)
         elif user['role'] in ["BRANCH_HEAD", "SECTION_HEAD"]:
             view = st.sidebar.radio("View", ["Admin", "Counter"])
             if view == "Admin": render_admin_panel(user)
             else: render_counter(user)
-        else: 
-            render_counter(user)
-elif mode == "display": 
-    render_display()
+        else: render_counter(user)
+elif mode == "display": render_display()
 else:
-    # Mobile Tracker - Default View
     if db['config']["logo_url"].startswith("http"): st.image(db['config']["logo_url"], width=50)
     st.title("G-ABAY Mobile Tracker")
     t1, t2, t3 = st.tabs(["🎫 Tracker", "ℹ️ Info Hub", "⭐ Rate Us"])
@@ -1302,37 +1220,26 @@ else:
             local_db = load_db()
             t = next((x for x in local_db['tickets'] if x["number"] == tn or x.get('full_id') == tn), None)
             t_hist = next((x for x in local_db['history'] if x["number"] == tn or x.get('full_id') == tn), None)
-            
             if t:
                 if t['status'] == "PARKED":
-                    limit_mins = 60  # Universal 60-minute limit
-                    park_time = datetime.datetime.fromisoformat(t['park_timestamp'])
-                    remaining = datetime.timedelta(minutes=limit_mins) - (datetime.datetime.now() - park_time)
+                    limit_mins = 60
+                    park_time = datetime.datetime.fromisoformat(t['park_timestamp']); remaining = datetime.timedelta(minutes=limit_mins) - (get_ph_time() - park_time)
                     if remaining.total_seconds() > 0:
                         mins, secs = divmod(remaining.total_seconds(), 60)
-                        st.markdown(f"""<div style="font-size:30px; font-weight:bold; color:#b91c1c; text-align:center;">PARKED: {int(mins):02d}:{int(secs):02d}</div>""", unsafe_allow_html=True)
-                        st.error("⚠️ PLEASE APPROACH COUNTER IMMEDIATELY TO AVOID FORFEITURE.")
+                        st.markdown(f"""<div style="font-size:30px; font-weight:bold; color:#b91c1c; text-align:center;">PARKED: {int(mins):02d}:{int(secs):02d}</div>""", unsafe_allow_html=True); st.error("⚠️ PLEASE APPROACH COUNTER IMMEDIATELY TO AVOID FORFEITURE.")
                         st.markdown(f"""<script>startTimer({remaining.total_seconds()}, "mob_park_{t['id']}");</script>""", unsafe_allow_html=True)
                     else: st.error("❌ TICKET EXPIRED")
-                elif t['status'] == "SERVING":
-                    st.success(f"🔊 NOW SERVING at {t.get('served_by', 'Counter')}. Please proceed immediately.")
+                elif t['status'] == "SERVING": st.success(f"🔊 NOW SERVING at {t.get('served_by', 'Counter')}. Please proceed immediately.")
                 else:
                     st.info(f"Status: {t['status']}")
-                    wait_str = calculate_specific_wait_time(t['id'], t['lane'])
-                    people_ahead = calculate_people_ahead(t['id'], t['lane'])
-                    c1, c2 = st.columns(2)
-                    c1.metric("Est. Wait", wait_str)
+                    wait_str = calculate_specific_wait_time(t['id'], t['lane']); people_ahead = calculate_people_ahead(t['id'], t['lane'])
+                    c1, c2 = st.columns(2); c1.metric("Est. Wait", wait_str)
                     if people_ahead == 0: c2.success("You are Next!")
                     else: c2.metric("People Ahead", people_ahead)
                     st.write(f"Your Ticket: {t['number']}")
+                time.sleep(5); st.rerun()
             elif t_hist: st.success("✅ TRANSACTION COMPLETE. Thank you!")
             else: st.error("Not Found (Check Ticket Number)")
-        
-        # FIX-v23.7: Auto-refresh only in Tracker tab when tracking
-        if tn:
-            time.sleep(5)
-            st.rerun()
-            
     with t2:
         st.subheader("Member Resources")
         for l in [r for r in db.get('resources', []) if r['type'] == 'LINK']: st.markdown(f"[{l['label']}]({l['value']})")
@@ -1352,10 +1259,6 @@ else:
                     pers = st.text_input("Personnel Served You (Optional)")
                     comm = st.text_area("Comments")
                     if st.form_submit_button("Submit Rating"):
-                        review_entry = {"ticket": verify_t, "rating": (rate if rate else 0) + 1, "personnel": pers, "comment": comm, "timestamp": datetime.datetime.now().isoformat()}
+                        review_entry = {"ticket": verify_t, "rating": (rate if rate else 0) + 1, "personnel": pers, "comment": comm, "timestamp": get_ph_time().isoformat()}
                         local_db['reviews'].append(review_entry); save_db(local_db); st.success("Thank you!"); time.sleep(2); st.rerun()
             else: st.error("Ticket not found.")
-
-# ==============================================================================
-# END OF SSS G-ABAY v23.7 - PHASE 1 CRITICAL STABILITY
-# ==============================================================================
