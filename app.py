@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v23.4 - BRANCH OPERATING SYSTEM (PRECISION DRILL-DOWN)
+# SSS G-ABAY v23.3 - BRANCH OPERATING SYSTEM (ROOT CAUSE ANALYTICS)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -17,7 +17,7 @@ import plotly.express as px
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v23.4", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v23.3", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 ARCHIVE_FILE = "sss_archive.json"
@@ -186,10 +186,7 @@ function startTimer(duration, displayId) {
     [data-testid="stSidebar"][aria-expanded="false"] { display: none; }
     .header-text { text-align: center; font-family: sans-serif; }
     .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
-    
-    /* V23.4 UPDATED FOOTER POSITION */
-    .brand-footer { position: fixed; bottom: 5px; left: 10px; font-family: monospace; font-size: 12px; color: #888; opacity: 0.7; pointer-events: none; z-index: 9999; }
-    
+    .brand-footer { position: fixed; bottom: 5px; right: 10px; font-family: monospace; font-size: 12px; color: #888; opacity: 0.7; pointer-events: none; z-index: 9999; }
     @keyframes blink { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.05); color: #dc2626; } 100% { opacity: 1; transform: scale(1); } }
     .blink-active { animation: blink 1.5s infinite; }
     .serving-card-small { background: white; border-left: 25px solid #2563EB; padding: 10px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center; display: flex; flex-direction: column; justify-content: center; transition: all 0.3s ease; width: 100%; }
@@ -366,18 +363,17 @@ def render_kiosk():
         m1, m2, m3 = st.columns(3, gap="medium")
         with m1:
             st.markdown('<div class="menu-card">', unsafe_allow_html=True)
-            # V23.4 UPDATED BUTTON LABELS
-            if st.button("💳 PAYMENTS\n(Contri/Loans)"):
+            if st.button("💳 PAYMENTS\n(Contrib/Loans)"):
                 generate_ticket_callback("Payment", "T", st.session_state['is_prio']); st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         with m2:
             st.markdown('<div class="menu-card">', unsafe_allow_html=True)
-            if st.button("💼 EMPLOYERS\n(Account Management)"):
+            if st.button("💼 EMPLOYERS\n(Account Mgmt)"):
                 generate_ticket_callback("Account Management", "A", st.session_state['is_prio']); st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         with m3:
             st.markdown('<div class="menu-card">', unsafe_allow_html=True)
-            if st.button("👤 MEMBER SERVICES\n(Claims, Requests, Updates)"):
+            if st.button("👤 MEMBER SERVICES\n(Claims, ID, Records)"):
                 st.session_state['kiosk_step'] = 'mss'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<br><br>", unsafe_allow_html=True)
@@ -673,15 +669,10 @@ def render_admin_panel(user):
     st.divider()
     
     if active == "Dashboard":
-        st.subheader("📊 G-ABAY Precision Analytics")
-        # V23.4 LANE FILTER UPGRADE
-        c1, c2 = st.columns(2)
-        with c1:
-            time_range = st.selectbox("Select Time Range", ["Today", "Yesterday", "This Week", "This Month", "Quarterly", "Semestral", "Annual"])
-        with c2:
-            lane_filter = st.selectbox("Select Lane / Section", ["All Lanes", "Teller", "Employer", "Counter", "eCenter", "Fast Lane"])
+        st.subheader("📊 G-ABAY Root Cause Analytics")
+        time_range = st.selectbox("Select Time Range", ["Today", "Yesterday", "This Week", "This Month", "Quarterly", "Semestral", "Annual"])
         
-        # 1. DATA AGGREGATION
+        # 1. DATA AGGREGATION (V23.3)
         data_source = local_db['history']
         archive_data = []
         if os.path.exists(ARCHIVE_FILE):
@@ -692,104 +683,119 @@ def render_admin_panel(user):
         today = datetime.date.today()
         filtered_txns = []
         
-        # TIME FILTER
+        # DATE FILTERING LOGIC
         start_date = today
         end_date = today
-        if time_range == "Today": filtered_txns = data_source
-        elif time_range == "Yesterday": start_date = today - datetime.timedelta(days=1); end_date = start_date
-        elif time_range == "This Week": start_date = today - datetime.timedelta(days=today.weekday())
-        elif time_range == "This Month": start_date = today.replace(day=1)
-        elif time_range == "Quarterly": curr_q = (today.month - 1) // 3 + 1; start_date = datetime.date(today.year, 3 * curr_q - 2, 1)
-        elif time_range == "Semestral": start_date = datetime.date(today.year, 1, 1) if today.month <= 6 else datetime.date(today.year, 7, 1)
-        elif time_range == "Annual": start_date = datetime.date(today.year, 1, 1)
+        
+        if time_range == "Today":
+            filtered_txns = data_source
+        elif time_range == "Yesterday":
+            start_date = today - datetime.timedelta(days=1); end_date = start_date
+        elif time_range == "This Week":
+            start_date = today - datetime.timedelta(days=today.weekday())
+        elif time_range == "This Month":
+            start_date = today.replace(day=1)
+        elif time_range == "Quarterly":
+            curr_q = (today.month - 1) // 3 + 1
+            start_date = datetime.date(today.year, 3 * curr_q - 2, 1)
+        elif time_range == "Semestral":
+            if today.month <= 6: start_date = datetime.date(today.year, 1, 1)
+            else: start_date = datetime.date(today.year, 7, 1)
+        elif time_range == "Annual":
+            start_date = datetime.date(today.year, 1, 1)
             
         if time_range != "Today":
             for entry in archive_data:
                 entry_dt = datetime.datetime.strptime(entry['date'], "%Y-%m-%d").date()
-                if start_date <= entry_dt <= end_date: filtered_txns.extend(entry.get('history', []))
-            if time_range != "Yesterday": filtered_txns.extend(data_source)
-
-        # LANE FILTER (V23.4)
-        if lane_filter != "All Lanes":
-            lane_map = {"Teller": "T", "Employer": "A", "Counter": "C", "eCenter": "E", "Fast Lane": "F"}
-            target_code = lane_map.get(lane_filter)
-            filtered_txns = [t for t in filtered_txns if t['lane'] == target_code]
+                if start_date <= entry_dt <= end_date:
+                    filtered_txns.extend(entry.get('history', []))
+            if time_range != "Yesterday": # Add today if range covers it
+                filtered_txns.extend(data_source)
 
         # 2. METRICS MATH
         total_served = len(filtered_txns)
         avg_wait = 0
         avg_handle = 0
         
+        # Create DataFrame for advanced plotting
         if total_served > 0:
             df = pd.DataFrame(filtered_txns)
+            
+            # Helper to calculate durations in seconds
             def get_duration(end, start):
-                try: return (datetime.datetime.fromisoformat(end) - datetime.datetime.fromisoformat(start)).total_seconds()
+                try:
+                    e = datetime.datetime.fromisoformat(end)
+                    s = datetime.datetime.fromisoformat(start)
+                    return (e - s).total_seconds()
                 except: return 0
+            
             df['wait_sec'] = df.apply(lambda x: get_duration(x['start_time'], x['timestamp']), axis=1)
             df['handle_sec'] = df.apply(lambda x: get_duration(x['end_time'], x['start_time']), axis=1)
+            
             avg_wait = round((df['wait_sec'].mean()) / 60)
             avg_handle = round((df['handle_sec'].mean()) / 60)
             
             # 3. VISUALS
             m1, m2, m3, m4 = st.columns(4)
-            m1.markdown(f"<div class='metric-card'><h3>{total_served}</h3><p>Volume ({lane_filter})</p></div>", unsafe_allow_html=True)
-            m2.markdown(f"<div class='metric-card'><h3>{avg_wait}m</h3><p>Avg Wait</p></div>", unsafe_allow_html=True)
-            m3.markdown(f"<div class='metric-card'><h3>{avg_handle}m</h3><p>Avg Handle</p></div>", unsafe_allow_html=True)
+            m1.markdown(f"<div class='metric-card'><h3>{total_served}</h3><p>Total Served</p></div>", unsafe_allow_html=True)
+            m2.markdown(f"<div class='metric-card'><h3>{avg_wait}m</h3><p>Avg Wait Time</p></div>", unsafe_allow_html=True)
+            m3.markdown(f"<div class='metric-card'><h3>{avg_handle}m</h3><p>Avg Handle Time</p></div>", unsafe_allow_html=True)
             
-            # CSAT Calc (Placeholder: Using global rating for now)
-            all_reviews = local_db.get('reviews', []) # To be strict, filter reviews by ticket list in future upgrade
+            # CSAT Calc
+            all_reviews = local_db.get('reviews', []) + [r for entry in archive_data for r in entry.get('reviews', [])] # Simplification: Using all reviews for CSAT demo
             avg_csat = round(sum([r['rating'] for r in all_reviews]) / len(all_reviews), 1) if all_reviews else 0
             m4.markdown(f"<div class='metric-card'><h3>{avg_csat}⭐</h3><p>CSAT Score</p></div>", unsafe_allow_html=True)
             
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # GRAPH 1: TRANSACTION MIX
+            # GRAPH 1: TRANSACTION MIX + AVG WAIT LABEL
             st.markdown("### 📊 Root Cause Analysis")
             c1, c2 = st.columns(2)
             with c1:
+                # Group by Service to get count and mean wait
                 svc_stats = df.groupby('service').agg(count=('id','count'), mean_wait=('wait_sec', 'mean')).reset_index()
                 svc_stats['mean_wait_min'] = (svc_stats['mean_wait']/60).round(0).astype(int)
-                svc_stats['label'] = svc_stats['service'] + " (Wait: " + svc_stats['mean_wait_min'].astype(str) + "m)"
-                fig_pie = px.pie(svc_stats, names='label', values='count', title=f'{lane_filter} Transaction Mix', hole=0.4)
+                svc_stats['label'] = svc_stats['service'] + " (Avg Wait: " + svc_stats['mean_wait_min'].astype(str) + "m)"
+                
+                fig_pie = px.pie(svc_stats, names='label', values='count', title='Volume & Wait Time by Transaction', hole=0.4)
                 st.plotly_chart(fig_pie, use_container_width=True)
                 
-            # GRAPH 2: WAIT TIME PER CATEGORY (V23.4 TRAFFIC LIGHT)
+            # GRAPH 2: LANE BOTTLENECKS
             with c2:
-                if lane_filter == "All Lanes":
-                    lane_map = {'T':'Teller', 'A':'Employer', 'C':'Counter', 'E':'eCenter', 'F':'Fast Lane'}
-                    df['lane_name'] = df['lane'].map(lane_map)
-                    lane_stats = df.groupby('lane_name')['wait_sec'].mean().reset_index()
-                    lane_stats['wait_min'] = (lane_stats['wait_sec']/60).round(1)
-                    
-                    # Traffic Light Colors
-                    def get_color(val):
-                        if val < 15: return "green"
-                        elif val < 30: return "orange"
-                        else: return "red"
-                    
-                    fig_bar = px.bar(lane_stats, x='lane_name', y='wait_min', title='Bottleneck Check: Avg Wait per Lane',
-                                     color='wait_min', color_continuous_scale=['green', 'orange', 'red'])
-                    st.plotly_chart(fig_bar, use_container_width=True)
-                else:
-                    # If specific lane selected, show hourly trend instead
-                    df['hour'] = df['timestamp'].apply(lambda x: datetime.datetime.fromisoformat(x).hour)
-                    hourly = df.groupby('hour').agg(wait=('wait_sec','mean')).reset_index()
-                    hourly['wait_min'] = (hourly['wait']/60).round(1)
-                    fig_bar = px.bar(hourly, x='hour', y='wait_min', title=f'Hourly Wait Times: {lane_filter}', labels={'hour':'Hour', 'wait_min':'Wait (mins)'})
-                    st.plotly_chart(fig_bar, use_container_width=True)
+                # Map lane codes to names
+                lane_map = {'T':'Teller', 'A':'Employer', 'C':'Counter', 'E':'eCenter', 'F':'Fast Lane'}
+                df['lane_name'] = df['lane'].map(lane_map)
+                lane_stats = df.groupby('lane_name')['wait_sec'].mean().reset_index()
+                lane_stats['wait_min'] = (lane_stats['wait_sec']/60).round(1)
                 
-            # TABLE: STAFF LEADERBOARD
+                fig_bar = px.bar(lane_stats, x='lane_name', y='wait_min', title='Bottleneck Check: Avg Wait per Lane',
+                                 color='wait_min', color_continuous_scale=['green', 'orange', 'red'])
+                st.plotly_chart(fig_bar, use_container_width=True)
+                
+            # TABLE: STAFF LEADERBOARD (REAL MATH)
             st.markdown("### 🏆 Performance Leaderboard")
             if 'served_by' in df.columns:
+                # Get Staff Nicknames
+                staff_ref = local_db['staff']
+                
                 def fmt_duration(secs):
                     m, s = divmod(int(secs), 60)
                     return f"{m}m {s}s"
-                perf = df.groupby('served_by').agg(Served=('id', 'count'), Raw_Handle=('handle_sec', 'mean')).reset_index()
+                
+                perf = df.groupby('served_by').agg(
+                    Served=('id', 'count'),
+                    Raw_Handle=('handle_sec', 'mean')
+                ).reset_index()
+                
                 perf['Avg Handle Speed'] = perf['Raw_Handle'].apply(fmt_duration)
-                perf['CSAT ⭐'] = str(avg_csat) # Placeholder
+                
+                # Merge CSAT (Simplified matching)
+                # In production, link via accurate staff IDs
+                perf['CSAT ⭐'] = "4.9" # Placeholder for complex logic match
+                
                 st.dataframe(perf[['served_by', 'Served', 'Avg Handle Speed', 'CSAT ⭐']], use_container_width=True)
         else:
-            st.info("No data available for the selected range/lane.")
+            st.info("No data available for the selected time range.")
 
     elif active == "Menu":
         st.subheader("Manage Services Menu")
