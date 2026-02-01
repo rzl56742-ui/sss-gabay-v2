@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v23.5 - BRANCH OPERATING SYSTEM (RESTORATION & ENTERPRISE)
+# SSS G-ABAY v23.5 - BRANCH OPERATING SYSTEM (VISUAL RESTORATION & ENTERPRISE)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -32,14 +32,14 @@ st.set_page_config(page_title="SSS G-ABAY v23.5", page_icon="🇵🇭", layout="
 DATA_FILE = "sss_data.json"
 ARCHIVE_FILE = "sss_archive.json"
 
-# --- DEFAULT MASTER LIST (IOMS STRUCTURE) ---
+# --- DEFAULT MASTER LIST (For Staff IOMS Logging - Hidden from Kiosk) ---
 DEFAULT_TRANSACTIONS = {
     "PAYMENTS": ["Contribution Payment", "Loan Payment", "Miscellaneous Payment", "Status Inquiry (Payments)"],
     "EMPLOYERS": ["Employer Registration", "Employee Update (R1A)", "Contribution/Loan List", "Status Inquiry (Employer)"],
     "MEMBER SERVICES": ["Sickness/Maternity Claim", "Pension Claim", "Death/Funeral Claim", "Salary Loan Application", "Verification/Static Info", "UMID/Card Inquiry"]
 }
 
-# --- DEFAULT DATA (Merged V23.4 + V23.5) ---
+# --- DEFAULT DATA (Restored V23.4 Structure for Menu) ---
 DEFAULT_DATA = {
     "system_date": datetime.datetime.now().strftime("%Y-%m-%d"),
     "branch_status": "NORMAL", # NORMAL, SLOW, OFFLINE
@@ -49,7 +49,7 @@ DEFAULT_DATA = {
     "breaks": [],
     "reviews": [],
     "incident_log": [],
-    "transaction_master": DEFAULT_TRANSACTIONS,
+    "transaction_master": DEFAULT_TRANSACTIONS, # For Staff Reporting
     "resources": [
         {"type": "LINK", "label": "🌐 SSS Official Website", "value": "https://www.sss.gov.ph"},
         {"type": "LINK", "label": "💻 My.SSS Member Portal", "value": "https://member.sss.gov.ph/members/"},
@@ -91,14 +91,31 @@ DEFAULT_DATA = {
             {"name": "eCenter", "type": "eCenter"}
         ]
     },
+    # V23.4 Menu Structure RESTORED
     "menu": {
-        # Defaults mapped to IOMS Categories
-        "PAYMENTS": [("Contribution/Loans", "Pay-Gen", "T")],
-        "EMPLOYERS": [("Account Management", "Emp-Gen", "A")],
-        "MEMBER SERVICES": [
-            ("Claims/Benefits", "Mem-Claims", "C"),
-            ("Requests/Updates", "Mem-Req", "F"),
-            ("Online Services", "Mem-Online", "E")
+        "Benefits": [
+            ("Maternity / Sickness", "Ben-Mat/Sick", "E"),
+            ("Disability / Unemployment", "Ben-Dis/Unemp", "E"),
+            ("Retirement", "Ben-Retirement", "GATE"), 
+            ("Death", "Ben-Death", "GATE"),        
+            ("Funeral", "Ben-Funeral", "GATE")     
+        ],
+        "Loans": [
+            ("Salary / Conso", "Ln-Sal/Conso", "E"),
+            ("Calamity / Emergency", "Ln-Cal/Emerg", "E"),
+            ("Pension Loan", "Ln-Pension", "E")
+        ],
+        "Member Records": [
+            ("Contact Info Update", "Rec-Contact", "F"),
+            ("Simple Correction", "Rec-Simple", "F"),
+            ("Complex Correction", "Rec-Complex", "C"),
+            ("Verification", "Rec-Verify", "C")
+        ],
+        "eServices": [
+            ("My.SSS Reset", "eSvc-Reset", "E"),
+            ("SS Number", "eSvc-SSNum", "E"),
+            ("Status Inquiry", "eSvc-Status", "E"),
+            ("DAEM / ACOP", "eSvc-DAEM/ACOP", "E")
         ]
     },
     "staff": {
@@ -117,14 +134,11 @@ def load_db():
     else:
         data = DEFAULT_DATA
 
-    # MIGRATION LOGIC (Restoring V23.4 keys + Adding V23.5 keys)
     for key in DEFAULT_DATA:
         if key not in data: data[key] = DEFAULT_DATA[key]
     
     if "branch_code" not in data['config']: data['config']['branch_code'] = "H07"
     if "transaction_master" not in data: data['transaction_master'] = DEFAULT_TRANSACTIONS
-    
-    # Ensure nested dicts exist
     if "exemptions" not in data: data['exemptions'] = DEFAULT_DATA['exemptions']
     if "resources" not in data: data['resources'] = DEFAULT_DATA['resources']
     if "announcements" not in data: data['announcements'] = DEFAULT_DATA['announcements']
@@ -174,7 +188,7 @@ def save_db(data):
 
 db = load_db()
 
-# --- INDUSTRIAL CSS & JS ---
+# --- INDUSTRIAL CSS & JS (RESTORED V23.4 STYLES) ---
 st.markdown("""
 <script>
 function startTimer(duration, displayId) {
@@ -208,19 +222,35 @@ function startTimer(duration, displayId) {
     .serving-card-small p { margin: 0; font-size: 24px; color: #111; font-weight: bold; text-transform: uppercase; }
     .serving-card-small span { font-size: 20px; color: #777; font-weight: normal; margin-top: 5px; }
     
-    .metric-card { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; border-top: 5px solid #2563EB; }
-    .metric-card h3 { font-size: 36px; margin: 0; color: #1E3A8A; font-weight: 900; }
-    .metric-card p { margin: 0; color: #666; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
-    
-    .menu-card > button { height: 250px !important; width: 100% !important; font-size: 28px !important; font-weight: 800 !important; border-radius: 20px !important; border: 4px solid #ddd !important; white-space: pre-wrap !important;}
-    
-    /* V23.5 PARKING & STATUS */
-    .park-appt { background: #dbeafe; color: #1e40af; border-left: 5px solid #2563EB; font-weight: bold; padding: 10px; border-radius: 5px; display: flex; justify-content: space-between; margin-bottom: 5px; }
-    .park-danger { background: #fee2e2; color: #b91c1c; border-left: 5px solid #ef4444; animation: pulse 2s infinite; padding: 10px; border-radius: 5px; font-weight:bold; display:flex; justify-content:space-between; margin-bottom: 5px; }
     .swim-col { background: #f8f9fa; border-radius: 10px; padding: 10px; border-top: 10px solid #ccc; height: 100%; }
     .swim-col h3 { text-align: center; margin-bottom: 10px; font-size: 18px; text-transform: uppercase; color: #333; }
     .queue-item { background: white; border-bottom: 1px solid #ddd; padding: 15px; margin-bottom: 5px; border-radius: 5px; display: flex; justify-content: space-between; }
     .queue-item span { font-size: 24px; font-weight: 900; color: #111; }
+    
+    .park-appt { background: #dbeafe; color: #1e40af; border-left: 5px solid #2563EB; font-weight: bold; padding: 10px; border-radius: 5px; display: flex; justify-content: space-between; margin-bottom: 5px; }
+    .park-danger { background: #fee2e2; color: #b91c1c; border-left: 5px solid #ef4444; animation: pulse 2s infinite; padding: 10px; border-radius: 5px; font-weight:bold; display:flex; justify-content:space-between; margin-bottom: 5px; }
+    
+    /* V23.4 GATE & SWIMLANE STYLES RESTORED */
+    .gate-btn > button { height: 350px !important; width: 100% !important; font-size: 40px !important; font-weight: 900 !important; border-radius: 30px !important; }
+    .menu-card > button { height: 300px !important; width: 100% !important; font-size: 30px !important; font-weight: 800 !important; border-radius: 20px !important; border: 4px solid #ddd !important; white-space: pre-wrap !important;}
+    .swim-btn > button { height: 100px !important; width: 100% !important; font-size: 18px !important; font-weight: 700 !important; text-align: left !important; padding-left: 20px !important; }
+    
+    .info-link { text-decoration: none; display: block; padding: 15px; background: #f0f2f6; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #2563EB; color: #333; font-weight: bold; transition: 0.2s; }
+    .info-link:hover { background: #e0e7ff; }
+    
+    /* SWIMLANE COLORS */
+    .head-red { background-color: #DC2626; color: white; padding: 5px; border-radius: 5px 5px 0 0; font-weight: bold; text-align: center; } 
+    .border-red > button { border-left: 20px solid #DC2626 !important; }
+    .head-orange { background-color: #EA580C; color: white; padding: 5px; border-radius: 5px 5px 0 0; font-weight: bold; text-align: center; } 
+    .border-orange > button { border-left: 20px solid #EA580C !important; }
+    .head-green { background-color: #16A34A; color: white; padding: 5px; border-radius: 5px 5px 0 0; font-weight: bold; text-align: center; } 
+    .border-green > button { border-left: 20px solid #16A34A !important; }
+    .head-blue { background-color: #2563EB; color: white; padding: 5px; border-radius: 5px 5px 0 0; font-weight: bold; text-align: center; } 
+    .border-blue > button { border-left: 20px solid #2563EB !important; }
+    
+    .metric-card { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; border-top: 5px solid #2563EB; }
+    .metric-card h3 { font-size: 36px; margin: 0; color: #1E3A8A; font-weight: 900; }
+    .metric-card p { margin: 0; color: #666; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -245,7 +275,6 @@ def generate_ticket_callback(service, lane_code, is_priority):
     global_count = len(local_db['tickets']) + len(local_db['history']) + 1
     branch_code = local_db['config'].get('branch_code', 'H07')
     
-    # V23.5 DUAL ID: Simple for display, Full for DB
     simple_num = f"{global_count:03d}"
     display_num = simple_num 
     full_id = f"{branch_code}-{lane_code}-{simple_num}" 
@@ -319,12 +348,11 @@ def log_incident(user_name, status_type):
 def get_next_ticket(queue, surge_mode):
     if not queue: return None
     
-    # V23.5 TIME-LOCK APPOINTMENT LOGIC
     now = datetime.datetime.now().time()
     for t in queue:
         if t['type'] == 'APPOINTMENT' and t['appt_time']:
             appt_t = datetime.datetime.strptime(t['appt_time'], "%H:%M:%S").time()
-            if now >= appt_t: # It's time!
+            if now >= appt_t: 
                 return t
                 
     if surge_mode:
@@ -332,7 +360,6 @@ def get_next_ticket(queue, surge_mode):
         if prio: return prio[0] 
         return queue[0] 
     
-    # Standard logic
     local_db = load_db()
     last_2 = local_db['history'][-2:]
     p_count = sum(1 for t in last_2 if t['type'] == 'PRIORITY')
@@ -410,37 +437,54 @@ def render_kiosk():
                 st.session_state['is_prio'] = True; st.session_state['kiosk_step'] = 'menu'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
             st.warning("⚠ NOTICE: Non-priority users will be transferred to end of line.")
+    
+    # RESTORED V23.4 KIOSK MENU STYLE
     elif st.session_state['kiosk_step'] == 'menu':
         st.markdown("### Select Service Category")
         m1, m2, m3 = st.columns(3, gap="medium")
         with m1:
             st.markdown('<div class="menu-card">', unsafe_allow_html=True)
-            if st.button("PAYMENTS\n(Contri/Loans)"):
+            if st.button("💳 PAYMENTS\n(Contri/Loans)"):
                 generate_ticket_callback("Payment", "T", st.session_state['is_prio']); st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         with m2:
             st.markdown('<div class="menu-card">', unsafe_allow_html=True)
-            if st.button("EMPLOYERS\n(Account Management)"):
+            if st.button("💼 EMPLOYERS\n(Account Management)"):
                 generate_ticket_callback("Account Management", "A", st.session_state['is_prio']); st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         with m3:
             st.markdown('<div class="menu-card">', unsafe_allow_html=True)
-            if st.button("MEMBER SERVICES\n(Claims, Requests, Updates)"):
+            if st.button("👤 MEMBER SERVICES\n(Claims, Requests, Updates)"):
                 st.session_state['kiosk_step'] = 'mss'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<br><br>", unsafe_allow_html=True)
         if st.button("⬅ GO BACK", type="secondary", use_container_width=True): del st.session_state['kiosk_step']; st.rerun()
+    
+    # RESTORED V23.4 SWIMLANE MENU STYLE
     elif st.session_state['kiosk_step'] == 'mss':
         st.markdown("### 👤 Member Services")
         cols = st.columns(4, gap="small")
-        items = db['menu'].get("MEMBER SERVICES", [])
-        for label, code, lane in items:
-            if st.button(label, key=label, use_container_width=True):
-                if lane == "GATE":
-                    st.session_state['gate_target'] = {"label": label, "code": code}
-                    st.session_state['kiosk_step'] = 'gate_check'; st.rerun()
-                else:
-                    generate_ticket_callback(code, lane, st.session_state['is_prio']); st.rerun()
+        categories = list(db['menu'].keys())
+        colors = ["red", "orange", "green", "blue", "red", "orange"]
+        icons = ["🏥", "💰", "📝", "💻", "❓", "⚙️"]
+        
+        for i, cat_name in enumerate(categories):
+            with cols[i % 4]:
+                color = colors[i % len(colors)]
+                icon = icons[i % len(icons)]
+                st.markdown(f"<div class='swim-header head-{color}'>{icon} {cat_name}</div>", unsafe_allow_html=True)
+                st.markdown(f'<div class="swim-btn border-{color}">', unsafe_allow_html=True)
+                
+                for label, code, lane in db['menu'].get(cat_name, []):
+                    if st.button(label, key=label):
+                        if lane == "GATE":
+                            st.session_state['gate_target'] = {"label": label, "code": code}
+                            st.session_state['kiosk_step'] = 'gate_check'
+                            st.rerun()
+                        else:
+                            generate_ticket_callback(code, lane, st.session_state['is_prio'])
+                            st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("⬅ GO BACK", type="secondary", use_container_width=True): st.session_state['kiosk_step'] = 'menu'; st.rerun()
     
@@ -694,7 +738,6 @@ def render_admin_panel(user):
     if st.sidebar.button("⬅ LOGOUT"): del st.session_state['user']; st.rerun()
     
     if user['role'] in ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD"]:
-        # V23.5 FIXED: Restored all tabs
         tabs = ["Dashboard", "Reports", "Book Appt", "Kiosk Menu", "IOMS Master", "Counters", "Users", "Resources", "Exemptions", "Announcements", "Backup"]
     else: st.error("Access Denied"); return
     
@@ -961,7 +1004,7 @@ elif mode == "staff":
         else: render_counter(user)
 elif mode == "display": render_display()
 else:
-    # MOBILE TRACKER
+    # MOBILE TRACKER (RESTORED RATE US)
     if db['config']["logo_url"].startswith("http"): st.image(db['config']["logo_url"], width=50)
     st.title("G-ABAY Mobile Tracker")
     t1, t2, t3 = st.tabs(["🎫 Tracker", "ℹ️ Info Hub", "⭐ Rate Us"])
@@ -982,5 +1025,38 @@ else:
         for f in [r for r in db.get('resources', []) if r['type'] == 'FAQ']: 
             with st.expander(f['label']): st.write(f['value'])
     with t3:
-        st.write("Rate Us feature coming soon.")
+        # V23.4 RATE US RESTORED
+        st.subheader("Rate Our Service")
+        verify_t = st.text_input("Enter your Ticket Number to rate:")
+        if verify_t:
+            local_db = load_db()
+            active_t = next((x for x in local_db['history'] if x['number'] == verify_t), None)
+            archive_t = None
+            if not active_t and os.path.exists(ARCHIVE_FILE):
+                with open(ARCHIVE_FILE, 'r') as af:
+                    try:
+                        archives = json.load(af)
+                        for day in archives:
+                            found = next((x for x in day.get('history', []) if x['number'] == verify_t), None)
+                            if found: archive_t = found; break
+                    except: pass
+            
+            target_ticket = active_t if active_t else archive_t
+            
+            if target_ticket:
+                st.success(f"Ticket Verified! Served by: {target_ticket.get('served_by', 'Unknown')}")
+                with st.form("rev"):
+                    rate = st.feedback("stars")
+                    staff_objs = [s for s in local_db['staff'].values() if s.get('status') == 'ACTIVE']
+                    display_names = [get_display_name(s) for s in staff_objs]
+                    if not display_names: display_names = ["General Service"]
+                    pers = st.selectbox("Personnel Served You", display_names)
+                    comm = st.text_area("Comments")
+                    
+                    if st.form_submit_button("Submit Rating"):
+                        if rate is None: st.error("Please select a star rating.")
+                        else:
+                            review_entry = {"ticket": verify_t, "rating": rate + 1, "personnel": pers, "comment": comm, "timestamp": datetime.datetime.now().isoformat()}
+                            local_db['reviews'].append(review_entry); save_db(local_db); st.success("Thank you for your feedback!"); time.sleep(2); st.rerun()
+            else: st.error("Ticket not found or transaction not yet completed.")
     time.sleep(5); st.rerun()
