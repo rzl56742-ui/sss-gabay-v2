@@ -1,6 +1,6 @@
 # ==============================================================================
-# SSS G-ABAY v23.5 - BRANCH OPERATING SYSTEM (ANALYTICS DATA FIX)
-# "Visuals: V23.4 | Logic: V23.5 | Export: Custom Columns"
+# SSS G-ABAY v23.6 - BRANCH OPERATING SYSTEM (FINAL GOLD)
+# "V23.5 Core + Advanced Admin User Management"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
 
@@ -21,7 +21,7 @@ import shutil
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v23.5", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v23.6", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
 BACKUP_FILE = "sss_data.bak"
@@ -83,7 +83,6 @@ DEFAULT_DATA = {
             {"name": "eCenter", "type": "eCenter"}
         ]
     },
-    # --- CRITICAL: RESTORED V23.4 MENU STRUCTURE (SWIMLANES) ---
     "menu": {
         "Benefits": [
             ("Maternity / Sickness", "Ben-Mat/Sick", "E"),
@@ -115,7 +114,7 @@ DEFAULT_DATA = {
     }
 }
 
-# --- ATOMIC DATABASE ENGINE WITH SELF-HEALING ---
+# --- DATABASE ENGINE ---
 def load_db():
     current_date = datetime.datetime.now().strftime("%Y-%m-%d")
     
@@ -181,15 +180,10 @@ def save_db(data):
 
 db = load_db()
 
+# --- INIT ---
 if 'surge_mode' not in st.session_state: st.session_state['surge_mode'] = False
 
-# --- SORT HELPER ---
-def get_queue_sort_key(t):
-    assigned_weight = 0 if t.get('assigned_to') else 1
-    type_weight = 1 if t['type'] == 'APPOINTMENT' else (2 if t['type'] == 'PRIORITY' else 3)
-    return (assigned_weight, type_weight, t['timestamp'])
-
-# --- CSS ---
+# --- CSS (RESTORED V23.4 STYLES) ---
 st.markdown("""
 <script>
 function startTimer(duration, displayId) {
@@ -304,9 +298,12 @@ def log_incident(user_name, status_type):
 
 def get_next_ticket(queue, surge_mode, my_station):
     if not queue: return None
+    # Sort queue using unified logic
     queue.sort(key=get_queue_sort_key)
+    
     now = datetime.datetime.now().time()
     
+    # 1. Assigned to Me
     for t in queue:
         if t.get('assigned_to') == my_station:
             if t['type'] == 'APPOINTMENT' and t['appt_time']:
@@ -314,15 +311,18 @@ def get_next_ticket(queue, surge_mode, my_station):
                 if now >= appt_t: return t
             else: return t
             
+    # 2. General Appointments (Time Locked)
     for t in queue:
         if t['type'] == 'APPOINTMENT' and t['appt_time'] and not t.get('assigned_to'):
             appt_t = datetime.datetime.strptime(t['appt_time'], "%H:%M:%S").time()
             if now >= appt_t: return t
     
+    # 3. Surge Mode (Prio Only)
     if surge_mode:
         for t in queue:
             if t['type'] == 'PRIORITY' and not t.get('assigned_to'): return t
             
+    # 4. 2:1 Ratio Logic
     local_db = load_db()
     last_2 = local_db['history'][-2:]
     p_count = sum(1 for t in last_2 if t['type'] == 'PRIORITY')
@@ -331,6 +331,7 @@ def get_next_ticket(queue, surge_mode, my_station):
         reg = [t for t in queue if t['type'] == 'REGULAR' and not t.get('assigned_to')]
         if reg: return reg[0]
     
+    # 5. Standard Flow (Using Sorted List)
     for t in queue:
         if not t.get('assigned_to'): return t
     return None
@@ -343,6 +344,13 @@ def trigger_audio(ticket_num, counter_name):
     spoken_text += f"{spelled_out} please proceed to... {counter_name}."
     local_db['latest_announcement'] = {"text": spoken_text, "id": str(uuid.uuid4())}
     save_db(local_db)
+
+# --- FIXED: WEIGHTED QUEUE CALCULATION (Unified for Staff & Mobile) ---
+def get_queue_sort_key(t):
+    # Order: Assigned > Appt Time > Prio > Regular > Timestamp
+    assigned_weight = 0 if t.get('assigned_to') else 1
+    type_weight = 1 if t['type'] == 'APPOINTMENT' else (2 if t['type'] == 'PRIORITY' else 3)
+    return (assigned_weight, type_weight, t['timestamp'])
 
 def calculate_specific_wait_time(ticket_id, lane_code):
     local_db = load_db()
@@ -638,6 +646,8 @@ def render_counter(user):
     station_type = current_counter_obj['type'] if current_counter_obj else "Counter"
     my_lanes = local_db['config']["assignments"].get(station_type, ["C"])
     queue = [t for t in local_db['tickets'] if t["status"] == "WAITING" and t["lane"] in my_lanes]
+    
+    # Priority Sort for View Only
     queue.sort(key=get_queue_sort_key)
     
     current = next((t for t in local_db['tickets'] if t["status"] == "SERVING" and t.get("served_by") == st.session_state['my_station']), None)
@@ -779,7 +789,6 @@ def render_admin_panel(user):
         if filtered_txns:
             df = pd.DataFrame(filtered_txns)
             
-            # --- CUSTOM CSV EXPORT LOGIC ---
             df['Date'] = df['timestamp'].apply(lambda x: datetime.datetime.fromisoformat(x).strftime('%Y-%m-%d'))
             df['Ticket Number'] = df.apply(lambda x: x.get('full_id', x['number']), axis=1)
             
@@ -807,7 +816,6 @@ def render_admin_panel(user):
             csv_export = df[export_cols].to_csv(index=False).encode('utf-8')
             st.download_button("📥 Export Raw Data (CSV)", csv_export, "raw_data.csv", "text/csv")
             
-            # Metrics Logic
             avg_wait = round(df['Total Waiting Time (Mins)'].mean())
             avg_handle = round(df['Total Handle Time (Mins)'].mean())
             
@@ -943,20 +951,28 @@ def render_admin_panel(user):
                 with st.popover("✏️"):
                     with st.form(f"edit_{uid}"):
                         en = st.text_input("Name", u['name'])
+                        enick = st.text_input("Nickname (Display)", u.get('nickname', ''))
                         er = st.selectbox("Role", ["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "DIV_HEAD", "ADMIN"], index=["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "DIV_HEAD", "ADMIN"].index(u['role']) if u['role'] in ["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "DIV_HEAD", "ADMIN"] else 0)
-                        if st.form_submit_button("Save"): local_db['staff'][uid]['name'] = en; local_db['staff'][uid]['role'] = er; save_db(local_db); st.rerun()
-                    if st.button("Reset Password", key=f"rst_{uid}"): local_db['staff'][uid]['pass'] = "sss2026"; save_db(local_db); st.toast("Password reset to 'sss2026'")
+                        current_stat = u.get('default_station', '')
+                        all_stations = [c['name'] for c in local_db['config']['counter_map']]
+                        est = st.selectbox("Station", all_stations, index=all_stations.index(current_stat) if current_stat in all_stations else 0)
+                        if st.form_submit_button("Save"): 
+                            local_db['staff'][uid].update({'name': en, 'nickname': enick, 'role': er, 'default_station': est})
+                            save_db(local_db); st.rerun()
+                    if st.button("🔑 RESET", key=f"rst_{uid}"): local_db['staff'][uid]['pass'] = "sss2026"; save_db(local_db); st.toast("Reset to 'sss2026'")
             if c5.button("🗑", key=f"del_{uid}"): del local_db['staff'][uid]; save_db(local_db); st.rerun()
         st.markdown("---")
         st.write("**Add New User**")
         with st.form("add_user_form"):
             new_id = st.text_input("User ID (Login)")
             new_name = st.text_input("Full Name")
+            new_nick = st.text_input("Nickname (Display)")
             new_role = st.selectbox("Role", ["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "DIV_HEAD", "ADMIN"])
+            new_station = st.selectbox("Assign Default Station", [c['name'] for c in local_db['config']['counter_map']])
             if st.form_submit_button("Create User"):
                 if new_id in local_db['staff']: st.error("User ID already exists!")
                 else: 
-                    local_db['staff'][new_id] = {"pass": "123", "role": new_role, "name": new_name, "nickname": new_name.split()[0], "default_station": "Counter 1", "status": "ACTIVE", "online": False}
+                    local_db['staff'][new_id] = {"pass": "123", "role": new_role, "name": new_name, "nickname": new_nick if new_nick else new_name.split()[0], "default_station": new_station, "status": "ACTIVE", "online": False}
                     save_db(local_db); st.success("Created!"); st.rerun()
     
     elif active == "Resources":
