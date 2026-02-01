@@ -1,5 +1,5 @@
 # ==============================================================================
-# SSS G-ABAY v23.5 - BRANCH OPERATING SYSTEM (VISUAL RESTORATION & ENTERPRISE)
+# SSS G-ABAY v23.5 - BRANCH OPERATING SYSTEM (STABLE ENTERPRISE EDITION)
 # "World-Class Service, Zero-Install Architecture"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
@@ -16,6 +16,7 @@ import plotly.express as px
 import urllib.parse
 import io
 import base64
+import shutil
 
 # Try import qrcode, fallback if missing
 try:
@@ -30,39 +31,37 @@ except ImportError:
 st.set_page_config(page_title="SSS G-ABAY v23.5", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 DATA_FILE = "sss_data.json"
+BACKUP_FILE = "sss_data.bak"
 ARCHIVE_FILE = "sss_archive.json"
 
-# --- DEFAULT MASTER LIST (For Staff IOMS Logging - Hidden from Kiosk) ---
+# --- DEFAULT MASTER LIST (Staff IOMS Logging) ---
 DEFAULT_TRANSACTIONS = {
     "PAYMENTS": ["Contribution Payment", "Loan Payment", "Miscellaneous Payment", "Status Inquiry (Payments)"],
     "EMPLOYERS": ["Employer Registration", "Employee Update (R1A)", "Contribution/Loan List", "Status Inquiry (Employer)"],
     "MEMBER SERVICES": ["Sickness/Maternity Claim", "Pension Claim", "Death/Funeral Claim", "Salary Loan Application", "Verification/Static Info", "UMID/Card Inquiry"]
 }
 
-# --- DEFAULT DATA (Restored V23.4 Structure for Menu) ---
+# --- DEFAULT DATA (V23.4 Kiosk Structure) ---
 DEFAULT_DATA = {
     "system_date": datetime.datetime.now().strftime("%Y-%m-%d"),
-    "branch_status": "NORMAL", # NORMAL, SLOW, OFFLINE
+    "branch_status": "NORMAL", 
     "latest_announcement": {"text": "", "id": ""},
     "tickets": [],
     "history": [],
     "breaks": [],
     "reviews": [],
     "incident_log": [],
-    "transaction_master": DEFAULT_TRANSACTIONS, # For Staff Reporting
+    "transaction_master": DEFAULT_TRANSACTIONS,
     "resources": [
         {"type": "LINK", "label": "🌐 SSS Official Website", "value": "https://www.sss.gov.ph"},
         {"type": "LINK", "label": "💻 My.SSS Member Portal", "value": "https://member.sss.gov.ph/members/"},
-        {"type": "LINK", "label": "📖 Citizen's Charter", "value": "https://www.sss.gov.ph/sss/DownloadContent?fileName=SSS_Citizens_Charter_2024.pdf"},
-        {"type": "LINK", "label": "📥 Downloadable Forms", "value": "https://www.sss.gov.ph/sss/appmanager/viewArticle.jsp?page=forms"},
-        {"type": "FAQ", "label": "How to reset My.SSS password?", "value": "Please visit our e-Center for assistance or use the 'Forgot User ID/Password' feature on the My.SSS portal."},
-        {"type": "FAQ", "label": "What are the requirements for Funeral Claim?", "value": "1. Death Certificate (LCR certified)\n2. Official Receipt of Funeral Expenses\n3. Valid ID of claimant"}
+        {"type": "FAQ", "label": "How to reset My.SSS password?", "value": "Please visit our e-Center."}
     ],
     "announcements": ["Welcome to SSS Gingoog. Operating Hours: 8:00 AM - 5:00 PM."],
     "exemptions": {
-        "Retirement": ["Dropped/Cancelled SS Number", "Multiple SS Numbers", "Portability (SGS)", "Maintenance/Adjustment of records"],
-        "Death": ["Dropped/Cancelled SS Number", "Multiple SS Numbers", "Claimant is not legal spouse/child", "Pending Case"],
-        "Funeral": ["Dropped/Cancelled SS Number", "Multiple SS Numbers", "Receipt Issues"]
+        "Retirement": ["Dropped/Cancelled SS Number", "Multiple SS Numbers", "Maintenance of records"],
+        "Death": ["Claimant is not legal spouse/child", "Pending Case"],
+        "Funeral": ["Receipt Issues"]
     },
     "config": {
         "branch_name": "BRANCH GINGOOG",
@@ -91,7 +90,7 @@ DEFAULT_DATA = {
             {"name": "eCenter", "type": "eCenter"}
         ]
     },
-    # V23.4 Menu Structure RESTORED
+    # V23.4 SWIMLANE MENU STRUCTURE (Restored)
     "menu": {
         "Benefits": [
             ("Maternity / Sickness", "Ben-Mat/Sick", "E"),
@@ -123,20 +122,25 @@ DEFAULT_DATA = {
     }
 }
 
-# --- DATABASE ENGINE & MIGRATION ---
+# --- ATOMIC DATABASE ENGINE (Anti-Corruption) ---
 def load_db():
     current_date = datetime.datetime.now().strftime("%Y-%m-%d")
     
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r") as f:
             try: data = json.load(f)
-            except: data = DEFAULT_DATA
+            except: 
+                # Fallback to backup if corrupt
+                if os.path.exists(BACKUP_FILE):
+                    with open(BACKUP_FILE, "r") as bf: data = json.load(bf)
+                else: data = DEFAULT_DATA
     else:
         data = DEFAULT_DATA
 
     for key in DEFAULT_DATA:
         if key not in data: data[key] = DEFAULT_DATA[key]
     
+    # Ensure nested dicts exist
     if "branch_code" not in data['config']: data['config']['branch_code'] = "H07"
     if "transaction_master" not in data: data['transaction_master'] = DEFAULT_TRANSACTIONS
     if "exemptions" not in data: data['exemptions'] = DEFAULT_DATA['exemptions']
@@ -175,16 +179,19 @@ def load_db():
             data['staff'][uid]['status'] = "ACTIVE"
             data['staff'][uid]['online'] = False
             if 'break_reason' in data['staff'][uid]: del data['staff'][uid]['break_reason']
-            if 'break_start_time' in data['staff'][uid]: del data['staff'][uid]['break_start_time']
 
-    if "Counter" not in data['config']['assignments']:
-        data['config']['assignments']['Counter'] = ["C", "F", "E"]
-        
     return data
 
 def save_db(data):
-    with open(DATA_FILE, "w") as f:
+    # ATOMIC WRITE: Write to temp, then rename
+    temp_file = f"{DATA_FILE}.tmp"
+    with open(temp_file, "w") as f:
         json.dump(data, f, default=str)
+    
+    if os.path.exists(DATA_FILE):
+        shutil.copy2(DATA_FILE, BACKUP_FILE) # Create .bak
+    
+    os.replace(temp_file, DATA_FILE) # Atomic replacement
 
 db = load_db()
 
@@ -522,7 +529,9 @@ def render_kiosk():
         with c_left:
             st.markdown(f"""<div class="ticket-card no-print" style='background:{bg}; color:{col}; padding:40px; border-radius:20px; text-align:center; margin:20px 0;'><h1>{t['number']}</h1><h3>{t['service']}</h3><p style="font-size:18px;">{print_dt}</p></div>""", unsafe_allow_html=True)
         with c_right:
-            if qr_b64: st.markdown(f"<div style='text-align:center; margin-top:30px;'><img src='data:image/png;base64,{qr_b64}' alt='Scan to Track' width='150'><br><b>SCAN TO TRACK</b></div>", unsafe_allow_html=True)
+            if qr_b64: 
+                st.markdown(f"<div style='text-align:center; margin-top:30px;'><img src='data:image/png;base64,{qr_b64}' alt='Scan to Track' width='150'><br><b>SCAN TO TRACK</b></div>", unsafe_allow_html=True)
+                st.caption("Connect to Office Wi-Fi to Track")
             else: st.info("QR Code Library Missing")
 
         if t['type'] == 'PRIORITY': st.error("**⚠ PRIORITY LANE:** For Seniors, PWDs, Pregnant ONLY.")
@@ -660,7 +669,6 @@ def render_counter(user):
 
     if 'my_station' not in st.session_state: st.session_state['my_station'] = current_user_state.get('default_station', 'Counter 1')
     
-    # ... (Station Switch & Queue Logic) ...
     current_counter_obj = next((c for c in local_db['config']['counter_map'] if c['name'] == st.session_state['my_station']), None)
     station_type = current_counter_obj['type'] if current_counter_obj else "Counter"
     my_lanes = local_db['config']["assignments"].get(station_type, ["C"])
@@ -969,7 +977,54 @@ def render_admin_panel(user):
             m1.markdown(f"<div class='metric-card'><h3>{total_served}</h3><p>Volume ({lane_filter})</p></div>", unsafe_allow_html=True)
             m2.markdown(f"<div class='metric-card'><h3>{avg_wait}m</h3><p>Avg Wait</p></div>", unsafe_allow_html=True)
             m3.markdown(f"<div class='metric-card'><h3>{avg_handle}m</h3><p>Avg Handle</p></div>", unsafe_allow_html=True)
-            m4.markdown(f"<div class='metric-card'><h3>98%</h3><p>Stability</p></div>", unsafe_allow_html=True) # Placeholder
+            
+            # CSAT Calc
+            all_reviews = local_db.get('reviews', [])
+            avg_csat = round(sum([r['rating'] for r in all_reviews]) / len(all_reviews), 1) if all_reviews else 0
+            m4.markdown(f"<div class='metric-card'><h3>{avg_csat}⭐</h3><p>CSAT Score</p></div>", unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # GRAPH 1: TRANSACTION MIX
+            st.markdown("### 📊 Root Cause Analysis")
+            c1, c2 = st.columns(2)
+            with c1:
+                svc_stats = df.groupby('service').agg(count=('id','count'), mean_wait=('wait_sec', 'mean')).reset_index()
+                svc_stats['mean_wait_min'] = (svc_stats['mean_wait']/60).round(0).astype(int)
+                svc_stats['label'] = svc_stats['service'] + " (Wait: " + svc_stats['mean_wait_min'].astype(str) + "m)"
+                fig_pie = px.pie(svc_stats, names='label', values='count', title=f'{lane_filter} Transaction Mix', hole=0.4)
+                st.plotly_chart(fig_pie, use_container_width=True)
+                
+            # GRAPH 2: WAIT TIME PER CATEGORY
+            with c2:
+                if lane_filter == "All Lanes":
+                    lane_map = {'T':'Teller', 'A':'Employer', 'C':'Counter', 'E':'eCenter', 'F':'Fast Lane'}
+                    df['lane_name'] = df['lane'].map(lane_map)
+                    lane_stats = df.groupby('lane_name')['wait_sec'].mean().reset_index()
+                    lane_stats['wait_min'] = (lane_stats['wait_sec']/60).round(1)
+                    
+                    fig_bar = px.bar(lane_stats, x='lane_name', y='wait_min', title='Bottleneck Check: Avg Wait per Lane',
+                                     color='wait_min', color_continuous_scale=['green', 'orange', 'red'])
+                    st.plotly_chart(fig_bar, use_container_width=True)
+                else:
+                    df['hour'] = df['timestamp'].apply(lambda x: datetime.datetime.fromisoformat(x).hour)
+                    hourly = df.groupby('hour').agg(wait=('wait_sec','mean')).reset_index()
+                    hourly['wait_min'] = (hourly['wait']/60).round(1)
+                    fig_bar = px.bar(hourly, x='hour', y='wait_min', title=f'Hourly Wait Times: {lane_filter}', labels={'hour':'Hour', 'wait_min':'Wait (mins)'})
+                    st.plotly_chart(fig_bar, use_container_width=True)
+            
+            # TABLE: STAFF LEADERBOARD
+            st.markdown("### 🏆 Performance Leaderboard")
+            if 'served_by' in df.columns:
+                def fmt_duration(secs):
+                    m, s = divmod(int(secs), 60)
+                    return f"{m}m {s}s"
+                perf = df.groupby('served_by').agg(Served=('id', 'count'), Raw_Handle=('handle_sec', 'mean')).reset_index()
+                perf['Avg Handle Speed'] = perf['Raw_Handle'].apply(fmt_duration)
+                perf['CSAT ⭐'] = str(avg_csat)
+                st.dataframe(perf[['served_by', 'Served', 'Avg Handle Speed', 'CSAT ⭐']], use_container_width=True)
+        else:
+            st.info("No data available for the selected range/lane.")
 
 # ==========================================
 # 5. ROUTER
@@ -987,7 +1042,7 @@ elif mode == "staff":
             acct = next((v for k,v in local_db['staff'].items() if v["name"] == u or k == u), None)
             acct_key = next((k for k,v in local_db['staff'].items() if v["name"] == u or k == u), None)
             
-            # Auto-Reset Admin if needed
+            # Auto-Reset Admin
             if u == "admin" and not acct:
                  local_db['staff']['admin'] = DEFAULT_DATA['staff']['admin']
                  save_db(local_db); st.warning("Admin reset. Try again."); st.rerun()
