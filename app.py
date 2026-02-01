@@ -1,6 +1,6 @@
 # ==============================================================================
-# SSS G-ABAY v23.5 - BRANCH OPERATING SYSTEM (FINAL GOLD)
-# "The Best of V23.4 Visuals + V23.5 Enterprise Power"
+# SSS G-ABAY v23.5 - BRANCH OPERATING SYSTEM (AUDITED & FIXED)
+# "Visuals of V23.4 + Enterprise Backend + Logic Corrections"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
 
@@ -27,14 +27,14 @@ DATA_FILE = "sss_data.json"
 BACKUP_FILE = "sss_data.bak"
 ARCHIVE_FILE = "sss_archive.json"
 
-# --- DEFAULT MASTER LIST (Staff IOMS Logging - Backend) ---
+# --- DEFAULT MASTER LIST (Staff IOMS Logging) ---
 DEFAULT_TRANSACTIONS = {
     "PAYMENTS": ["Contribution Payment", "Loan Payment", "Miscellaneous Payment", "Status Inquiry (Payments)"],
     "EMPLOYERS": ["Employer Registration", "Employee Update (R1A)", "Contribution/Loan List", "Status Inquiry (Employer)"],
     "MEMBER SERVICES": ["Sickness/Maternity Claim", "Pension Claim", "Death/Funeral Claim", "Salary Loan Application", "Calamity Loan", "Verification/Static Info", "UMID/Card Inquiry", "My.SSS Reset"]
 }
 
-# --- DEFAULT DATA (V23.4 Kiosk Structure - Visuals) ---
+# --- DEFAULT DATA ---
 DEFAULT_DATA = {
     "system_date": datetime.datetime.now().strftime("%Y-%m-%d"),
     "branch_status": "NORMAL", 
@@ -83,7 +83,6 @@ DEFAULT_DATA = {
             {"name": "eCenter", "type": "eCenter"}
         ]
     },
-    # --- CRITICAL: RESTORED V23.4 MENU STRUCTURE ---
     "menu": {
         "Benefits": [
             ("Maternity / Sickness", "Ben-Mat/Sick", "E"),
@@ -115,7 +114,7 @@ DEFAULT_DATA = {
     }
 }
 
-# --- ATOMIC DATABASE ENGINE WITH SELF-HEALING ---
+# --- DATABASE ENGINE ---
 def load_db():
     current_date = datetime.datetime.now().strftime("%Y-%m-%d")
     
@@ -129,9 +128,7 @@ def load_db():
     else:
         data = DEFAULT_DATA
 
-    # SELF-HEALING: Fix corrupted Menu (Restore Swimlanes)
-    if "PAYMENTS" in data.get("menu", {}):
-        data["menu"] = DEFAULT_DATA["menu"]
+    if "PAYMENTS" in data.get("menu", {}): data["menu"] = DEFAULT_DATA["menu"] # Self-Heal Menu
         
     for key in DEFAULT_DATA:
         if key not in data: data[key] = DEFAULT_DATA[key]
@@ -139,7 +136,6 @@ def load_db():
     if "branch_code" not in data['config']: data['config']['branch_code'] = "H07"
     if "transaction_master" not in data: data['transaction_master'] = DEFAULT_TRANSACTIONS
 
-    # DAILY RESET
     if data["system_date"] != current_date:
         archive_data = []
         if os.path.exists(ARCHIVE_FILE):
@@ -184,9 +180,8 @@ def save_db(data):
 
 db = load_db()
 
-# --- CRASH PREVENTION INIT ---
-if 'surge_mode' not in st.session_state:
-    st.session_state['surge_mode'] = False
+# --- INIT ---
+if 'surge_mode' not in st.session_state: st.session_state['surge_mode'] = False
 
 # --- CSS ---
 st.markdown("""
@@ -305,7 +300,7 @@ def get_next_ticket(queue, surge_mode, my_station):
     if not queue: return None
     now = datetime.datetime.now().time()
     
-    # 1. Check for Assigned Appointments for ME
+    # 1. Assigned Appointments
     for t in queue:
         if t.get('assigned_to') == my_station:
             if t['type'] == 'APPOINTMENT' and t['appt_time']:
@@ -332,7 +327,6 @@ def get_next_ticket(queue, surge_mode, my_station):
         reg = [t for t in queue if t['type'] == 'REGULAR' and not t.get('assigned_to')]
         if reg: return reg[0]
     
-    # Return first unassigned ticket
     for t in queue:
         if not t.get('assigned_to'): return t
     return None
@@ -367,10 +361,19 @@ def calculate_specific_wait_time(ticket_id, lane_code):
     if wait_time < 2: return "Next"
     return f"{wait_time} min"
 
+# --- FIXED: WEIGHTED QUEUE CALCULATION (People Ahead) ---
 def calculate_people_ahead(ticket_id, lane_code):
     local_db = load_db()
     waiting_in_lane = [t for t in local_db['tickets'] if t['lane'] == lane_code and t['status'] == "WAITING"]
-    waiting_in_lane.sort(key=lambda x: datetime.datetime.fromisoformat(x['timestamp']))
+    
+    # Sort matching "Call Next" logic: Appt (1) > Prio (2) > Reg (3) > Timestamp
+    def get_sort_weight(t):
+        if t['type'] == 'APPOINTMENT': return 1
+        if t['type'] == 'PRIORITY': return 2
+        return 3
+        
+    waiting_in_lane.sort(key=lambda x: (get_sort_weight(x), x['timestamp']))
+    
     for i, t in enumerate(waiting_in_lane):
         if t['id'] == ticket_id: return i
     return 0
@@ -410,8 +413,6 @@ def render_kiosk():
                 st.session_state['is_prio'] = True; st.session_state['kiosk_step'] = 'menu'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
             st.warning("⚠ NOTICE: Non-priority users will be transferred to end of line.")
-    
-    # RESTORED V23.4 KIOSK MENU STYLE
     elif st.session_state['kiosk_step'] == 'menu':
         st.markdown("### Select Service Category")
         m1, m2, m3 = st.columns(3, gap="medium")
@@ -432,35 +433,28 @@ def render_kiosk():
             st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<br><br>", unsafe_allow_html=True)
         if st.button("⬅ GO BACK", type="secondary", use_container_width=True): del st.session_state['kiosk_step']; st.rerun()
-    
-    # RESTORED V23.4 SWIMLANE MENU STYLE
     elif st.session_state['kiosk_step'] == 'mss':
         st.markdown("### 👤 Member Services")
         cols = st.columns(4, gap="small")
         categories = list(db['menu'].keys())
         colors = ["red", "orange", "green", "blue", "red", "orange"]
         icons = ["🏥", "💰", "📝", "💻", "❓", "⚙️"]
-        
         for i, cat_name in enumerate(categories):
             with cols[i % 4]:
                 color = colors[i % len(colors)]
                 icon = icons[i % len(icons)]
                 st.markdown(f"<div class='swim-header head-{color}'>{icon} {cat_name}</div>", unsafe_allow_html=True)
                 st.markdown(f'<div class="swim-btn border-{color}">', unsafe_allow_html=True)
-                
                 for label, code, lane in db['menu'].get(cat_name, []):
                     if st.button(label, key=label):
                         if lane == "GATE":
                             st.session_state['gate_target'] = {"label": label, "code": code}
-                            st.session_state['kiosk_step'] = 'gate_check'
-                            st.rerun()
+                            st.session_state['kiosk_step'] = 'gate_check'; st.rerun()
                         else:
-                            generate_ticket_callback(code, lane, st.session_state['is_prio'])
-                            st.rerun()
+                            generate_ticket_callback(code, lane, st.session_state['is_prio']); st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("⬅ GO BACK", type="secondary", use_container_width=True): st.session_state['kiosk_step'] = 'menu'; st.rerun()
-    
     elif st.session_state['kiosk_step'] == 'gate_check':
         target = st.session_state.get('gate_target', {})
         label = target.get('label', 'Transaction')
@@ -477,14 +471,11 @@ def render_kiosk():
             if st.button("💻 NO, none of these apply to me", type="primary", use_container_width=True):
                 generate_ticket_callback(f"{label} (Online)", "E", st.session_state['is_prio']); st.rerun()
         if st.button("⬅ CANCEL"): st.session_state['kiosk_step'] = 'mss'; st.rerun()
-
     elif st.session_state['kiosk_step'] == 'ticket':
         t = st.session_state['last_ticket']
         bg = "#FFC107" if t['type'] == 'PRIORITY' else "#2563EB"
         col = "#0038A8" if t['type'] == 'PRIORITY' else "white"
         print_dt = datetime.datetime.now().strftime("%B %d, %Y - %I:%M %p")
-        
-        # V23.5 NO QR - TEXT LINK ONLY + 60 MIN WARNING
         c_left, c_right = st.columns([2, 1])
         with c_left:
             st.markdown(f"""<div class="ticket-card no-print" style='background:{bg}; color:{col}; padding:40px; border-radius:20px; text-align:center; margin:20px 0;'><h1>{t['number']}</h1><h3>{t['service']}</h3><p style="font-size:18px;">{print_dt}</p></div>""", unsafe_allow_html=True)
@@ -492,10 +483,8 @@ def render_kiosk():
             base_url = st.query_params.get("base_url", "http://192.168.1.X:8501")
             if isinstance(base_url, list): base_url = base_url[0]
             st.markdown(f"<div style='text-align:center; margin-top:30px; font-weight:bold;'>TRACK YOUR TICKET<br><br>Scan or Go To:<br><span style='color:blue;'>{base_url}</span><br>Enter: {t['number']}</div>", unsafe_allow_html=True)
-
         if t['type'] == 'PRIORITY': st.error("**⚠ PRIORITY LANE:** For Seniors, PWDs, Pregnant ONLY.")
         st.markdown("<h4 style='color:red; text-align:center;'>⚠ POLICY: Ticket forfeited if parked for 60 MINUTES.</h4>", unsafe_allow_html=True)
-        
         c1, c2, c3 = st.columns(3)
         with c1: 
             if st.button("❌ CANCEL", use_container_width=True): curr_db = load_db(); curr_db['tickets'] = [x for x in curr_db['tickets'] if x['id'] != t['id']]; save_db(curr_db); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
@@ -503,13 +492,11 @@ def render_kiosk():
             if st.button("✅ DONE", type="primary", use_container_width=True): del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
         with c3:
             if st.button("🖨️ PRINT", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
-    
     st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026</div>", unsafe_allow_html=True)
 
 def render_display():
     placeholder = st.empty()
     last_audio_id = ""
-    
     while True:
         local_db = load_db()
         audio_script = ""
@@ -518,7 +505,6 @@ def render_display():
             last_audio_id = current_audio['id']
             text_safe = current_audio['text'].replace("'", "")
             audio_script = f"""<script>var msg = new SpeechSynthesisUtterance(); msg.text = "{text_safe}"; msg.rate = 1.0; msg.pitch = 1.1; var voices = window.speechSynthesis.getVoices(); var fVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Zira')); if(fVoice) msg.voice = fVoice; window.speechSynthesis.speak(msg);</script>"""
-        
         with placeholder.container():
             if audio_script: st.markdown(audio_script, unsafe_allow_html=True)
             status = local_db.get('branch_status', 'NORMAL')
@@ -526,9 +512,7 @@ def render_display():
                 color = "red" if status == "OFFLINE" else "orange"
                 text = "⚠ SYSTEM OFFLINE: MANUAL PROCESSING" if status == "OFFLINE" else "⚠ INTERMITTENT CONNECTION"
                 st.markdown(f"<h2 style='text-align:center; color:{color}; animation: blink 1.5s infinite;'>{text}</h2>", unsafe_allow_html=True)
-            
             st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
-            
             raw_staff = [s for s in local_db['staff'].values() if s.get('online') is True and s['role'] != "ADMIN" and s['name'] != "System Admin"]
             unique_staff_map = {} 
             for s in raw_staff:
@@ -540,7 +524,6 @@ def render_display():
                     is_new_serving = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == st_name and t.get('served_by') == s.get('default_station')), None) 
                     if not is_curr_serving and is_new_serving: unique_staff_map[st_name] = s
             unique_staff = list(unique_staff_map.values())
-            
             if not unique_staff: st.warning("Waiting for staff to log in...")
             else:
                 count = len(unique_staff); num_rows = math.ceil(count / 6); card_height = 65 // num_rows; font_scale = 1.0 if num_rows == 1 else (0.8 if num_rows == 2 else 0.7)
@@ -557,12 +540,11 @@ def render_display():
                                     b_color = "#DC2626" if active_t['lane'] == "T" else ("#16A34A" if active_t['lane'] == "A" else "#2563EB")
                                     st.markdown(f"""<div class="serving-card-small" style="border-left: 25px solid {b_color}; {style_str}"><p style="font-size: {35*font_scale}px;">{station_name}</p><h2 style="color:{b_color}; font-size: {110*font_scale}px;" class="{is_blinking}">{active_t['number']}</h2><span style="font-size: {24*font_scale}px;">{nickname}</span></div>""", unsafe_allow_html=True)
                                 else: st.markdown(f"""<div class="serving-card-small" style="border-left: 25px solid #ccc; {style_str}"><p style="font-size: {35*font_scale}px;">{station_name}</p><h2 style="color:#22c55e; font-size: {70*font_scale}px;">READY</h2><span style="font-size: {24*font_scale}px;">{nickname}</span></div>""", unsafe_allow_html=True)
-
             st.markdown("---")
             c_queue, c_park = st.columns([3, 1])
             with c_queue:
                 q1, q2, q3 = st.columns(3)
-                waiting = [t for t in local_db['tickets'] if t["status"] == "WAITING" and not t.get('appt_time')] # Show non-appts
+                waiting = [t for t in local_db['tickets'] if t["status"] == "WAITING" and not t.get('appt_time')] 
                 waiting.sort(key=lambda x: datetime.datetime.fromisoformat(x['timestamp'])) # FIFO
                 with q1:
                     st.markdown(f"<div class='swim-col' style='border-top-color:#DC2626;'><h3>💳 PAYMENTS</h3>", unsafe_allow_html=True)
@@ -580,7 +562,7 @@ def render_display():
                 st.markdown("### 🅿️ PARKED")
                 parked = [t for t in local_db['tickets'] if t["status"] == "PARKED"]
                 for p in parked:
-                    limit_mins = 60 if p.get('appt_name') else 60 # Default 60 min for all parked
+                    limit_mins = 60 if p.get('appt_name') else 60
                     park_time = datetime.datetime.fromisoformat(p['park_timestamp']); remaining = datetime.timedelta(minutes=limit_mins) - (datetime.datetime.now() - park_time)
                     if remaining.total_seconds() <= 0: p["status"] = "NO_SHOW"; save_db(local_db); st.rerun()
                     else:
@@ -588,7 +570,6 @@ def render_display():
                         disp_txt = p['appt_name'] if p.get('appt_name') else p['number']
                         css_class = "park-appt" if p.get('appt_name') else "park-danger"
                         st.markdown(f"""<div class="{css_class}"><span>{disp_txt}</span><span>{int(mins):02d}:{int(secs):02d}</span></div>""", unsafe_allow_html=True)
-            
             txt = " | ".join(local_db['announcements'])
             status = local_db.get('branch_status', 'NORMAL')
             bg_color = "#DC2626" if status == "OFFLINE" else ("#F97316" if status == "SLOW" else "#FFD700")
@@ -606,7 +587,13 @@ def render_counter(user):
 
     st.sidebar.title(f"👮 {user['name']}")
     
-    # RESTORED V23.4 SIDEBAR FEATURES
+    # RESTORED SIDEBAR CONTROLS
+    if st.sidebar.button("⬅ LOGOUT"):
+        local_db['staff'][user_key]['online'] = False
+        save_db(local_db)
+        del st.session_state['user']
+        st.rerun()
+
     st.sidebar.markdown("---")
     st.session_state['surge_mode'] = st.sidebar.checkbox("🚨 PRIORITY SURGE MODE", value=st.session_state['surge_mode'])
     if st.session_state['surge_mode']: st.sidebar.warning("⚠ SURGE ACTIVE: Only Priority Tickets will be called!")
@@ -648,13 +635,26 @@ def render_counter(user):
             save_db(local_db); st.session_state['user'] = local_db['staff'][user_key]; st.rerun()
         return
 
+    # RESTORED SWITCH STATION
     if 'my_station' not in st.session_state: st.session_state['my_station'] = current_user_state.get('default_station', 'Counter 1')
+    st.markdown(f"### Station: {st.session_state['my_station']}")
+    allowed_counters = get_allowed_counters(user['role'])
+    if st.session_state['my_station'] not in allowed_counters and allowed_counters: st.session_state['my_station'] = allowed_counters[0]
+    new_station = st.selectbox("Switch Station", allowed_counters, index=allowed_counters.index(st.session_state['my_station']) if st.session_state['my_station'] in allowed_counters else 0)
+    if new_station != st.session_state['my_station']:
+        st.session_state['my_station'] = new_station; local_db['staff'][user_key]['default_station'] = new_station; save_db(local_db); st.rerun()
     
     current_counter_obj = next((c for c in local_db['config']['counter_map'] if c['name'] == st.session_state['my_station']), None)
     station_type = current_counter_obj['type'] if current_counter_obj else "Counter"
     my_lanes = local_db['config']["assignments"].get(station_type, ["C"])
     queue = [t for t in local_db['tickets'] if t["status"] == "WAITING" and t["lane"] in my_lanes]
-    queue.sort(key=lambda x: (0 if x.get('appt_time') and datetime.datetime.strptime(x['appt_time'], "%H:%M:%S").time() <= datetime.datetime.now().time() else 1, datetime.datetime.fromisoformat(x['timestamp'])))
+    
+    # Priority Sort for View Only
+    def get_sort_weight(t):
+        if t['type'] == 'APPOINTMENT': return 1
+        if t['type'] == 'PRIORITY': return 2
+        return 3
+    queue.sort(key=lambda x: (get_sort_weight(x), x['timestamp']))
     
     current = next((t for t in local_db['tickets'] if t["status"] == "SERVING" and t.get("served_by") == st.session_state['my_station']), None)
     
@@ -665,7 +665,6 @@ def render_counter(user):
             st.markdown(f"""<div style='padding:30px; background:#e0f2fe; border-radius:15px; border-left:10px solid #0369a1;'><h1 style='margin:0; color:#0369a1; font-size: 60px;'>{display_num}</h1><h3>{current['service']}</h3></div>""", unsafe_allow_html=True)
             if current.get("ref_from"): st.markdown(f"""<div style='background:#fee2e2; border-left:5px solid #ef4444; padding:10px; margin-top:10px;'><span style='color:#b91c1c; font-weight:bold;'>↩ REFERRED FROM: {current["ref_from"]}</span><br><span style='color:#b91c1c; font-weight:bold;'>📝 REASON: {current.get("referral_reason", "No reason provided")}</span></div>""", unsafe_allow_html=True)
             
-            # IMPROVED IOMS REALITY LOG (EDITABLE LIST)
             with st.expander("📝 Reality Log (IOMS - Verify & Edit)", expanded=True):
                 all_txns = []
                 for cat, items in local_db.get('transaction_master', {}).items():
@@ -943,7 +942,15 @@ else:
                     else: st.error("❌ TICKET EXPIRED")
                 else:
                     st.info(f"Status: {t['status']}")
-                    wait_str = calculate_specific_wait_time(t['id'], t['lane']); people_ahead = calculate_people_ahead(t['id'], t['lane']); c1, c2 = st.columns(2); c1.metric("Est. Wait", wait_str); c2.metric("People Ahead", people_ahead)
+                    # FIXED: WEIGHTED PEOPLE AHEAD CALCULATION
+                    wait_str = calculate_specific_wait_time(t['id'], t['lane'])
+                    people_ahead = calculate_people_ahead(t['id'], t['lane'])
+                    
+                    c1, c2 = st.columns(2)
+                    c1.metric("Est. Wait", wait_str)
+                    if people_ahead == 0: c2.success("You are Next!")
+                    else: c2.metric("People Ahead", people_ahead)
+                    
                     st.write(f"Your Ticket: {t['number']}")
             elif t_hist: st.success("✅ TRANSACTION COMPLETE. Thank you!")
             else: st.error("Not Found (Check Ticket Number)")
