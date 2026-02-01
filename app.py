@@ -1,6 +1,6 @@
 # ==============================================================================
-# SSS G-ABAY v23.5 - BRANCH OPERATING SYSTEM (FINAL STABLE FIX)
-# "Restored Visuals + Enterprise Backend + Crash Proofing"
+# SSS G-ABAY v23.5 - BRANCH OPERATING SYSTEM (FINAL GOLD)
+# "The Best of V23.4 Visuals + V23.5 Enterprise Power"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
 
@@ -18,13 +18,6 @@ import io
 import base64
 import shutil
 
-# Try import qrcode, fallback if missing
-try:
-    import qrcode
-    HAS_QR = True
-except ImportError:
-    HAS_QR = False
-
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
@@ -34,14 +27,14 @@ DATA_FILE = "sss_data.json"
 BACKUP_FILE = "sss_data.bak"
 ARCHIVE_FILE = "sss_archive.json"
 
-# --- DEFAULT MASTER LIST (Staff IOMS Logging) ---
+# --- DEFAULT MASTER LIST (Staff IOMS Logging - Backend) ---
 DEFAULT_TRANSACTIONS = {
     "PAYMENTS": ["Contribution Payment", "Loan Payment", "Miscellaneous Payment", "Status Inquiry (Payments)"],
     "EMPLOYERS": ["Employer Registration", "Employee Update (R1A)", "Contribution/Loan List", "Status Inquiry (Employer)"],
     "MEMBER SERVICES": ["Sickness/Maternity Claim", "Pension Claim", "Death/Funeral Claim", "Salary Loan Application", "Calamity Loan", "Verification/Static Info", "UMID/Card Inquiry", "My.SSS Reset"]
 }
 
-# --- DEFAULT DATA ---
+# --- DEFAULT DATA (V23.4 Kiosk Structure - Visuals) ---
 DEFAULT_DATA = {
     "system_date": datetime.datetime.now().strftime("%Y-%m-%d"),
     "branch_status": "NORMAL", 
@@ -90,6 +83,7 @@ DEFAULT_DATA = {
             {"name": "eCenter", "type": "eCenter"}
         ]
     },
+    # --- CRITICAL: RESTORED V23.4 MENU STRUCTURE ---
     "menu": {
         "Benefits": [
             ("Maternity / Sickness", "Ben-Mat/Sick", "E"),
@@ -121,7 +115,7 @@ DEFAULT_DATA = {
     }
 }
 
-# --- DATABASE ENGINE ---
+# --- ATOMIC DATABASE ENGINE WITH SELF-HEALING ---
 def load_db():
     current_date = datetime.datetime.now().strftime("%Y-%m-%d")
     
@@ -135,7 +129,7 @@ def load_db():
     else:
         data = DEFAULT_DATA
 
-    # SELF-HEALING: Fix corrupted Menu
+    # SELF-HEALING: Fix corrupted Menu (Restore Swimlanes)
     if "PAYMENTS" in data.get("menu", {}):
         data["menu"] = DEFAULT_DATA["menu"]
         
@@ -317,7 +311,7 @@ def get_next_ticket(queue, surge_mode, my_station):
             if t['type'] == 'APPOINTMENT' and t['appt_time']:
                 appt_t = datetime.datetime.strptime(t['appt_time'], "%H:%M:%S").time()
                 if now >= appt_t: return t
-            else: return t # Immediate if not time-locked
+            else: return t 
             
     # 2. Global Appointments
     for t in queue:
@@ -373,6 +367,14 @@ def calculate_specific_wait_time(ticket_id, lane_code):
     if wait_time < 2: return "Next"
     return f"{wait_time} min"
 
+def calculate_people_ahead(ticket_id, lane_code):
+    local_db = load_db()
+    waiting_in_lane = [t for t in local_db['tickets'] if t['lane'] == lane_code and t['status'] == "WAITING"]
+    waiting_in_lane.sort(key=lambda x: datetime.datetime.fromisoformat(x['timestamp']))
+    for i, t in enumerate(waiting_in_lane):
+        if t['id'] == ticket_id: return i
+    return 0
+
 def get_staff_efficiency(staff_name):
     local_db = load_db()
     my_txns = [t for t in local_db['history'] if t.get("served_by") == staff_name]
@@ -408,6 +410,8 @@ def render_kiosk():
                 st.session_state['is_prio'] = True; st.session_state['kiosk_step'] = 'menu'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
             st.warning("⚠ NOTICE: Non-priority users will be transferred to end of line.")
+    
+    # RESTORED V23.4 KIOSK MENU STYLE
     elif st.session_state['kiosk_step'] == 'menu':
         st.markdown("### Select Service Category")
         m1, m2, m3 = st.columns(3, gap="medium")
@@ -428,28 +432,35 @@ def render_kiosk():
             st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<br><br>", unsafe_allow_html=True)
         if st.button("⬅ GO BACK", type="secondary", use_container_width=True): del st.session_state['kiosk_step']; st.rerun()
+    
+    # RESTORED V23.4 SWIMLANE MENU STYLE
     elif st.session_state['kiosk_step'] == 'mss':
         st.markdown("### 👤 Member Services")
         cols = st.columns(4, gap="small")
         categories = list(db['menu'].keys())
         colors = ["red", "orange", "green", "blue", "red", "orange"]
         icons = ["🏥", "💰", "📝", "💻", "❓", "⚙️"]
+        
         for i, cat_name in enumerate(categories):
             with cols[i % 4]:
                 color = colors[i % len(colors)]
                 icon = icons[i % len(icons)]
                 st.markdown(f"<div class='swim-header head-{color}'>{icon} {cat_name}</div>", unsafe_allow_html=True)
                 st.markdown(f'<div class="swim-btn border-{color}">', unsafe_allow_html=True)
+                
                 for label, code, lane in db['menu'].get(cat_name, []):
                     if st.button(label, key=label):
                         if lane == "GATE":
                             st.session_state['gate_target'] = {"label": label, "code": code}
-                            st.session_state['kiosk_step'] = 'gate_check'; st.rerun()
+                            st.session_state['kiosk_step'] = 'gate_check'
+                            st.rerun()
                         else:
-                            generate_ticket_callback(code, lane, st.session_state['is_prio']); st.rerun()
+                            generate_ticket_callback(code, lane, st.session_state['is_prio'])
+                            st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("⬅ GO BACK", type="secondary", use_container_width=True): st.session_state['kiosk_step'] = 'menu'; st.rerun()
+    
     elif st.session_state['kiosk_step'] == 'gate_check':
         target = st.session_state.get('gate_target', {})
         label = target.get('label', 'Transaction')
@@ -466,11 +477,14 @@ def render_kiosk():
             if st.button("💻 NO, none of these apply to me", type="primary", use_container_width=True):
                 generate_ticket_callback(f"{label} (Online)", "E", st.session_state['is_prio']); st.rerun()
         if st.button("⬅ CANCEL"): st.session_state['kiosk_step'] = 'mss'; st.rerun()
+
     elif st.session_state['kiosk_step'] == 'ticket':
         t = st.session_state['last_ticket']
         bg = "#FFC107" if t['type'] == 'PRIORITY' else "#2563EB"
         col = "#0038A8" if t['type'] == 'PRIORITY' else "white"
         print_dt = datetime.datetime.now().strftime("%B %d, %Y - %I:%M %p")
+        
+        # V23.5 NO QR - TEXT LINK ONLY + 60 MIN WARNING
         c_left, c_right = st.columns([2, 1])
         with c_left:
             st.markdown(f"""<div class="ticket-card no-print" style='background:{bg}; color:{col}; padding:40px; border-radius:20px; text-align:center; margin:20px 0;'><h1>{t['number']}</h1><h3>{t['service']}</h3><p style="font-size:18px;">{print_dt}</p></div>""", unsafe_allow_html=True)
@@ -478,7 +492,10 @@ def render_kiosk():
             base_url = st.query_params.get("base_url", "http://192.168.1.X:8501")
             if isinstance(base_url, list): base_url = base_url[0]
             st.markdown(f"<div style='text-align:center; margin-top:30px; font-weight:bold;'>TRACK YOUR TICKET<br><br>Scan or Go To:<br><span style='color:blue;'>{base_url}</span><br>Enter: {t['number']}</div>", unsafe_allow_html=True)
+
         if t['type'] == 'PRIORITY': st.error("**⚠ PRIORITY LANE:** For Seniors, PWDs, Pregnant ONLY.")
+        st.markdown("<h4 style='color:red; text-align:center;'>⚠ POLICY: Ticket forfeited if parked for 60 MINUTES.</h4>", unsafe_allow_html=True)
+        
         c1, c2, c3 = st.columns(3)
         with c1: 
             if st.button("❌ CANCEL", use_container_width=True): curr_db = load_db(); curr_db['tickets'] = [x for x in curr_db['tickets'] if x['id'] != t['id']]; save_db(curr_db); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
@@ -486,11 +503,13 @@ def render_kiosk():
             if st.button("✅ DONE", type="primary", use_container_width=True): del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
         with c3:
             if st.button("🖨️ PRINT", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
+    
     st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026</div>", unsafe_allow_html=True)
 
 def render_display():
     placeholder = st.empty()
     last_audio_id = ""
+    
     while True:
         local_db = load_db()
         audio_script = ""
@@ -499,6 +518,7 @@ def render_display():
             last_audio_id = current_audio['id']
             text_safe = current_audio['text'].replace("'", "")
             audio_script = f"""<script>var msg = new SpeechSynthesisUtterance(); msg.text = "{text_safe}"; msg.rate = 1.0; msg.pitch = 1.1; var voices = window.speechSynthesis.getVoices(); var fVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Zira')); if(fVoice) msg.voice = fVoice; window.speechSynthesis.speak(msg);</script>"""
+        
         with placeholder.container():
             if audio_script: st.markdown(audio_script, unsafe_allow_html=True)
             status = local_db.get('branch_status', 'NORMAL')
@@ -506,7 +526,9 @@ def render_display():
                 color = "red" if status == "OFFLINE" else "orange"
                 text = "⚠ SYSTEM OFFLINE: MANUAL PROCESSING" if status == "OFFLINE" else "⚠ INTERMITTENT CONNECTION"
                 st.markdown(f"<h2 style='text-align:center; color:{color}; animation: blink 1.5s infinite;'>{text}</h2>", unsafe_allow_html=True)
+            
             st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
+            
             raw_staff = [s for s in local_db['staff'].values() if s.get('online') is True and s['role'] != "ADMIN" and s['name'] != "System Admin"]
             unique_staff_map = {} 
             for s in raw_staff:
@@ -518,6 +540,7 @@ def render_display():
                     is_new_serving = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == st_name and t.get('served_by') == s.get('default_station')), None) 
                     if not is_curr_serving and is_new_serving: unique_staff_map[st_name] = s
             unique_staff = list(unique_staff_map.values())
+            
             if not unique_staff: st.warning("Waiting for staff to log in...")
             else:
                 count = len(unique_staff); num_rows = math.ceil(count / 6); card_height = 65 // num_rows; font_scale = 1.0 if num_rows == 1 else (0.8 if num_rows == 2 else 0.7)
@@ -534,11 +557,12 @@ def render_display():
                                     b_color = "#DC2626" if active_t['lane'] == "T" else ("#16A34A" if active_t['lane'] == "A" else "#2563EB")
                                     st.markdown(f"""<div class="serving-card-small" style="border-left: 25px solid {b_color}; {style_str}"><p style="font-size: {35*font_scale}px;">{station_name}</p><h2 style="color:{b_color}; font-size: {110*font_scale}px;" class="{is_blinking}">{active_t['number']}</h2><span style="font-size: {24*font_scale}px;">{nickname}</span></div>""", unsafe_allow_html=True)
                                 else: st.markdown(f"""<div class="serving-card-small" style="border-left: 25px solid #ccc; {style_str}"><p style="font-size: {35*font_scale}px;">{station_name}</p><h2 style="color:#22c55e; font-size: {70*font_scale}px;">READY</h2><span style="font-size: {24*font_scale}px;">{nickname}</span></div>""", unsafe_allow_html=True)
+
             st.markdown("---")
             c_queue, c_park = st.columns([3, 1])
             with c_queue:
                 q1, q2, q3 = st.columns(3)
-                waiting = [t for t in local_db['tickets'] if t["status"] == "WAITING" and not t.get('appt_time')] 
+                waiting = [t for t in local_db['tickets'] if t["status"] == "WAITING" and not t.get('appt_time')] # Show non-appts
                 waiting.sort(key=lambda x: datetime.datetime.fromisoformat(x['timestamp'])) # FIFO
                 with q1:
                     st.markdown(f"<div class='swim-col' style='border-top-color:#DC2626;'><h3>💳 PAYMENTS</h3>", unsafe_allow_html=True)
@@ -556,7 +580,7 @@ def render_display():
                 st.markdown("### 🅿️ PARKED")
                 parked = [t for t in local_db['tickets'] if t["status"] == "PARKED"]
                 for p in parked:
-                    limit_mins = 60 if p.get('appt_name') else 30
+                    limit_mins = 60 if p.get('appt_name') else 60 # Default 60 min for all parked
                     park_time = datetime.datetime.fromisoformat(p['park_timestamp']); remaining = datetime.timedelta(minutes=limit_mins) - (datetime.datetime.now() - park_time)
                     if remaining.total_seconds() <= 0: p["status"] = "NO_SHOW"; save_db(local_db); st.rerun()
                     else:
@@ -564,6 +588,7 @@ def render_display():
                         disp_txt = p['appt_name'] if p.get('appt_name') else p['number']
                         css_class = "park-appt" if p.get('appt_name') else "park-danger"
                         st.markdown(f"""<div class="{css_class}"><span>{disp_txt}</span><span>{int(mins):02d}:{int(secs):02d}</span></div>""", unsafe_allow_html=True)
+            
             txt = " | ".join(local_db['announcements'])
             status = local_db.get('branch_status', 'NORMAL')
             bg_color = "#DC2626" if status == "OFFLINE" else ("#F97316" if status == "SLOW" else "#FFD700")
@@ -580,6 +605,25 @@ def render_counter(user):
     current_user_state = local_db['staff'][user_key]
 
     st.sidebar.title(f"👮 {user['name']}")
+    
+    # RESTORED V23.4 SIDEBAR FEATURES
+    st.sidebar.markdown("---")
+    st.session_state['surge_mode'] = st.sidebar.checkbox("🚨 PRIORITY SURGE MODE", value=st.session_state['surge_mode'])
+    if st.session_state['surge_mode']: st.sidebar.warning("⚠ SURGE ACTIVE: Only Priority Tickets will be called!")
+    
+    st.sidebar.markdown("---")
+    with st.sidebar.expander("☕ Go On Break"):
+        b_reason = st.selectbox("Reason", ["Lunch Break", "Coffee Break (15m)", "Bio-Break", "Emergency"])
+        if st.button("⏸ START BREAK"):
+            local_db['staff'][user_key]['status'] = "ON_BREAK"; local_db['staff'][user_key]['break_reason'] = b_reason; local_db['staff'][user_key]['break_start_time'] = datetime.datetime.now().isoformat()
+            save_db(local_db); st.session_state['user'] = local_db['staff'][user_key]; st.rerun()
+
+    with st.sidebar.expander("🔒 Change Password"):
+        with st.form("pwd_chg"):
+            n_pass = st.text_input("New Password", type="password")
+            if st.form_submit_button("Update"):
+                if user_key: local_db['staff'][user_key]['pass'] = n_pass; save_db(local_db); st.success("Updated!")
+
     st.sidebar.markdown("---")
     st.sidebar.write("**⚠ Report Issue**")
     if st.sidebar.button("🟡 Intermittent Net"): log_incident(user['name'], "SLOW"); st.toast("Reported: Slow Connection")
@@ -591,7 +635,7 @@ def render_counter(user):
         with st.form("staff_appt"):
             nm = st.text_input("Client Name")
             tm = st.time_input("Time Slot")
-            svc = st.text_input("Transaction (e.g. Death Claim)")
+            svc = st.text_input("Transaction")
             ctr = st.selectbox("Assign to Counter (Optional)", [""] + [c['name'] for c in local_db['config']['counter_map']])
             if st.form_submit_button("Book"):
                 generate_ticket_manual(svc, "C", True, is_appt=True, appt_name=nm, appt_time=tm, assign_counter=ctr)
@@ -621,28 +665,29 @@ def render_counter(user):
             st.markdown(f"""<div style='padding:30px; background:#e0f2fe; border-radius:15px; border-left:10px solid #0369a1;'><h1 style='margin:0; color:#0369a1; font-size: 60px;'>{display_num}</h1><h3>{current['service']}</h3></div>""", unsafe_allow_html=True)
             if current.get("ref_from"): st.markdown(f"""<div style='background:#fee2e2; border-left:5px solid #ef4444; padding:10px; margin-top:10px;'><span style='color:#b91c1c; font-weight:bold;'>↩ REFERRED FROM: {current["ref_from"]}</span><br><span style='color:#b91c1c; font-weight:bold;'>📝 REASON: {current.get("referral_reason", "No reason provided")}</span></div>""", unsafe_allow_html=True)
             
-            with st.expander("📝 Reality Log (IOMS)", expanded=True):
+            # IMPROVED IOMS REALITY LOG (EDITABLE LIST)
+            with st.expander("📝 Reality Log (IOMS - Verify & Edit)", expanded=True):
                 all_txns = []
                 for cat, items in local_db.get('transaction_master', {}).items():
                     for item in items: all_txns.append(f"[{cat}] {item}")
                 
-                c_txn, c_qty, c_btn = st.columns([3, 1, 1])
-                new_txn = c_txn.selectbox("Add Actual Transaction", all_txns)
-                qty = c_qty.number_input("Qty", min_value=1, value=1)
-                
+                c_txn, c_btn = st.columns([3, 1])
+                new_txn = c_txn.selectbox("Add Transaction", all_txns)
                 if c_btn.button("➕ Add"):
                     if 'actual_transactions' not in current: current['actual_transactions'] = []
                     clean_txn = new_txn.split("] ")[1] if "]" in new_txn else new_txn
                     category = new_txn.split("] ")[0].replace("[","") if "]" in new_txn else "GENERAL"
-                    for _ in range(qty):
-                        current['actual_transactions'].append({
-                            "txn": clean_txn, "category": category, "staff": user['name'], "timestamp": datetime.datetime.now().isoformat()
-                        })
-                    save_db(local_db); st.success(f"Added {qty}x {clean_txn}"); time.sleep(0.5); st.rerun()
+                    current['actual_transactions'].append({"txn": clean_txn, "category": category, "staff": user['name'], "timestamp": datetime.datetime.now().isoformat()})
+                    save_db(local_db); st.rerun()
                 
                 if 'actual_transactions' in current and current['actual_transactions']:
                     st.write("---")
-                    st.caption(f"Total Transactions logged: {len(current['actual_transactions'])}")
+                    st.caption("Transactions Logged for this Ticket:")
+                    for i, txn in enumerate(current['actual_transactions']):
+                        col_text, col_del = st.columns([4, 1])
+                        col_text.text(f"• {txn['txn']}")
+                        if col_del.button("🗑", key=f"del_txn_{i}"):
+                            current['actual_transactions'].pop(i); save_db(local_db); st.rerun()
 
             st.markdown("<br>", unsafe_allow_html=True)
             b1, b2, b3 = st.columns(3)
@@ -694,9 +739,11 @@ def render_admin_panel(user):
         c1, c2 = st.columns(2)
         d_range = c1.date_input("Date Range", [datetime.date.today(), datetime.date.today()])
         staff_filter = c2.multiselect("Filter Staff", [s['name'] for s in local_db['staff'].values()])
+        
         if len(d_range) == 2:
             start, end = d_range
             all_txns_flat = []
+            
             def extract_txns(ticket_list):
                 for t in ticket_list:
                     t_date = datetime.datetime.fromisoformat(t['timestamp']).date()
@@ -712,12 +759,14 @@ def render_admin_panel(user):
                                 all_txns_flat.append({
                                     "Date": t_date, "Ticket ID": t.get('full_id', t['number']), "Category": "Intent", "Transaction": t['service'], "Staff": t.get('served_by', 'Unknown'), "Handle Time": "N/A"
                                 })
+
             extract_txns(local_db['history'])
             if os.path.exists(ARCHIVE_FILE):
                 with open(ARCHIVE_FILE, 'r') as af:
                     try: 
                         for day in json.load(af): extract_txns(day.get('history', []))
                     except: pass
+            
             if all_txns_flat:
                 df_rep = pd.DataFrame(all_txns_flat)
                 st.write("**Summary (Frequency Count)**")
@@ -737,6 +786,7 @@ def render_admin_panel(user):
                 generate_ticket_manual(svc, "C", True, is_appt=True, appt_name=nm, appt_time=tm, assign_counter=ctr)
                 st.success(f"Booked for {nm} at {tm}")
 
+    # RESTORED: KIOSK MENU
     elif active == "Kiosk Menu":
         st.subheader("Manage Kiosk Buttons")
         c1, c2 = st.columns([1, 2])
@@ -752,6 +802,7 @@ def render_admin_panel(user):
                     if st.button("Update", key=f"up_{i}"): local_db['menu'][sel_cat][i] = (new_label, new_code, new_lane); save_db(local_db); st.success("Updated!"); st.rerun()
                     if st.button("Delete", key=f"del_{i}"): local_db['menu'][sel_cat].pop(i); save_db(local_db); st.rerun()
 
+    # RESTORED: COUNTERS
     elif active == "Counters":
         for i, c in enumerate(local_db['config']['counter_map']): 
             c1, c2, c3, c4 = st.columns([3, 2, 1, 1])
@@ -875,16 +926,27 @@ else:
     st.title("G-ABAY Mobile Tracker")
     t1, t2, t3 = st.tabs(["🎫 Tracker", "ℹ️ Info Hub", "⭐ Rate Us"])
     with t1:
-        url_ticket = st.query_params.get("ticket")
-        default_val = url_ticket if url_ticket else ""
-        tn = st.text_input("Enter Ticket # (e.g., 001 or H07-T-001)", value=default_val)
+        tn = st.text_input("Enter Ticket # (e.g. 001)")
         if tn:
             local_db = load_db()
             t = next((x for x in local_db['tickets'] if x["number"] == tn or x.get('full_id') == tn), None)
+            t_hist = next((x for x in local_db['history'] if x["number"] == tn or x.get('full_id') == tn), None)
+            
             if t:
-                st.info(f"Status: {t['status']}")
-                wait_str = calculate_specific_wait_time(t['id'], t['lane']); c1, c2 = st.columns(2); c1.metric("Est. Wait", wait_str); c2.write(f"Your Ticket: {t['number']}")
-            else: st.error("Not Found")
+                if t['status'] == "PARKED":
+                    limit_mins = 60 if t.get('appt_name') else 60
+                    park_time = datetime.datetime.fromisoformat(t['park_timestamp']); remaining = datetime.timedelta(minutes=limit_mins) - (datetime.datetime.now() - park_time)
+                    if remaining.total_seconds() > 0:
+                        mins, secs = divmod(remaining.total_seconds(), 60)
+                        st.markdown(f"""<div style="font-size:30px; font-weight:bold; color:#b91c1c; text-align:center;">PARKED: {int(mins):02d}:{int(secs):02d}</div>""", unsafe_allow_html=True); st.error("⚠️ PLEASE APPROACH COUNTER IMMEDIATELY TO AVOID FORFEITURE.")
+                        st.markdown(f"""<script>startTimer({remaining.total_seconds()}, "mob_park_{t['id']}");</script>""", unsafe_allow_html=True)
+                    else: st.error("❌ TICKET EXPIRED")
+                else:
+                    st.info(f"Status: {t['status']}")
+                    wait_str = calculate_specific_wait_time(t['id'], t['lane']); people_ahead = calculate_people_ahead(t['id'], t['lane']); c1, c2 = st.columns(2); c1.metric("Est. Wait", wait_str); c2.metric("People Ahead", people_ahead)
+                    st.write(f"Your Ticket: {t['number']}")
+            elif t_hist: st.success("✅ TRANSACTION COMPLETE. Thank you!")
+            else: st.error("Not Found (Check Ticket Number)")
     with t2:
         st.subheader("Member Resources")
         for l in [r for r in db.get('resources', []) if r['type'] == 'LINK']: st.markdown(f"[{l['label']}]({l['value']})")
@@ -892,11 +954,22 @@ else:
             with st.expander(f['label']): st.write(f['value'])
     with t3:
         st.subheader("Rate Our Service")
-        verify_t = st.text_input("Enter your Ticket Number to rate:")
+        verify_t = st.text_input("Enter your Ticket Number to rate:", key="rate_t")
         if verify_t:
             local_db = load_db()
             active_t = next((x for x in local_db['history'] if x['number'] == verify_t), None)
-            target_ticket = active_t # Simplified for mobile
+            archive_t = None
+            if not active_t and os.path.exists(ARCHIVE_FILE):
+                with open(ARCHIVE_FILE, 'r') as af:
+                    try:
+                        archives = json.load(af)
+                        for day in archives:
+                            found = next((x for x in day.get('history', []) if x['number'] == verify_t), None)
+                            if found: archive_t = found; break
+                    except: pass
+            
+            target_ticket = active_t if active_t else archive_t
+            
             if target_ticket:
                 st.success(f"Verified! Served by: {target_ticket.get('served_by', 'Unknown')}")
                 with st.form("rev"):
