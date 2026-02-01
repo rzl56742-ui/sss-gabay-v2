@@ -1,6 +1,6 @@
 # ==============================================================================
-# SSS G-ABAY v23.5 - BRANCH OPERATING SYSTEM (STABLE ENTERPRISE EDITION)
-# "World-Class Service, Zero-Install Architecture"
+# SSS G-ABAY v23.5 - BRANCH OPERATING SYSTEM (FINAL STABLE EDITION)
+# "Restored Visuals (V23.4) + Enterprise Backend (V23.5)"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
 
@@ -13,17 +13,7 @@ import json
 import os
 import math
 import plotly.express as px
-import urllib.parse
-import io
-import base64
 import shutil
-
-# Try import qrcode, fallback if missing
-try:
-    import qrcode
-    HAS_QR = True
-except ImportError:
-    HAS_QR = False
 
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
@@ -34,14 +24,14 @@ DATA_FILE = "sss_data.json"
 BACKUP_FILE = "sss_data.bak"
 ARCHIVE_FILE = "sss_archive.json"
 
-# --- DEFAULT MASTER LIST (Staff IOMS Logging) ---
+# --- DEFAULT MASTER LIST (Staff IOMS Logging - Backend) ---
 DEFAULT_TRANSACTIONS = {
     "PAYMENTS": ["Contribution Payment", "Loan Payment", "Miscellaneous Payment", "Status Inquiry (Payments)"],
     "EMPLOYERS": ["Employer Registration", "Employee Update (R1A)", "Contribution/Loan List", "Status Inquiry (Employer)"],
-    "MEMBER SERVICES": ["Sickness/Maternity Claim", "Pension Claim", "Death/Funeral Claim", "Salary Loan Application", "Verification/Static Info", "UMID/Card Inquiry"]
+    "MEMBER SERVICES": ["Sickness/Maternity Claim", "Pension Claim", "Death/Funeral Claim", "Salary Loan Application", "Calamity Loan", "Verification/Static Info", "UMID/Card Inquiry", "My.SSS Reset"]
 }
 
-# --- DEFAULT DATA (V23.4 Kiosk Structure) ---
+# --- DEFAULT DATA (V23.4 Kiosk Structure - Visuals) ---
 DEFAULT_DATA = {
     "system_date": datetime.datetime.now().strftime("%Y-%m-%d"),
     "branch_status": "NORMAL", 
@@ -90,7 +80,7 @@ DEFAULT_DATA = {
             {"name": "eCenter", "type": "eCenter"}
         ]
     },
-    # V23.4 SWIMLANE MENU STRUCTURE (Restored)
+    # --- CRITICAL: RESTORED V23.4 MENU STRUCTURE ---
     "menu": {
         "Benefits": [
             ("Maternity / Sickness", "Ben-Mat/Sick", "E"),
@@ -122,7 +112,7 @@ DEFAULT_DATA = {
     }
 }
 
-# --- ATOMIC DATABASE ENGINE (Anti-Corruption) ---
+# --- ATOMIC DATABASE ENGINE WITH SELF-HEALING ---
 def load_db():
     current_date = datetime.datetime.now().strftime("%Y-%m-%d")
     
@@ -130,21 +120,25 @@ def load_db():
         with open(DATA_FILE, "r") as f:
             try: data = json.load(f)
             except: 
-                # Fallback to backup if corrupt
                 if os.path.exists(BACKUP_FILE):
                     with open(BACKUP_FILE, "r") as bf: data = json.load(bf)
                 else: data = DEFAULT_DATA
     else:
         data = DEFAULT_DATA
 
+    # --- SELF-HEALING PROTOCOL (The Fix for your Screenshot) ---
+    # Check if the menu is broken (i.e., has "PAYMENTS" key instead of "Benefits")
+    if "PAYMENTS" in data.get("menu", {}):
+        # FORCE RESTORE default menu structure
+        data["menu"] = DEFAULT_DATA["menu"]
+        
+    # Standard Migration
     for key in DEFAULT_DATA:
         if key not in data: data[key] = DEFAULT_DATA[key]
     
-    # Ensure nested dicts exist
+    # Ensure nested dicts
     if "branch_code" not in data['config']: data['config']['branch_code'] = "H07"
     if "transaction_master" not in data: data['transaction_master'] = DEFAULT_TRANSACTIONS
-    if "exemptions" not in data: data['exemptions'] = DEFAULT_DATA['exemptions']
-    if "resources" not in data: data['resources'] = DEFAULT_DATA['resources']
     if "announcements" not in data: data['announcements'] = DEFAULT_DATA['announcements']
 
     # DAILY RESET
@@ -183,19 +177,17 @@ def load_db():
     return data
 
 def save_db(data):
-    # ATOMIC WRITE: Write to temp, then rename
+    # Atomic Write
     temp_file = f"{DATA_FILE}.tmp"
     with open(temp_file, "w") as f:
         json.dump(data, f, default=str)
-    
     if os.path.exists(DATA_FILE):
-        shutil.copy2(DATA_FILE, BACKUP_FILE) # Create .bak
-    
-    os.replace(temp_file, DATA_FILE) # Atomic replacement
+        shutil.copy2(DATA_FILE, BACKUP_FILE)
+    os.replace(temp_file, DATA_FILE)
 
 db = load_db()
 
-# --- INDUSTRIAL CSS & JS (RESTORED V23.4 STYLES) ---
+# --- INDUSTRIAL CSS & JS (V23.4 RESTORED) ---
 st.markdown("""
 <script>
 function startTimer(duration, displayId) {
@@ -266,16 +258,6 @@ function startTimer(duration, displayId) {
 # ==========================================
 def get_display_name(staff_data):
     return staff_data.get('nickname') if staff_data.get('nickname') else staff_data['name']
-
-def generate_qr_image(data):
-    if not HAS_QR: return None
-    qr = qrcode.QRCode(version=1, box_size=10, border=2)
-    qr.add_data(data)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
-    buf = io.BytesIO()
-    img.save(buf)
-    return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 def generate_ticket_callback(service, lane_code, is_priority):
     local_db = load_db()
@@ -518,21 +500,14 @@ def render_kiosk():
         col = "#0038A8" if t['type'] == 'PRIORITY' else "white"
         print_dt = datetime.datetime.now().strftime("%B %d, %Y - %I:%M %p")
         
-        qr_b64 = None
-        if HAS_QR:
-            base_url = st.query_params.get("base_url", "http://localhost:8501")
-            if isinstance(base_url, list): base_url = base_url[0]
-            qr_data = f"{base_url}?mode=mobile&ticket={t['full_id']}"
-            qr_b64 = generate_qr_image(qr_data)
-        
+        # V23.5 NO QR - TEXT LINK ONLY
         c_left, c_right = st.columns([2, 1])
         with c_left:
             st.markdown(f"""<div class="ticket-card no-print" style='background:{bg}; color:{col}; padding:40px; border-radius:20px; text-align:center; margin:20px 0;'><h1>{t['number']}</h1><h3>{t['service']}</h3><p style="font-size:18px;">{print_dt}</p></div>""", unsafe_allow_html=True)
         with c_right:
-            if qr_b64: 
-                st.markdown(f"<div style='text-align:center; margin-top:30px;'><img src='data:image/png;base64,{qr_b64}' alt='Scan to Track' width='150'><br><b>SCAN TO TRACK</b></div>", unsafe_allow_html=True)
-                st.caption("Connect to Office Wi-Fi to Track")
-            else: st.info("QR Code Library Missing")
+            base_url = st.query_params.get("base_url", "http://192.168.1.X:8501")
+            if isinstance(base_url, list): base_url = base_url[0]
+            st.markdown(f"<div style='text-align:center; margin-top:30px; font-weight:bold;'>TRACK YOUR TICKET<br><br>Scan or Go To:<br><span style='color:blue;'>{base_url}</span><br>Enter: {t['number']}</div>", unsafe_allow_html=True)
 
         if t['type'] == 'PRIORITY': st.error("**⚠ PRIORITY LANE:** For Seniors, PWDs, Pregnant ONLY.")
         c1, c2, c3 = st.columns(3)
@@ -1059,32 +1034,47 @@ elif mode == "staff":
         else: render_counter(user)
 elif mode == "display": render_display()
 else:
-    # MOBILE TRACKER (RESTORED RATE US)
+    # MOBILE TRACKER (RESTORED RATE US & TRACKER)
     if db['config']["logo_url"].startswith("http"): st.image(db['config']["logo_url"], width=50)
     st.title("G-ABAY Mobile Tracker")
     t1, t2, t3 = st.tabs(["🎫 Tracker", "ℹ️ Info Hub", "⭐ Rate Us"])
+    
+    # TRACKER WITH "TODAY ONLY" LOGIC
     with t1:
-        url_ticket = st.query_params.get("ticket")
-        default_val = url_ticket if url_ticket else ""
-        tn = st.text_input("Enter Ticket # (e.g., 001 or H07-T-001)", value=default_val)
+        tn = st.text_input("Enter Ticket # (e.g. 001)")
         if tn:
             local_db = load_db()
+            # Only search today's active ticket list (implicit via load_db architecture)
             t = next((x for x in local_db['tickets'] if x["number"] == tn or x.get('full_id') == tn), None)
+            t_hist = next((x for x in local_db['history'] if x["number"] == tn or x.get('full_id') == tn), None)
+            
             if t:
-                st.info(f"Status: {t['status']}")
-                wait_str = calculate_specific_wait_time(t['id'], t['lane']); c1, c2 = st.columns(2); c1.metric("Est. Wait", wait_str); c2.write(f"Your Ticket: {t['number']}")
-            else: st.error("Not Found")
+                if t['status'] == "PARKED":
+                    limit_mins = 60 if t.get('appt_name') else 30
+                    park_time = datetime.datetime.fromisoformat(t['park_timestamp']); remaining = datetime.timedelta(minutes=limit_mins) - (datetime.datetime.now() - park_time)
+                    if remaining.total_seconds() > 0:
+                        mins, secs = divmod(remaining.total_seconds(), 60)
+                        st.markdown(f"""<div style="font-size:30px; font-weight:bold; color:#b91c1c; text-align:center;">PARKED: {int(mins):02d}:{int(secs):02d}</div>""", unsafe_allow_html=True); st.warning("Please return to counter immediately.")
+                    else: st.error("❌ TICKET EXPIRED")
+                else:
+                    st.info(f"Status: {t['status']}")
+                    wait_str = calculate_specific_wait_time(t['id'], t['lane']); c1, c2 = st.columns(2); c1.metric("Est. Wait", wait_str); c2.write(f"Your Ticket: {t['number']}")
+            elif t_hist: st.success("✅ TRANSACTION COMPLETE. Thank you!")
+            else: st.error("Not Found (Check Ticket Number)")
+    
     with t2:
         st.subheader("Member Resources")
         for l in [r for r in db.get('resources', []) if r['type'] == 'LINK']: st.markdown(f"[{l['label']}]({l['value']})")
         for f in [r for r in db.get('resources', []) if r['type'] == 'FAQ']: 
             with st.expander(f['label']): st.write(f['value'])
+    
+    # RATE US RESTORED
     with t3:
-        # V23.4 RATE US RESTORED
         st.subheader("Rate Our Service")
-        verify_t = st.text_input("Enter your Ticket Number to rate:")
+        verify_t = st.text_input("Enter your Ticket Number to rate:", key="rate_t")
         if verify_t:
             local_db = load_db()
+            # Search both today and archives for rating
             active_t = next((x for x in local_db['history'] if x['number'] == verify_t), None)
             archive_t = None
             if not active_t and os.path.exists(ARCHIVE_FILE):
@@ -1099,13 +1089,22 @@ else:
             target_ticket = active_t if active_t else archive_t
             
             if target_ticket:
-                st.success(f"Ticket Verified! Served by: {target_ticket.get('served_by', 'Unknown')}")
+                st.success(f"Verified! Served by: {target_ticket.get('served_by', 'Unknown')}")
                 with st.form("rev"):
                     rate = st.feedback("stars")
                     staff_objs = [s for s in local_db['staff'].values() if s.get('status') == 'ACTIVE']
                     display_names = [get_display_name(s) for s in staff_objs]
                     if not display_names: display_names = ["General Service"]
-                    pers = st.selectbox("Personnel Served You", display_names)
+                    
+                    default_idx = 0
+                    if target_ticket.get('served_by'):
+                        served_station = target_ticket['served_by']
+                        staff_match = next((s for s in staff_objs if s.get('default_station') == served_station), None)
+                        if staff_match:
+                            match_name = get_display_name(staff_match)
+                            if match_name in display_names: default_idx = display_names.index(match_name)
+                            
+                    pers = st.selectbox("Personnel Served You", display_names, index=default_idx)
                     comm = st.text_area("Comments")
                     
                     if st.form_submit_button("Submit Rating"):
