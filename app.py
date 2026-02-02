@@ -1,6 +1,6 @@
 # ==============================================================================
-# SSS G-ABAY v23.10 - BRANCH OPERATING SYSTEM (CORRECTED GRID EDITION)
-# "Visuals: Ticket Hero | Logic: 6-Col Auto-Grid | Display: Nickname Only"
+# SSS G-ABAY v23.11 - BRANCH OPERATING SYSTEM (FINAL STABLE)
+# "Visuals: Strict 6-Grid | Logic: Role Filters & Triple-Check Tracking"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
 
@@ -33,7 +33,7 @@ except ImportError:
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v23.10", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v23.11", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 # ==============================================================================
 # CONSTANTS
@@ -64,6 +64,7 @@ LANE_NAME_TO_CODE = {"Teller": "T", "Employer": "A", "eCenter": "E", "Counter": 
 LANE_CODE_TO_NAME = {v: k for k, v in LANE_NAME_TO_CODE.items()}
 LANE_TO_CATEGORY = {"T": "PAYMENTS", "A": "EMPLOYERS", "C": "MEMBER SERVICES", "E": "MEMBER SERVICES", "F": "MEMBER SERVICES"}
 
+# --- STATUS DEFINITIONS ---
 TICKET_STATUSES = {
     "WAITING": {"label": "Waiting", "color": "#3B82F6", "desc": "In queue, awaiting service"},
     "SERVING": {"label": "Serving", "color": "#F59E0B", "desc": "Currently being served at counter"},
@@ -74,9 +75,11 @@ TICKET_STATUSES = {
     "SYSTEM_CLOSED": {"label": "System Closed", "color": "#6B7280", "desc": "Auto-completed at midnight rollover"}
 }
 
+# --- ROLE DEFINITIONS ---
 STAFF_ROLES = ["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "DIV_HEAD", "ADMIN"]
 ADMIN_ROLES = ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]
-COUNTER_ROLES = ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]
+COUNTER_ROLES = ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"] 
+SUPERVISOR_ROLES = ["BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"] # Roles hidden from TV display
 
 # ==============================================================================
 # UTILITIES
@@ -181,7 +184,7 @@ DEFAULT_DATA = {
     }
 }
 
-# --- DATABASE ENGINE ---
+# --- DATABASE ENGINE (ROBUST SAVE & LOCK) ---
 def acquire_file_lock(timeout=10):
     if FILE_LOCK_AVAILABLE: return FileLock(LOCK_FILE, timeout=timeout)
     return None
@@ -218,6 +221,7 @@ def load_db():
         if "transaction_master" not in data: data['transaction_master'] = DEFAULT_TRANSACTIONS
         if "audit_log" not in data: data['audit_log'] = []
 
+        # MIDNIGHT ROLLOVER
         if data["system_date"] != current_date:
             serving_tickets = [t for t in data['tickets'] if t['status'] == 'SERVING']
             for ticket in serving_tickets:
@@ -277,13 +281,21 @@ def load_db():
 
 def save_db(data):
     lock = acquire_file_lock()
+    temp_file = f"{DATA_FILE}.{uuid.uuid4()}.tmp"
     try:
         if lock: lock.acquire()
         create_hourly_backup()
-        temp_file = f"{DATA_FILE}.tmp"
-        with open(temp_file, "w") as f: json.dump(data, f, default=str)
+        with open(temp_file, "w") as f:
+            json.dump(data, f, default=str)
+            f.flush()
+            os.fsync(f.fileno())
         if os.path.exists(DATA_FILE): shutil.copy2(DATA_FILE, BACKUP_FILE)
         os.replace(temp_file, DATA_FILE)
+    except Exception as e:
+        if os.path.exists(temp_file):
+            try: os.remove(temp_file)
+            except: pass
+        raise e
     finally:
         if lock and lock.is_locked: lock.release()
 
@@ -352,7 +364,7 @@ def handle_safe_logout(reason="MANUAL"):
     for key in ['refer_modal', 'my_station', 'user', 'login_date']:
         if key in st.session_state: del st.session_state[key]
 
-# --- CSS (JUMBO EDITION - OPTIMIZED FOR 6-COL GRID) ---
+# --- CSS (STRICT GRID) ---
 st.markdown("""
 <script>
 function startTimer(duration, displayId) {
@@ -377,7 +389,7 @@ function startTimer(duration, displayId) {
     .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
     .brand-footer { position: fixed; bottom: 5px; left: 10px; font-family: monospace; font-size: 12px; color: #888; opacity: 0.7; pointer-events: none; z-index: 9999; }
     
-    /* JUMBO CARD CSS - 6 COL GRID OPTIMIZED */
+    /* JUMBO CARD CSS - STRICT GRID OPTIMIZED */
     .serving-card-jumbo { 
         background: white; 
         border-radius: 15px; 
@@ -392,18 +404,18 @@ function startTimer(duration, displayId) {
         padding: 5px;
     }
     
-    /* LEVEL 1: TICKET NUMBER (BIGGEST, 10vw for 6-col fit) */
+    /* LEVEL 1: TICKET NUMBER */
     .jumbo-ticket {
-        font-size: 10vw !important;
+        font-size: 13vw !important;
         font-weight: 900 !important;
         line-height: 1.0 !important;
         margin: 0 !important;
         padding: 10px 0 !important;
     }
     
-    /* LEVEL 2: COUNTER NAME (2vw) */
+    /* LEVEL 2: COUNTER NAME */
     .jumbo-counter {
-        font-size: 2vw !important;
+        font-size: 2.5vw !important;
         font-weight: 700 !important;
         text-transform: uppercase;
         color: #333;
@@ -411,9 +423,9 @@ function startTimer(duration, displayId) {
         line-height: 1.2 !important;
     }
     
-    /* LEVEL 3: STAFF NICKNAME (1.5vw, Normal Weight) */
+    /* LEVEL 3: STAFF NICKNAME */
     .jumbo-staff {
-        font-size: 1.5vw !important;
+        font-size: 1.8vw !important;
         font-weight: 400 !important;
         color: #666;
         margin-top: 0px !important;
@@ -738,7 +750,7 @@ def render_kiosk():
             if st.button("✅ DONE", type="primary", use_container_width=True): del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
         with c3:
             if st.button("🖨️ PRINT", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
-    st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.10</div>", unsafe_allow_html=True)
+    st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.11</div>", unsafe_allow_html=True)
 
 def render_display():
     check_session_timeout()
@@ -760,22 +772,26 @@ def render_display():
             st.markdown(f"<h2 style='text-align:center; color:{color}; animation: blink 1.5s infinite;'>{text}</h2>", unsafe_allow_html=True)
         st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
         
-        active_staff_list = [s for s in local_db['staff'].values() if s.get('online') is True and s['role'] != "ADMIN" and s['name'] != "System Admin"]
+        # Filter active staff - EXCLUDE SUPERVISORS unless explicitly allowed
+        active_staff_list = []
+        for s in local_db['staff'].values():
+            if s.get('online') is True and s['role'] != "ADMIN" and s['name'] != "System Admin":
+                if s['role'] in SUPERVISOR_ROLES:
+                    continue # Hide supervisors from main display
+                active_staff_list.append(s)
         
         if not active_staff_list: st.warning("Waiting for staff to log in...")
         else:
-            # FIX: RESTORE 6-COL GRID
+            # STRICT 6-COL GRID
             cols_per_row = 6
             count = len(active_staff_list)
-            num_rows = math.ceil(count / cols_per_row)
-            card_height = 65 // num_rows
             
             for i in range(0, count, cols_per_row):
                 batch = active_staff_list[i:i+cols_per_row]
-                cols = st.columns(len(batch))
+                cols = st.columns(cols_per_row) # FORCE 6 COLUMNS
                 for idx, staff in enumerate(batch):
                     with cols[idx]:
-                        nickname = get_display_name(staff); station_name = staff.get('default_station', 'Unassigned'); style_str = f"height: {card_height}vh;"
+                        nickname = get_display_name(staff); station_name = staff.get('default_station', 'Unassigned'); style_str = "height: 100%;"
                         if staff.get('status') == "ON_BREAK": 
                             st.markdown(f"""
                             <div class="serving-card-break" style="{style_str}">
@@ -784,10 +800,15 @@ def render_display():
                                 <div class="jumbo-staff">{sanitize_text(nickname)}</div>
                             </div>""", unsafe_allow_html=True)
                         elif staff.get('status') == "ACTIVE":
+                            # TRIPLE-CHECK LOGIC FOR ACTIVE TICKET
                             active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by_staff') == staff['name']), None)
                             if not active_t:
                                 active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station_name and not t.get('served_by_staff')), None)
                             
+                            # Fallback: Find any serving ticket in the lane assigned to this station type if user is Teller
+                            if not active_t and staff['role'] == 'TELLER':
+                                active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t['lane'] == 'T' and t.get('served_by') == station_name), None)
+
                             if active_t:
                                 is_blinking = "blink-active" if active_t.get('start_time') and (get_ph_time() - datetime.datetime.fromisoformat(active_t['start_time'])).total_seconds() < 20 else ""
                                 b_color = get_lane_color(active_t['lane'])
@@ -798,12 +819,22 @@ def render_display():
                                     <div class="jumbo-staff">{sanitize_text(nickname)}</div>
                                 </div>""", unsafe_allow_html=True)
                             else: 
+                                # Dynamic READY Color
+                                ready_color = "#22c55e" # Default Green
+                                if staff['role'] == 'TELLER': ready_color = "#DC2626" # Red
+                                elif staff['role'] == 'AO': ready_color = "#16A34A" # Green
+                                
                                 st.markdown(f"""
                                 <div class="serving-card-jumbo" style="border-left: 20px solid #ccc; {style_str}">
                                     <div class="jumbo-counter">{sanitize_text(station_name)}</div>
-                                    <h2 style="color:#22c55e; font-size: 6vw;">READY</h2>
+                                    <h2 style="color:{ready_color}; font-size: 5vw;">READY</h2>
                                     <div class="jumbo-staff">{sanitize_text(nickname)}</div>
                                 </div>""", unsafe_allow_html=True)
+                
+                # Fill empty columns if batch size < 6
+                for k in range(len(batch), 6):
+                    with cols[k]: st.write("")
+
         st.markdown("---")
         c_queue, c_park = st.columns([3, 1])
         with c_queue:
@@ -839,7 +870,7 @@ def render_display():
         text_color = "white" if status in ["OFFLINE", "SLOW"] else "black"
         if status != "NORMAL": txt = f"⚠ NOTICE: We are currently experiencing {status} connection. Please bear with us. {txt}"
         st.markdown(f"<div style='background: {bg_color}; color: {text_color}; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%; font-size:20px;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
-        st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.10</div>", unsafe_allow_html=True)
+        st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.11</div>", unsafe_allow_html=True)
     time.sleep(3); st.rerun()
 
 def render_counter(user):
@@ -985,8 +1016,15 @@ def render_counter(user):
                 if nxt:
                     db_ticket = next((x for x in local_db['tickets'] if x['id'] == nxt['id']), None)
                     if db_ticket:
-                        db_ticket["status"] = "SERVING"; db_ticket["served_by"] = st.session_state['my_station']; db_ticket["start_time"] = get_ph_time().isoformat()
-                        trigger_audio(db_ticket['number'], st.session_state['my_station']); save_db(local_db); log_audit("TICKET_CALL", user['name'], target=db_ticket['number']); st.rerun()
+                        # FIX-v23.10-003: SAVE STAFF ID FOR 1:1 LINKING
+                        db_ticket["status"] = "SERVING"
+                        db_ticket["served_by"] = st.session_state['my_station']
+                        db_ticket["served_by_staff"] = user['name'] # NEW: Precise tracking
+                        db_ticket["start_time"] = get_ph_time().isoformat()
+                        trigger_audio(db_ticket['number'], st.session_state['my_station'])
+                        save_db(local_db)
+                        log_audit("TICKET_CALL", user['name'], target=db_ticket['number'])
+                        st.rerun()
                 else: st.warning(f"No tickets for {station_type}.")
     with c2:
         count, avg_time = get_staff_efficiency(user['name'])
@@ -997,7 +1035,9 @@ def render_counter(user):
         for p in parked:
             if st.button(f"🔊 {p['number']}", key=p['id']):
                 update_activity()
-                p["status"] = "SERVING"; p["served_by"] = st.session_state['my_station']; p["start_time"] = get_ph_time().isoformat(); trigger_audio(p['number'], st.session_state['my_station']); save_db(local_db); log_audit("TICKET_RECALL_PARKED", user['name'], target=p['number']); st.rerun()
+                p["status"] = "SERVING"; p["served_by"] = st.session_state['my_station']; 
+                p["served_by_staff"] = user['name'] # NEW: Precise tracking
+                p["start_time"] = get_ph_time().isoformat(); trigger_audio(p['number'], st.session_state['my_station']); save_db(local_db); log_audit("TICKET_RECALL_PARKED", user['name'], target=p['number']); st.rerun()
 
 def render_admin_panel(user):
     update_activity()
@@ -1005,7 +1045,7 @@ def render_admin_panel(user):
     st.title("🛠 Admin & IOMS Center")
     if st.sidebar.button("⬅ LOGOUT"): handle_safe_logout(reason="MANUAL"); st.rerun()
     
-    if user['role'] in ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]:
+    if user['role'] in ADMIN_ROLES:
         tabs = ["Dashboard", "Reports", "Book Appt", "Kiosk Menu", "IOMS Master", "Counters", "Users", "Resources", "Exemptions", "Announcements", "Audit Log", "Backup", "System Info"]
     else: st.error("Access Denied"); return
     
@@ -1033,18 +1073,23 @@ def render_admin_panel(user):
         
         today = get_ph_time().date()
         filtered_txns = []
-        start_date, end_date = today, today
         
-        if time_range == "Today": filtered_txns = data_source
+        if time_range == "Today": 
+            filtered_txns = data_source
         else:
+            start_date = today
+            end_date = today
             if time_range == "Yesterday": start_date = today - datetime.timedelta(days=1); end_date = start_date
-            elif time_range == "This Week": start_date = today - datetime.timedelta(days=today.weekday())
-            elif time_range == "This Month": start_date = today.replace(day=1)
-            elif time_range == "Quarterly": curr_q = (today.month - 1) // 3 + 1; start_date = datetime.date(today.year, 3 * curr_q - 2, 1)
+            elif time_range == "This Week": start_date = today - datetime.timedelta(days=today.weekday()); end_date = today
+            elif time_range == "This Month": start_date = today.replace(day=1); end_date = today
+            elif time_range == "Quarterly": curr_q = (today.month - 1) // 3 + 1; start_date = datetime.date(today.year, 3 * curr_q - 2, 1); end_date = today
             
             for entry in archive_data:
-                entry_dt = datetime.datetime.strptime(entry['date'], "%Y-%m-%d").date()
-                if start_date <= entry_dt <= end_date: filtered_txns.extend(entry.get('history', []))
+                try:
+                    entry_dt = datetime.datetime.strptime(entry['date'], "%Y-%m-%d").date()
+                    if start_date <= entry_dt <= end_date:
+                        filtered_txns.extend(entry.get('history', []))
+                except: continue
             if time_range != "Yesterday": filtered_txns.extend(data_source)
 
         if lane_filter != "All Lanes":
@@ -1276,7 +1321,7 @@ def render_admin_panel(user):
         st.subheader("⚙️ System Configuration")
         st.write("**Version Information**")
         st.code(f"""
-SSS G-ABAY Version: v23.10 (Corrected Grid Edition)
+SSS G-ABAY Version: v23.11 (Final Stable)
 Build Date: 2026-02-02
 Timezone: UTC+{UTC_OFFSET_HOURS} (Philippine Standard Time)
         """)
