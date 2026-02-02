@@ -1,6 +1,6 @@
 # ==============================================================================
-# SSS G-ABAY v23.10 - BRANCH OPERATING SYSTEM (FINAL JUMBO EDITION)
-# "Visuals: Hi-Contrast Hierarchy | Logic: Precision Tracking | Display: Show All"
+# SSS G-ABAY v23.10 - BRANCH OPERATING SYSTEM (VISUAL PERFECTION EDITION)
+# "Visuals: Forced Hierarchy (Ticket > Counter > Staff) | Logic: v23.9 Base"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
 
@@ -22,7 +22,7 @@ import shutil
 import glob
 
 # ==============================================================================
-# FIX-v23.7-001: FILE LOCKING IMPORTS
+# FILE LOCKING IMPORTS
 # ==============================================================================
 try:
     from filelock import FileLock, Timeout
@@ -181,22 +181,10 @@ DEFAULT_DATA = {
     }
 }
 
-# --- AUDIT & BACKUP ---
-def log_audit(action, user_name, details=None, target=None):
-    local_db = load_db()
-    if 'audit_log' not in local_db: local_db['audit_log'] = []
-    entry = {
-        "timestamp": get_ph_time().isoformat(),
-        "action": action,
-        "user": user_name,
-        "target": target,
-        "details": details,
-        "session_id": st.session_state.get('session_id', 'unknown')
-    }
-    local_db['audit_log'].append(entry)
-    if len(local_db['audit_log']) > AUDIT_LOG_MAX_ENTRIES: 
-        local_db['audit_log'] = local_db['audit_log'][-AUDIT_LOG_MAX_ENTRIES:]
-    save_db(local_db)
+# --- DATABASE ENGINE ---
+def acquire_file_lock(timeout=10):
+    if FILE_LOCK_AVAILABLE: return FileLock(LOCK_FILE, timeout=timeout)
+    return None
 
 def create_hourly_backup():
     if not os.path.exists(BACKUP_DIR): os.makedirs(BACKUP_DIR)
@@ -208,10 +196,6 @@ def create_hourly_backup():
     while len(backups) > MAX_HOURLY_BACKUPS:
         try: os.remove(backups.pop(0))
         except: pass
-
-def acquire_file_lock(timeout=10):
-    if FILE_LOCK_AVAILABLE: return FileLock(LOCK_FILE, timeout=timeout)
-    return None
 
 def load_db():
     current_date = get_ph_time().strftime("%Y-%m-%d")
@@ -303,6 +287,22 @@ def save_db(data):
     finally:
         if lock and lock.is_locked: lock.release()
 
+def log_audit(action, user_name, details=None, target=None):
+    local_db = load_db()
+    if 'audit_log' not in local_db: local_db['audit_log'] = []
+    entry = {
+        "timestamp": get_ph_time().isoformat(),
+        "action": action,
+        "user": user_name,
+        "target": target,
+        "details": details,
+        "session_id": st.session_state.get('session_id', 'unknown')
+    }
+    local_db['audit_log'].append(entry)
+    if len(local_db['audit_log']) > AUDIT_LOG_MAX_ENTRIES: 
+        local_db['audit_log'] = local_db['audit_log'][-AUDIT_LOG_MAX_ENTRIES:]
+    save_db(local_db)
+
 db = load_db()
 
 # --- INIT ---
@@ -332,10 +332,9 @@ def handle_safe_logout(reason="MANUAL"):
     user_key = next((k for k, v in local_db['staff'].items() if v['name'] == user['name']), None)
     
     if user_key:
-        # Auto-park serving ticket for this specific staff member
+        station = local_db['staff'][user_key].get('default_station', '')
         serving_ticket = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by_staff') == user['name']), None)
         
-        # Fallback for old tickets without 'served_by_staff'
         if not serving_ticket:
              station = local_db['staff'][user_key].get('default_station', '')
              serving_ticket = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station), None)
@@ -348,14 +347,12 @@ def handle_safe_logout(reason="MANUAL"):
         
         local_db['staff'][user_key]['online'] = False
         save_db(local_db)
-        log_audit("LOGOUT", user['name'], details=f"Reason: {reason}")
+        log_audit("LOGOUT", user['name'], details=f"Reason: {reason}", target=station)
     
     for key in ['refer_modal', 'my_station', 'user', 'login_date']:
         if key in st.session_state: del st.session_state[key]
 
-# ==============================================================================
-# FIX-v23.10-001: JUMBO CSS VISUALS (HIERARCHY TUNED)
-# ==============================================================================
+# --- CSS (JUMBO EDITION) ---
 st.markdown("""
 <script>
 function startTimer(duration, displayId) {
@@ -380,7 +377,7 @@ function startTimer(duration, displayId) {
     .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
     .brand-footer { position: fixed; bottom: 5px; left: 10px; font-family: monospace; font-size: 12px; color: #888; opacity: 0.7; pointer-events: none; z-index: 9999; }
     
-    /* JUMBO CARD CSS - REVISED HIERARCHY */
+    /* === JUMBO DISPLAY HIERARCHY === */
     .serving-card-jumbo { 
         background: white; 
         border-radius: 15px; 
@@ -396,32 +393,31 @@ function startTimer(duration, displayId) {
         padding-bottom: 5px;
     }
     
-    /* TICKET NUMBER: BIGGEST (5vw) & BOLDEST (900) */
-    .serving-card-jumbo h2 { 
-        margin: 0; 
-        font-size: 5vw; 
-        font-weight: 900; 
-        line-height: 1.0; 
-        padding: 5px 0; 
+    /* LEVEL 1: TICKET NUMBER (HERO) */
+    .jumbo-ticket {
+        font-size: 15vw !important;
+        font-weight: 900 !important;
+        line-height: 1.0 !important;
+        margin: 0 !important;
+        padding: 10px 0 !important;
     }
     
-    /* COUNTER NAME: MEDIUM (2.5vw) & BOLD (800) */
-    .serving-card-jumbo p { 
-        margin: 0; 
-        font-size: 2.5vw; 
-        font-weight: 800; 
-        text-transform: uppercase; 
-        letter-spacing: 1px; 
-        color: #222; 
+    /* LEVEL 2: COUNTER NAME (CONTEXT) */
+    .jumbo-counter {
+        font-size: 4vw !important;
+        font-weight: 700 !important;
+        text-transform: uppercase;
+        color: #333;
+        margin-bottom: 0px !important;
+        line-height: 1.2 !important;
     }
     
-    /* NICKNAME: SMALLEST (1.8vw) & NORMAL (400) */
-    .serving-card-jumbo span { 
-        font-size: 1.8vw; 
-        font-weight: 400; 
-        color: #555; 
-        display: block; 
-        margin-top: 0px; 
+    /* LEVEL 3: STAFF NICKNAME (FOOTER) */
+    .jumbo-staff {
+        font-size: 2vw !important;
+        font-weight: 400 !important;
+        color: #666;
+        margin-top: 0px !important;
     }
     
     .serving-card-break { 
@@ -439,10 +435,29 @@ function startTimer(duration, displayId) {
     .queue-item span { font-size: 24px; font-weight: 900; color: #111; }
     
     .park-appt { background: #dbeafe; color: #1e40af; border-left: 5px solid #2563EB; font-weight: bold; padding: 10px; border-radius: 5px; display: flex; justify-content: space-between; margin-bottom: 5px; }
+    .park-danger { background: #fee2e2; color: #b91c1c; border-left: 5px solid #ef4444; animation: pulse 2s infinite; padding: 10px; border-radius: 5px; font-weight:bold; display:flex; justify-content:space-between; margin-bottom: 5px; }
     .gate-btn > button { height: 350px !important; width: 100% !important; font-size: 40px !important; font-weight: 900 !important; border-radius: 30px !important; }
     .menu-card > button { height: 300px !important; width: 100% !important; font-size: 30px !important; font-weight: 800 !important; border-radius: 20px !important; border: 4px solid #ddd !important; white-space: pre-wrap !important;}
     .swim-btn > button { height: 100px !important; width: 100% !important; font-size: 18px !important; font-weight: 700 !important; text-align: left !important; padding-left: 20px !important; }
-    
+    .info-link { text-decoration: none; display: block; padding: 15px; background: #f0f2f6; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #2563EB; color: #333; font-weight: bold; transition: 0.2s; }
+    .info-link:hover { background: #e0e7ff; }
+    .head-red { background-color: #DC2626; color: white; padding: 5px; border-radius: 5px 5px 0 0; font-weight: bold; text-align: center; } 
+    .border-red > button { border-left: 20px solid #DC2626 !important; }
+    .head-orange { background-color: #EA580C; color: white; padding: 5px; border-radius: 5px 5px 0 0; font-weight: bold; text-align: center; } 
+    .border-orange > button { border-left: 20px solid #EA580C !important; }
+    .head-green { background-color: #16A34A; color: white; padding: 5px; border-radius: 5px 5px 0 0; font-weight: bold; text-align: center; } 
+    .border-green > button { border-left: 20px solid #16A34A !important; }
+    .head-blue { background-color: #2563EB; color: white; padding: 5px; border-radius: 5px 5px 0 0; font-weight: bold; text-align: center; } 
+    .border-blue > button { border-left: 20px solid #2563EB !important; }
+    .metric-card { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; border-top: 5px solid #2563EB; }
+    .metric-card h3 { font-size: 36px; margin: 0; color: #1E3A8A; font-weight: 900; }
+    .metric-card p { margin: 0; color: #666; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+    .timeout-warning { background: #FEF3C7; border: 2px solid #F59E0B; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 10px; }
+    .wait-estimate { background: #ECFDF5; border: 2px solid #10B981; border-radius: 10px; padding: 15px; text-align: center; margin: 10px 0; }
+    .wait-estimate h3 { margin: 0; color: #059669; font-size: 24px; }
+    .wait-estimate p { margin: 5px 0 0 0; color: #047857; font-size: 14px; }
+    .status-legend { background: #f8fafc; border-radius: 8px; padding: 10px; margin: 10px 0; }
+    .status-item { display: inline-block; margin: 5px 10px; padding: 3px 8px; border-radius: 4px; font-size: 12px; }
     @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     .blink-active { animation: blink 1s infinite; }
 </style>
@@ -765,17 +780,13 @@ def render_display():
             st.markdown(f"<h2 style='text-align:center; color:{color}; animation: blink 1.5s infinite;'>{text}</h2>", unsafe_allow_html=True)
         st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
         
-        # FIX-v23.10-002: REMOVED DEDUPLICATION LOGIC - SHOW ALL ACTIVE STAFF
         active_staff_list = [s for s in local_db['staff'].values() if s.get('online') is True and s['role'] != "ADMIN" and s['name'] != "System Admin"]
         
         if not active_staff_list: st.warning("Waiting for staff to log in...")
         else:
-            # FIX-v23.10-004: AUTO-GRID SIZING
             count = len(active_staff_list)
-            # Dynamic grid logic: 1-4 users (2 cols), 5-9 users (3 cols), 10+ users (4 cols)
             cols_per_row = 4 if count >= 10 else (3 if count >= 5 else 2)
             num_rows = math.ceil(count / cols_per_row)
-            # Dynamic height: Less rows = Taller cards
             card_height = 65 // num_rows
             
             for i in range(0, count, cols_per_row):
@@ -784,20 +795,36 @@ def render_display():
                 for idx, staff in enumerate(batch):
                     with cols[idx]:
                         nickname = get_display_name(staff); station_name = staff.get('default_station', 'Unassigned'); style_str = f"height: {card_height}vh;"
-                        if staff.get('status') == "ON_BREAK": st.markdown(f"""<div class="serving-card-break" style="{style_str}"><p style="font-size: 2.5vw;">{sanitize_text(station_name)}</p><h3 style="margin:0; font-size:4vw; color:#D97706;">ON BREAK</h3><span style="font-size: 1.8vw;">{sanitize_text(nickname)}</span></div>""", unsafe_allow_html=True)
+                        if staff.get('status') == "ON_BREAK": 
+                            # Custom HTML structure for Break status with CSS classes
+                            st.markdown(f"""
+                            <div class="serving-card-break" style="{style_str}">
+                                <div class="jumbo-counter">{sanitize_text(station_name)}</div>
+                                <h3 style="margin:0; font-size:4vw; color:#D97706;">ON BREAK</h3>
+                                <div class="jumbo-staff">{sanitize_text(nickname)}</div>
+                            </div>""", unsafe_allow_html=True)
                         elif staff.get('status') == "ACTIVE":
-                            # FIX-v23.10-003: MATCH TICKET BY STAFF ID FIRST
                             active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by_staff') == staff['name']), None)
-                            # Fallback for old tickets
                             if not active_t:
                                 active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station_name and not t.get('served_by_staff')), None)
                             
                             if active_t:
                                 is_blinking = "blink-active" if active_t.get('start_time') and (get_ph_time() - datetime.datetime.fromisoformat(active_t['start_time'])).total_seconds() < 20 else ""
                                 b_color = get_lane_color(active_t['lane'])
-                                # FIX-v23.10-001: JUMBO CSS (13vw for Number, 2.5vw for Station, 1.8vw for Name)
-                                st.markdown(f"""<div class="serving-card-jumbo" style="border-left: 20px solid {b_color}; {style_str}"><p>{sanitize_text(station_name)}</p><h2 style="color:{b_color};" class="{is_blinking}">{sanitize_text(active_t['number'])}</h2><span>{sanitize_text(nickname)}</span></div>""", unsafe_allow_html=True)
-                            else: st.markdown(f"""<div class="serving-card-jumbo" style="border-left: 20px solid #ccc; {style_str}"><p>{sanitize_text(station_name)}</p><h2 style="color:#22c55e; font-size: 6vw;">READY</h2><span>{sanitize_text(nickname)}</span></div>""", unsafe_allow_html=True)
+                                # REVISED VISUAL HIERARCHY: Counter Name (Top) -> Ticket Number (Middle/Huge) -> Nickname (Bottom)
+                                st.markdown(f"""
+                                <div class="serving-card-jumbo" style="border-left: 20px solid {b_color}; {style_str}">
+                                    <div class="jumbo-counter">{sanitize_text(station_name)}</div>
+                                    <h2 style="color:{b_color};" class="jumbo-ticket {is_blinking}">{sanitize_text(active_t['number'])}</h2>
+                                    <div class="jumbo-staff">{sanitize_text(nickname)}</div>
+                                </div>""", unsafe_allow_html=True)
+                            else: 
+                                st.markdown(f"""
+                                <div class="serving-card-jumbo" style="border-left: 20px solid #ccc; {style_str}">
+                                    <div class="jumbo-counter">{sanitize_text(station_name)}</div>
+                                    <h2 style="color:#22c55e; font-size: 6vw;">READY</h2>
+                                    <div class="jumbo-staff">{sanitize_text(nickname)}</div>
+                                </div>""", unsafe_allow_html=True)
         st.markdown("---")
         c_queue, c_park = st.columns([3, 1])
         with c_queue:
@@ -979,15 +1006,8 @@ def render_counter(user):
                 if nxt:
                     db_ticket = next((x for x in local_db['tickets'] if x['id'] == nxt['id']), None)
                     if db_ticket:
-                        # FIX-v23.10-003: SAVE STAFF ID FOR 1:1 LINKING
-                        db_ticket["status"] = "SERVING"
-                        db_ticket["served_by"] = st.session_state['my_station']
-                        db_ticket["served_by_staff"] = user['name'] # NEW: Precise tracking
-                        db_ticket["start_time"] = get_ph_time().isoformat()
-                        trigger_audio(db_ticket['number'], st.session_state['my_station'])
-                        save_db(local_db)
-                        log_audit("TICKET_CALL", user['name'], target=db_ticket['number'])
-                        st.rerun()
+                        db_ticket["status"] = "SERVING"; db_ticket["served_by"] = st.session_state['my_station']; db_ticket["start_time"] = get_ph_time().isoformat()
+                        trigger_audio(db_ticket['number'], st.session_state['my_station']); save_db(local_db); log_audit("TICKET_CALL", user['name'], target=db_ticket['number']); st.rerun()
                 else: st.warning(f"No tickets for {station_type}.")
     with c2:
         count, avg_time = get_staff_efficiency(user['name'])
@@ -998,9 +1018,7 @@ def render_counter(user):
         for p in parked:
             if st.button(f"🔊 {p['number']}", key=p['id']):
                 update_activity()
-                p["status"] = "SERVING"; p["served_by"] = st.session_state['my_station']; 
-                p["served_by_staff"] = user['name'] # NEW: Precise tracking
-                p["start_time"] = get_ph_time().isoformat(); trigger_audio(p['number'], st.session_state['my_station']); save_db(local_db); log_audit("TICKET_RECALL_PARKED", user['name'], target=p['number']); st.rerun()
+                p["status"] = "SERVING"; p["served_by"] = st.session_state['my_station']; p["start_time"] = get_ph_time().isoformat(); trigger_audio(p['number'], st.session_state['my_station']); save_db(local_db); log_audit("TICKET_RECALL_PARKED", user['name'], target=p['number']); st.rerun()
 
 def render_admin_panel(user):
     update_activity()
@@ -1017,12 +1035,6 @@ def render_admin_panel(user):
     
     if active == "Dashboard":
         st.subheader("📊 G-ABAY Precision Analytics")
-        with st.expander("📖 Status Legend", expanded=False):
-            st.markdown("<div class='status-legend'>", unsafe_allow_html=True)
-            for status_code, status_info in TICKET_STATUSES.items():
-                st.markdown(f"<span class='status-item' style='background-color: {status_info['color']}20; border: 1px solid {status_info['color']};'><strong>{status_info['label']}</strong>: {status_info['desc']}</span>", unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-        
         c1, c2 = st.columns(2)
         with c1: time_range = st.selectbox("Select Time Range", ["Today", "Yesterday", "This Week", "This Month", "Quarterly", "Semestral", "Annual"])
         with c2: lane_filter = st.selectbox("Select Lane / Section", ["All Lanes", "Teller", "Employer", "Counter", "eCenter", "Fast Lane"])
@@ -1036,18 +1048,22 @@ def render_admin_panel(user):
         
         today = get_ph_time().date()
         filtered_txns = []
-        start_date, end_date = today, today
         
-        if time_range == "Today": filtered_txns = data_source
+        if time_range == "Today": 
+            filtered_txns = data_source
         else:
+            start_date = today
+            end_date = today
             if time_range == "Yesterday": start_date = today - datetime.timedelta(days=1); end_date = start_date
             elif time_range == "This Week": start_date = today - datetime.timedelta(days=today.weekday()); end_date = today
             elif time_range == "This Month": start_date = today.replace(day=1); end_date = today
             elif time_range == "Quarterly": curr_q = (today.month - 1) // 3 + 1; start_date = datetime.date(today.year, 3 * curr_q - 2, 1); end_date = today
+            
             for entry in archive_data:
                 try:
                     entry_dt = datetime.datetime.strptime(entry['date'], "%Y-%m-%d").date()
-                    if start_date <= entry_dt <= end_date: filtered_txns.extend(entry.get('history', []))
+                    if start_date <= entry_dt <= end_date:
+                        filtered_txns.extend(entry.get('history', []))
                 except: continue
             if time_range != "Yesterday": filtered_txns.extend(data_source)
 
@@ -1104,7 +1120,7 @@ def render_admin_panel(user):
                 lane_stats = df.groupby('lane_name')['Total Waiting Time (Mins)'].mean().reset_index()
                 fig_bar = px.bar(lane_stats, x='lane_name', y='Total Waiting Time (Mins)', title='Avg Wait by Lane', color='Total Waiting Time (Mins)', color_continuous_scale=['green', 'orange', 'red'])
                 st.plotly_chart(fig_bar, use_container_width=True)
-        else: st.info("No data available for the selected time range.")
+        else: st.info("No data available.")
 
     elif active == "Reports":
         st.subheader("📋 IOMS Report Generator")
@@ -1280,7 +1296,7 @@ def render_admin_panel(user):
         st.subheader("⚙️ System Configuration")
         st.write("**Version Information**")
         st.code(f"""
-SSS G-ABAY Version: v23.10 (Jumbo Display Edition)
+SSS G-ABAY Version: v23.10 (Visual Perfection Edition)
 Build Date: 2026-02-02
 Timezone: UTC+{UTC_OFFSET_HOURS} (Philippine Standard Time)
         """)
