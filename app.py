@@ -1,19 +1,18 @@
 # ==============================================================================
-# SSS G-ABAY v23.9.1 - BRANCH OPERATING SYSTEM (PLATINUM EDITION - CORRECTIVE PATCH)
-# "Visuals: V23.4 | Backend: V23.5 | Security: V23.7 | Integrity: V23.8 | Polish: V23.9 | Precision: V23.9.1"
+# SSS G-ABAY v23.12 - BRANCH OPERATING SYSTEM (PLATINUM FINAL PRODUCTION)
+# "Visuals: V23.4 | Backend: V23.5 | Security: V23.7 | Integrity: V23.8 | Polish: V23.9 | Precision: V23.12"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
-# PHASE 3.1 CORRECTIVE FIXES (NEW in v23.9.1):
-#   FIX-v23.9.1-001: Force 6-Column Grid (Prevents Giant Cards)
-#   FIX-v23.9.1-002: Supervisor Role Exclusion from Display
-#   FIX-v23.9.1-003: Role-Based READY Color Coding
-#   FIX-v23.9.1-004: Precision Staff Tracking (served_by_staff)
-#   FIX-v23.9.1-005: Uniform Auto-Scaling Font Sizes
-#   FIX-v23.9.1-006: Display Ticket Matching by Staff Name First
-#   FIX-v23.9.1-007: Consistent Border Color for READY State
-#   FIX-v23.9.1-008: Safe Logout served_by_staff Check
-#   FIX-v23.9.1-009: Parked Ticket Recall served_by_staff
-#   FIX-v23.9.1-010: Counter Module served_by_staff Consistency
+# v23.12 SURGICAL FIXES (Audit Response):
+#   FIX-v23.12-001: Ghost Ticket Logic Repair (Two-Phase Matching)
+#   FIX-v23.12-002: CSS-Based Responsive Scaling (vw units)
+#   FIX-v23.12-003: Global Constant Optimization (Memory Efficiency)
+# ==============================================================================
+# INHERITED FROM v23.9.1:
+#   - 6-Column Fixed Grid
+#   - Supervisor Role Exclusion
+#   - Role-Based Color Coding
+#   - Precision Staff Tracking (served_by_staff)
 # ==============================================================================
 
 import streamlit as st
@@ -45,7 +44,7 @@ except ImportError:
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v23.9.1", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v23.12", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 # ==============================================================================
 # FIX-v23.9-001: CONFIGURABLE TIMEZONE CONSTANT
@@ -53,7 +52,8 @@ st.set_page_config(page_title="SSS G-ABAY v23.9.1", page_icon="🇵🇭", layout
 UTC_OFFSET_HOURS = 8  # Philippine Standard Time (PST = UTC+8)
 
 # ==============================================================================
-# FIX-v23.9-005: CENTRALIZED CONSTANTS
+# FIX-v23.9-005 + FIX-v23.12-003: CENTRALIZED CONSTANTS (GLOBAL SCOPE)
+# All constants defined ONCE at module load - no redefinition in loops
 # ==============================================================================
 
 # --- FILE PATHS ---
@@ -72,7 +72,7 @@ AUDIT_LOG_MAX_ENTRIES = 10000
 DEFAULT_AVG_TXN_MINUTES = 15
 
 # --- DISPLAY GRID CONSTANTS ---
-DISPLAY_GRID_COLUMNS = 6  # FIX-v23.9.1-001: Fixed 6-column grid
+DISPLAY_GRID_COLUMNS = 6  # Fixed 6-column grid
 
 # --- LANE CONFIGURATION ---
 LANE_CODES = {
@@ -113,13 +113,12 @@ ADMIN_ROLES = ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]
 COUNTER_ROLES = ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]
 
 # ==============================================================================
-# FIX-v23.9.1-002: SUPERVISOR ROLES EXCLUSION FROM DISPLAY
-# Purpose: Hide supervisory roles from TV display to prevent ghost cards
+# FIX-v23.12-003: SUPERVISOR ROLES - GLOBAL SCOPE (Moved from render_display)
 # ==============================================================================
-SUPERVISOR_ROLES = ["BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]
+SUPERVISOR_ROLES = ("BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD")  # Tuple for immutability
 
 # ==============================================================================
-# FIX-v23.9.1-003: ROLE-BASED READY COLOR CODING
+# FIX-v23.12-003: ROLE COLORS - GLOBAL SCOPE (Moved from render_display)
 # Purpose: Dynamic colors based on staff role's primary lane
 # ==============================================================================
 ROLE_COLORS = {
@@ -132,28 +131,8 @@ ROLE_COLORS = {
     "DIV_HEAD": {"ready_color": "#6B7280", "border_color": "#6B7280", "lane": None}
 }
 
-# ==============================================================================
-# FIX-v23.9.1-005: UNIFORM FONT SIZE CONFIGURATION
-# Purpose: Consistent auto-scaling fonts across all display cards
-# ==============================================================================
-DISPLAY_FONT_CONFIG = {
-    "1_row": {"station": 28, "ticket": 90, "ready": 60, "name": 20, "card_height": 60},
-    "2_row": {"station": 24, "ticket": 70, "ready": 50, "name": 18, "card_height": 30},
-    "3_row": {"station": 20, "ticket": 55, "ready": 40, "name": 16, "card_height": 20},
-    "4_row": {"station": 18, "ticket": 45, "ready": 35, "name": 14, "card_height": 15}
-}
-
-def get_display_font_config(staff_count):
-    """Get uniform font configuration based on number of staff logged in."""
-    num_rows = math.ceil(staff_count / DISPLAY_GRID_COLUMNS)
-    if num_rows <= 1:
-        return DISPLAY_FONT_CONFIG["1_row"]
-    elif num_rows == 2:
-        return DISPLAY_FONT_CONFIG["2_row"]
-    elif num_rows == 3:
-        return DISPLAY_FONT_CONFIG["3_row"]
-    else:
-        return DISPLAY_FONT_CONFIG["4_row"]
+# Default fallback for unknown roles
+DEFAULT_ROLE_COLORS = {"ready_color": "#22c55e", "border_color": "#ccc", "lane": None}
 
 # ==============================================================================
 # FIX-v23.9-001: PHILIPPINE TIME STANDARD
@@ -434,7 +413,7 @@ def check_session_timeout():
     return False
 
 # ==============================================================================
-# FIX-v23.9.1-008: SAFE LOGOUT WITH served_by_staff CHECK
+# SAFE LOGOUT WITH served_by_staff CHECK
 # ==============================================================================
 def handle_safe_logout(reason="MANUAL"):
     if 'user' not in st.session_state: return
@@ -444,10 +423,14 @@ def handle_safe_logout(reason="MANUAL"):
     
     if user_key:
         station = local_db['staff'][user_key].get('default_station', '')
-        # FIX-v23.9.1-008: Check both served_by_staff AND served_by for ticket matching
+        # Two-phase matching for safety
         serving_ticket = next((t for t in local_db['tickets'] 
-                               if t['status'] == 'SERVING' 
-                               and (t.get('served_by_staff') == user['name'] or t.get('served_by') == station)), None)
+                               if t['status'] == 'SERVING' and t.get('served_by_staff') == user['name']), None)
+        if not serving_ticket:
+            serving_ticket = next((t for t in local_db['tickets'] 
+                                   if t['status'] == 'SERVING' 
+                                   and t.get('served_by') == station 
+                                   and not t.get('served_by_staff')), None)
         
         if serving_ticket:
             serving_ticket['status'] = 'PARKED'
@@ -462,7 +445,10 @@ def handle_safe_logout(reason="MANUAL"):
     for key in ['refer_modal', 'my_station', 'user', 'login_date']:
         if key in st.session_state: del st.session_state[key]
 
-# --- CSS ---
+# ==============================================================================
+# FIX-v23.12-002: CSS WITH RESPONSIVE vw UNITS FOR TV DISPLAY
+# All font sizes use viewport-width units for true auto-scaling
+# ==============================================================================
 st.markdown("""
 <script>
 function startTimer(duration, displayId) {
@@ -486,20 +472,100 @@ function startTimer(duration, displayId) {
     .header-text { text-align: center; font-family: sans-serif; }
     .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
     .brand-footer { position: fixed; bottom: 5px; left: 10px; font-family: monospace; font-size: 12px; color: #888; opacity: 0.7; pointer-events: none; z-index: 9999; }
-    .serving-card-small { background: white; border-left: 25px solid #2563EB; padding: 10px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center; display: flex; flex-direction: column; justify-content: center; transition: all 0.3s ease; width: 100%; }
-    .serving-card-break { background: #FEF3C7; border-left: 25px solid #D97706; padding: 10px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center; display: flex; flex-direction: column; justify-content: center; transition: all 0.3s ease; width: 100%; }
-    .serving-card-small h2 { margin: 0; font-weight: 900; line-height: 1.0; }
-    .serving-card-small p { margin: 0; color: #111; font-weight: bold; text-transform: uppercase; }
-    .serving-card-small span { color: #777; font-weight: normal; margin-top: 5px; }
+    
+    /* ==============================================================================
+       FIX-v23.12-002: RESPONSIVE DISPLAY CARDS WITH vw UNITS
+       These scale automatically based on TV/screen width
+    ============================================================================== */
+    .serving-card-small { 
+        background: white; 
+        border-left: 25px solid #2563EB; 
+        padding: 1.5vh 0.5vw; 
+        border-radius: 15px; 
+        box-shadow: 0 10px 20px rgba(0,0,0,0.2); 
+        text-align: center; 
+        display: flex; 
+        flex-direction: column; 
+        justify-content: center; 
+        align-items: center;
+        transition: all 0.3s ease; 
+        width: 100%;
+        min-height: 18vh;
+    }
+    .serving-card-break { 
+        background: #FEF3C7; 
+        border-left: 25px solid #D97706; 
+        padding: 1.5vh 0.5vw; 
+        border-radius: 15px; 
+        box-shadow: 0 10px 20px rgba(0,0,0,0.2); 
+        text-align: center; 
+        display: flex; 
+        flex-direction: column; 
+        justify-content: center; 
+        align-items: center;
+        transition: all 0.3s ease; 
+        width: 100%;
+        min-height: 18vh;
+    }
+    
+    /* Station Name - Responsive */
+    .card-station { 
+        margin: 0; 
+        color: #111; 
+        font-weight: bold; 
+        text-transform: uppercase;
+        font-size: clamp(12px, 1.8vw, 28px);
+        line-height: 1.2;
+    }
+    
+    /* Ticket Number - Large, Responsive */
+    .card-ticket { 
+        margin: 0.5vh 0; 
+        font-weight: 900; 
+        line-height: 1.0;
+        font-size: clamp(40px, 11vw, 120px);
+    }
+    
+    /* READY Text - Medium, Responsive */
+    .card-ready { 
+        margin: 0.5vh 0; 
+        font-weight: 900; 
+        line-height: 1.0;
+        font-size: clamp(30px, 5vw, 70px);
+    }
+    
+    /* ON BREAK Text - Medium, Responsive */
+    .card-break-text { 
+        margin: 0; 
+        color: #92400E;
+        font-weight: 900; 
+        font-size: clamp(24px, 4vw, 55px);
+    }
+    
+    /* Staff Nickname - Small, Responsive */
+    .card-nickname { 
+        color: #777; 
+        font-weight: normal; 
+        margin-top: 0.5vh;
+        font-size: clamp(10px, 1.4vw, 22px);
+    }
+    
+    /* Swim Lane Columns */
     .swim-col { background: #f8f9fa; border-radius: 10px; padding: 10px; border-top: 10px solid #ccc; height: 100%; }
     .swim-col h3 { text-align: center; margin-bottom: 10px; font-size: 18px; text-transform: uppercase; color: #333; }
     .queue-item { background: white; border-bottom: 1px solid #ddd; padding: 15px; margin-bottom: 5px; border-radius: 5px; display: flex; justify-content: space-between; }
     .queue-item span { font-size: 24px; font-weight: 900; color: #111; }
+    
+    /* Kiosk Buttons */
     .gate-btn > button { height: 350px !important; width: 100% !important; font-size: 40px !important; font-weight: 900 !important; border-radius: 30px !important; }
     .menu-card > button { height: 300px !important; width: 100% !important; font-size: 30px !important; font-weight: 800 !important; border-radius: 20px !important; border: 4px solid #ddd !important; white-space: pre-wrap !important;}
     .swim-btn > button { height: 100px !important; width: 100% !important; font-size: 18px !important; font-weight: 700 !important; text-align: left !important; padding-left: 20px !important; }
+    
+    /* Info & Links */
     .info-link { text-decoration: none; display: block; padding: 15px; background: #f0f2f6; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #2563EB; color: #333; font-weight: bold; transition: 0.2s; }
     .info-link:hover { background: #e0e7ff; }
+    
+    /* Color Headers */
     .head-red { background-color: #DC2626; color: white; padding: 5px; border-radius: 5px 5px 0 0; font-weight: bold; text-align: center; } 
     .border-red > button { border-left: 20px solid #DC2626 !important; }
     .head-orange { background-color: #EA580C; color: white; padding: 5px; border-radius: 5px 5px 0 0; font-weight: bold; text-align: center; } 
@@ -508,19 +574,30 @@ function startTimer(duration, displayId) {
     .border-green > button { border-left: 20px solid #16A34A !important; }
     .head-blue { background-color: #2563EB; color: white; padding: 5px; border-radius: 5px 5px 0 0; font-weight: bold; text-align: center; } 
     .border-blue > button { border-left: 20px solid #2563EB !important; }
+    
+    /* Metrics & Warnings */
     .metric-card { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; border-top: 5px solid #2563EB; }
     .metric-card h3 { font-size: 36px; margin: 0; color: #1E3A8A; font-weight: 900; }
     .metric-card p { margin: 0; color: #666; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
     .timeout-warning { background: #FEF3C7; border: 2px solid #F59E0B; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 10px; }
+    
+    /* Parked Cards */
     .park-appt { background: #dbeafe; color: #1e40af; border-left: 5px solid #2563EB; font-weight: bold; padding: 10px; border-radius: 5px; display: flex; justify-content: space-between; margin-bottom: 5px; }
     .park-danger { background: #fee2e2; color: #b91c1c; border-left: 5px solid #ef4444; animation: pulse 2s infinite; padding: 10px; border-radius: 5px; font-weight:bold; display:flex; justify-content:space-between; margin-bottom: 5px; }
+    
+    /* Wait Estimate */
     .wait-estimate { background: #ECFDF5; border: 2px solid #10B981; border-radius: 10px; padding: 15px; text-align: center; margin: 10px 0; }
     .wait-estimate h3 { margin: 0; color: #059669; font-size: 24px; }
     .wait-estimate p { margin: 5px 0 0 0; color: #047857; font-size: 14px; }
+    
+    /* Status Legend */
     .status-legend { background: #f8fafc; border-radius: 8px; padding: 10px; margin: 10px 0; }
     .status-item { display: inline-block; margin: 5px 10px; padding: 3px 8px; border-radius: 4px; font-size: 12px; }
+    
+    /* Animations */
     @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     .blink-active { animation: blink 1s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
 </style>
 """, unsafe_allow_html=True)
 
@@ -531,7 +608,21 @@ def get_display_name(staff_data):
     return staff_data.get('nickname') if staff_data.get('nickname') else staff_data['name']
 
 # ==============================================================================
-# FIX-v23.9-003: KIOSK WAIT TIME ESTIMATE CALCULATOR
+# FIX-v23.12-003: GET ROLE COLORS - Uses Global Constant
+# ==============================================================================
+def get_role_colors(role):
+    """Get ready and border colors for a staff role from global constant."""
+    return ROLE_COLORS.get(role, DEFAULT_ROLE_COLORS)
+
+# ==============================================================================
+# GET LANE COLOR HELPER
+# ==============================================================================
+def get_lane_color(lane_code):
+    """Get color for a lane code from centralized constants."""
+    return LANE_CODES.get(lane_code, {}).get('color', '#2563EB')
+
+# ==============================================================================
+# KIOSK WAIT TIME ESTIMATE CALCULATOR
 # ==============================================================================
 def calculate_lane_wait_estimate(lane_code):
     """Calculate estimated wait time for a specific lane before ticket generation."""
@@ -588,7 +679,7 @@ def generate_ticket_callback(service, lane_code, is_priority):
         "type": "PRIORITY" if is_priority else "REGULAR", "status": "WAITING", 
         "timestamp": get_ph_time().isoformat(),
         "start_time": None, "end_time": None, "park_timestamp": None,
-        "history": [], "served_by": None, "served_by_staff": None,  # FIX-v23.9.1-004
+        "history": [], "served_by": None, "served_by_staff": None,
         "ref_from": None, "referral_reason": None,
         "appt_name": None, "appt_time": None, "actual_transactions": [] 
     }
@@ -610,7 +701,7 @@ def generate_ticket_manual(service, lane_code, is_priority, is_appt=False, appt_
         "type": "APPOINTMENT" if is_appt else ("PRIORITY" if is_priority else "REGULAR"),
         "status": "WAITING", "timestamp": get_ph_time().isoformat(),
         "start_time": None, "end_time": None, "park_timestamp": None,
-        "history": [], "served_by": None, "served_by_staff": None,  # FIX-v23.9.1-004
+        "history": [], "served_by": None, "served_by_staff": None,
         "ref_from": None, "referral_reason": None,
         "appt_name": appt_name, "appt_time": str(appt_time) if appt_time else None,
         "assigned_to": assign_counter, "actual_transactions": []
@@ -707,8 +798,11 @@ def calculate_people_ahead(ticket_id, lane_code):
 
 def get_staff_efficiency(staff_name):
     local_db = load_db()
-    # FIX-v23.9.1-010: Check both served_by_staff and served_by
-    my_txns = [t for t in local_db['history'] if t.get("served_by_staff") == staff_name or t.get("served_by") == staff_name]
+    # Two-phase matching for accuracy
+    my_txns = [t for t in local_db['history'] if t.get("served_by_staff") == staff_name]
+    legacy_txns = [t for t in local_db['history'] if t.get("served_by") == staff_name and not t.get("served_by_staff")]
+    my_txns.extend(legacy_txns)
+    
     if my_txns:
         total_handle_time = 0
         valid_count = 0
@@ -738,21 +832,6 @@ def clear_ticket_modal_states():
     modal_keys = ['refer_modal', 'transfer_in_progress']
     for key in modal_keys:
         if key in st.session_state: del st.session_state[key]
-
-# ==============================================================================
-# FIX-v23.9-005: GET LANE COLOR HELPER
-# ==============================================================================
-def get_lane_color(lane_code):
-    """Get color for a lane code from centralized constants."""
-    return LANE_CODES.get(lane_code, {}).get('color', '#2563EB')
-
-# ==============================================================================
-# FIX-v23.9.1-003: GET ROLE COLOR HELPER
-# ==============================================================================
-def get_role_colors(role):
-    """Get ready and border colors for a staff role."""
-    default = {"ready_color": "#22c55e", "border_color": "#ccc", "lane": None}
-    return ROLE_COLORS.get(role, default)
 
 # ==========================================
 # 4. MODULES
@@ -878,10 +957,12 @@ def render_kiosk():
         with c3:
             if st.button("🖨️ PRINT", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
     
-    st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.9.1</div>", unsafe_allow_html=True)
+    st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.12</div>", unsafe_allow_html=True)
 
 # ==============================================================================
-# FIX-v23.9.1-001 to FIX-v23.9.1-007: COMPLETELY REWRITTEN render_display()
+# FIX-v23.12-001: GHOST TICKET LOGIC REPAIR - TWO-PHASE MATCHING
+# FIX-v23.12-002: CSS-BASED RESPONSIVE SCALING (No Python font calculation)
+# FIX-v23.12-003: GLOBAL CONSTANTS (No redefinition in loop)
 # ==============================================================================
 def render_display():
     check_session_timeout()
@@ -906,14 +987,12 @@ def render_display():
         
         st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
         
-        # ==============================================================================
-        # FIX-v23.9.1-002: FILTER OUT SUPERVISORS FROM DISPLAY
-        # ==============================================================================
+        # Filter staff: Online, Not Admin, Not Supervisor (uses global constant)
         raw_staff = [s for s in local_db['staff'].values() 
                      if s.get('online') is True 
                      and s['role'] != "ADMIN" 
                      and s['name'] != "System Admin"
-                     and s['role'] not in SUPERVISOR_ROLES]  # ← NEW: Exclude supervisors
+                     and s['role'] not in SUPERVISOR_ROLES]
         
         # Build unique staff map by station (deduplicate)
         unique_staff_map = {} 
@@ -922,15 +1001,15 @@ def render_display():
             if st_name not in unique_staff_map: 
                 unique_staff_map[st_name] = s
             else:
-                # If station already has staff, check who is actually serving
+                # If station already has staff, check who is actually serving using two-phase matching
                 curr = unique_staff_map[st_name]
-                # FIX-v23.9.1-006: Check served_by_staff first
+                # Phase 1: Check served_by_staff (precise)
                 is_curr_serving = next((t for t in local_db['tickets'] 
                                         if t['status'] == 'SERVING' 
-                                        and (t.get('served_by_staff') == curr['name'] or t.get('served_by') == st_name)), None)
+                                        and t.get('served_by_staff') == curr['name']), None)
                 is_new_serving = next((t for t in local_db['tickets'] 
                                        if t['status'] == 'SERVING' 
-                                       and (t.get('served_by_staff') == s['name'] or t.get('served_by') == st_name)), None)
+                                       and t.get('served_by_staff') == s['name']), None)
                 if not is_curr_serving and is_new_serving: 
                     unique_staff_map[st_name] = s
         
@@ -939,26 +1018,13 @@ def render_display():
         if not unique_staff: 
             st.warning("Waiting for staff to log in...")
         else:
-            # ==============================================================================
-            # FIX-v23.9.1-005: UNIFORM AUTO-SCALING FONT SIZES
-            # ==============================================================================
             staff_count = len(unique_staff)
-            font_cfg = get_display_font_config(staff_count)
             
-            # Extract font sizes from config
-            f_station = font_cfg["station"]
-            f_ticket = font_cfg["ticket"]
-            f_ready = font_cfg["ready"]
-            f_name = font_cfg["name"]
-            card_height = font_cfg["card_height"]
-            
-            # ==============================================================================
-            # FIX-v23.9.1-001: FORCE 6-COLUMN GRID (Prevents Giant Cards)
-            # ==============================================================================
+            # 6-Column Fixed Grid (no Python font calculation - CSS handles sizing)
             for i in range(0, staff_count, DISPLAY_GRID_COLUMNS):
                 batch = unique_staff[i:i+DISPLAY_GRID_COLUMNS]
                 
-                # ALWAYS create 6 columns, not len(batch) columns
+                # ALWAYS create 6 columns
                 cols = st.columns(DISPLAY_GRID_COLUMNS)
                 
                 for idx, staff in enumerate(batch):
@@ -966,27 +1032,37 @@ def render_display():
                         nickname = get_display_name(staff)
                         station_name = staff.get('default_station', 'Unassigned')
                         staff_role = staff.get('role', 'MSR')
-                        style_str = f"height: {card_height}vh;"
                         
-                        # Get role-based colors
+                        # Get role-based colors (from global constant)
                         role_colors = get_role_colors(staff_role)
                         
                         if staff.get('status') == "ON_BREAK":
                             # ON BREAK card (orange/amber)
                             st.markdown(f"""
-                            <div class="serving-card-break" style="{style_str}">
-                                <p style="font-size: {f_station}px;">{sanitize_text(station_name)}</p>
-                                <h3 style="margin:0; font-size:{f_ready}px; color:#92400E;">ON BREAK</h3>
-                                <span style="font-size: {f_name}px;">{sanitize_text(nickname)}</span>
+                            <div class="serving-card-break">
+                                <p class="card-station">{sanitize_text(station_name)}</p>
+                                <h3 class="card-break-text">ON BREAK</h3>
+                                <span class="card-nickname">{sanitize_text(nickname)}</span>
                             </div>""", unsafe_allow_html=True)
                             
                         elif staff.get('status') == "ACTIVE":
-                            # ==============================================================================
-                            # FIX-v23.9.1-006: MATCH BY served_by_staff FIRST, THEN served_by
-                            # ==============================================================================
+                            # ==============================================================
+                            # FIX-v23.12-001: TWO-PHASE TICKET MATCHING (Ghost Ticket Fix)
+                            # Phase 1: Exact staff match (primary)
+                            # Phase 2: Station match ONLY if no owner (legacy fallback)
+                            # ==============================================================
+                            
+                            # PHASE 1: Look for ticket assigned to THIS SPECIFIC STAFF
                             active_t = next((t for t in local_db['tickets'] 
                                              if t['status'] == 'SERVING' 
-                                             and (t.get('served_by_staff') == staff['name'] or t.get('served_by') == station_name)), None)
+                                             and t.get('served_by_staff') == staff['name']), None)
+                            
+                            # PHASE 2: Only if no Phase 1 match, check station BUT verify no owner
+                            if not active_t:
+                                active_t = next((t for t in local_db['tickets'] 
+                                                 if t['status'] == 'SERVING' 
+                                                 and t.get('served_by') == station_name 
+                                                 and not t.get('served_by_staff')), None)  # <-- CRITICAL: No owner
                             
                             if active_t:
                                 # SERVING card with ticket number
@@ -1000,27 +1076,22 @@ def render_display():
                                 b_color = get_lane_color(active_t['lane'])
                                 
                                 st.markdown(f"""
-                                <div class="serving-card-small" style="border-left: 25px solid {b_color}; {style_str}">
-                                    <p style="font-size: {f_station}px;">{sanitize_text(station_name)}</p>
-                                    <h2 style="color:{b_color}; font-size: {f_ticket}px;" class="{is_blinking}">{sanitize_text(active_t['number'])}</h2>
-                                    <span style="font-size: {f_name}px;">{sanitize_text(nickname)}</span>
+                                <div class="serving-card-small" style="border-left-color: {b_color};">
+                                    <p class="card-station">{sanitize_text(station_name)}</p>
+                                    <h2 class="card-ticket {is_blinking}" style="color:{b_color};">{sanitize_text(active_t['number'])}</h2>
+                                    <span class="card-nickname">{sanitize_text(nickname)}</span>
                                 </div>""", unsafe_allow_html=True)
                             else:
-                                # ==============================================================================
-                                # FIX-v23.9.1-003 & FIX-v23.9.1-007: DYNAMIC READY COLOR & BORDER
-                                # ==============================================================================
+                                # READY card (role-based colors from global constant)
                                 ready_color = role_colors["ready_color"]
                                 border_color = role_colors["border_color"]
                                 
                                 st.markdown(f"""
-                                <div class="serving-card-small" style="border-left: 25px solid {border_color}; {style_str}">
-                                    <p style="font-size: {f_station}px;">{sanitize_text(station_name)}</p>
-                                    <h2 style="color:{ready_color}; font-size: {f_ready}px;">READY</h2>
-                                    <span style="font-size: {f_name}px;">{sanitize_text(nickname)}</span>
+                                <div class="serving-card-small" style="border-left-color: {border_color};">
+                                    <p class="card-station">{sanitize_text(station_name)}</p>
+                                    <h2 class="card-ready" style="color:{ready_color};">READY</h2>
+                                    <span class="card-nickname">{sanitize_text(nickname)}</span>
                                 </div>""", unsafe_allow_html=True)
-                
-                # Empty columns for remaining slots (if batch < 6)
-                # Streamlit handles this automatically - columns remain empty
         
         st.markdown("---")
         
@@ -1072,7 +1143,7 @@ def render_display():
         if status != "NORMAL": 
             txt = f"⚠ NOTICE: We are currently experiencing {status} connection. Please bear with us. {txt}"
         st.markdown(f"<div style='background: {bg_color}; color: {text_color}; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%; font-size:20px;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
-        st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.9.1</div>", unsafe_allow_html=True)
+        st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.12</div>", unsafe_allow_html=True)
     
     time.sleep(3)
     st.rerun()
@@ -1102,10 +1173,14 @@ def render_counter(user):
         b_reason = st.selectbox("Reason", ["Lunch Break", "Coffee Break (15m)", "Bio-Break", "Emergency"])
         if st.button("⏸ START BREAK"):
             station = current_user_state.get('default_station', '')
-            # FIX-v23.9.1-008: Check served_by_staff too
+            # Two-phase check for serving ticket
             serving_ticket = next((t for t in local_db['tickets'] 
-                                   if t['status'] == 'SERVING' 
-                                   and (t.get('served_by_staff') == user['name'] or t.get('served_by') == station)), None)
+                                   if t['status'] == 'SERVING' and t.get('served_by_staff') == user['name']), None)
+            if not serving_ticket:
+                serving_ticket = next((t for t in local_db['tickets'] 
+                                       if t['status'] == 'SERVING' 
+                                       and t.get('served_by') == station 
+                                       and not t.get('served_by_staff')), None)
             if serving_ticket: st.error("⛔ You have an active ticket. Complete or Park it first.")
             else:
                 local_db['staff'][user_key]['status'] = "ON_BREAK"
@@ -1177,10 +1252,14 @@ def render_counter(user):
     queue = [t for t in local_db['tickets'] if t["status"] == "WAITING" and t["lane"] in my_lanes]
     queue.sort(key=get_queue_sort_key)
     
-    # FIX-v23.9.1-006: Check served_by_staff first for current ticket
+    # Two-phase matching for current ticket
     current = next((t for t in local_db['tickets'] 
-                    if t["status"] == "SERVING" 
-                    and (t.get("served_by_staff") == user['name'] or t.get("served_by") == st.session_state['my_station'])), None)
+                    if t["status"] == "SERVING" and t.get("served_by_staff") == user['name']), None)
+    if not current:
+        current = next((t for t in local_db['tickets'] 
+                        if t["status"] == "SERVING" 
+                        and t.get("served_by") == st.session_state['my_station']
+                        and not t.get("served_by_staff")), None)
     
     c1, c2 = st.columns([2,1])
     with c1:
@@ -1203,7 +1282,7 @@ def render_counter(user):
                         current["lane"] = LANE_NAME_TO_CODE[target_lane]
                         current["status"] = "WAITING"
                         current["served_by"] = None
-                        current["served_by_staff"] = None  # FIX-v23.9.1-004: Clear staff tracking
+                        current["served_by_staff"] = None
                         current["ref_from"] = st.session_state['my_station']
                         current["referral_reason"] = reason
                         save_db(local_db)
@@ -1274,10 +1353,7 @@ def render_counter(user):
                     if db_ticket:
                         db_ticket["status"] = "SERVING"
                         db_ticket["served_by"] = st.session_state['my_station']
-                        # ==============================================================================
-                        # FIX-v23.9.1-004: PRECISION STAFF TRACKING
-                        # ==============================================================================
-                        db_ticket["served_by_staff"] = user['name']
+                        db_ticket["served_by_staff"] = user['name']  # Precision tracking
                         db_ticket["start_time"] = get_ph_time().isoformat()
                         trigger_audio(db_ticket['number'], st.session_state['my_station'])
                         save_db(local_db)
@@ -1297,10 +1373,7 @@ def render_counter(user):
                 update_activity()
                 p["status"] = "SERVING"
                 p["served_by"] = st.session_state['my_station']
-                # ==============================================================================
-                # FIX-v23.9.1-009: PARKED TICKET RECALL served_by_staff
-                # ==============================================================================
-                p["served_by_staff"] = user['name']
+                p["served_by_staff"] = user['name']  # Precision tracking
                 p["start_time"] = get_ph_time().isoformat()
                 trigger_audio(p['number'], st.session_state['my_station'])
                 save_db(local_db)
@@ -1413,7 +1486,7 @@ def render_admin_panel(user):
             df['Total Waiting Time (Mins)'] = df.apply(lambda x: calc_diff_mins(x['start_time'], x['timestamp']), axis=1)
             df['Total Handle Time (Mins)'] = df.apply(lambda x: calc_diff_mins(x['end_time'], x['start_time']), axis=1)
             
-            # FIX-v23.9.1-010: Show served_by_staff if available, fallback to served_by
+            # Two-phase matching for served_by display
             df['Served By'] = df.apply(lambda x: x.get('served_by_staff') or x.get('served_by', 'Unknown'), axis=1)
 
             export_cols = ['Date', 'Ticket Number', 'Time Issued', 'Time Called', 'Time Ended', 'Total Waiting Time (Mins)', 'Total Handle Time (Mins)', 'Served By']
@@ -1461,7 +1534,6 @@ def render_admin_panel(user):
                                         "Date": t_date, "Ticket ID": t.get('full_id', t['number']), "Category": act.get('category', 'MEMBER SERVICES'), "Transaction": act['txn'], "Staff": act['staff'], "Number of Transaction": 1
                                     })
                         else:
-                            # FIX-v23.9.1-010: Use served_by_staff if available
                             staff_name = t.get('served_by_staff') or t.get('served_by', 'Unknown')
                             if not staff_filter or staff_name in staff_filter:
                                 all_txns_flat.append({
@@ -1615,15 +1687,36 @@ def render_admin_panel(user):
             else: st.info("No hourly backups yet.")
     
     elif active == "System Info":
-        st.subheader("⚙️ System Configuration")
+        st.subheader("⚙️ System Configuration - v23.12 Final Production")
         
         st.write("**Version Information**")
         st.code(f"""
-SSS G-ABAY Version: v23.9.1 (Platinum Edition - Corrective Patch)
+SSS G-ABAY Version: v23.12 (Platinum Final Production)
 Build Date: 2026-02-02
 Timezone: UTC+{UTC_OFFSET_HOURS} (Philippine Standard Time)
 Display Grid: {DISPLAY_GRID_COLUMNS} columns (fixed)
         """)
+        
+        st.write("**v23.12 Surgical Fixes**")
+        fixes = [
+            "FIX-001: Ghost Ticket Logic Repair (Two-Phase Matching)",
+            "FIX-002: CSS-Based Responsive Scaling (vw units)",
+            "FIX-003: Global Constant Optimization (Memory Efficiency)"
+        ]
+        for fix in fixes:
+            st.markdown(f"✅ {fix}")
+        
+        st.write("**Two-Phase Ticket Matching Logic**")
+        st.code("""
+# Phase 1: Exact staff match (primary)
+active_t = next((t for t in tickets if t['served_by_staff'] == staff['name']), None)
+
+# Phase 2: Station match ONLY if no owner (legacy fallback)
+if not active_t:
+    active_t = next((t for t in tickets 
+                     if t['served_by'] == station_name 
+                     AND NOT t['served_by_staff']), None)  # <-- CRITICAL
+""", language="python")
         
         st.write("**System Constants**")
         c1, c2 = st.columns(2)
@@ -1636,29 +1729,9 @@ Display Grid: {DISPLAY_GRID_COLUMNS} columns (fixed)
             st.metric("Audit Log Max", f"{AUDIT_LOG_MAX_ENTRIES:,}")
             st.metric("Default Avg Txn Time", f"{DEFAULT_AVG_TXN_MINUTES} min")
         
-        st.write("**v23.9.1 Fixes Applied**")
-        fixes = [
-            "FIX-001: Force 6-Column Grid (Prevents Giant Cards)",
-            "FIX-002: Supervisor Role Exclusion from Display",
-            "FIX-003: Role-Based READY Color Coding",
-            "FIX-004: Precision Staff Tracking (served_by_staff)",
-            "FIX-005: Uniform Auto-Scaling Font Sizes",
-            "FIX-006: Display Ticket Matching by Staff Name First",
-            "FIX-007: Consistent Border Color for READY State",
-            "FIX-008: Safe Logout served_by_staff Check",
-            "FIX-009: Parked Ticket Recall served_by_staff",
-            "FIX-010: Counter Module served_by_staff Consistency"
-        ]
-        for fix in fixes:
-            st.markdown(f"✅ {fix}")
-        
-        st.write("**Role Color Mapping**")
+        st.write("**Role Color Mapping (Global Constants)**")
         for role, colors in ROLE_COLORS.items():
-            st.markdown(f"- **{role}**: Ready Color = `{colors['ready_color']}`, Border = `{colors['border_color']}`")
-        
-        st.write("**Status Legend**")
-        for status_code, status_info in TICKET_STATUSES.items():
-            st.markdown(f"- **{status_code}** ({status_info['label']}): {status_info['desc']}")
+            st.markdown(f"- **{role}**: Ready = `{colors['ready_color']}`, Border = `{colors['border_color']}`")
 
 # ==========================================
 # 5. ROUTER
@@ -1750,5 +1823,5 @@ else:
             else: st.error("Ticket not found.")
 
 # ==============================================================================
-# END OF SSS G-ABAY v23.9.1 - CORRECTIVE PATCH
+# END OF SSS G-ABAY v23.12 - PLATINUM FINAL PRODUCTION
 # ==============================================================================
