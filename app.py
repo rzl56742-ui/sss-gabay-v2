@@ -1,6 +1,6 @@
 # ==============================================================================
-# SSS G-ABAY v23.10 - BRANCH OPERATING SYSTEM (VISUAL PERFECTION EDITION)
-# "Visuals: Forced Hierarchy (Ticket > Counter > Staff) | Logic: v23.9 Base"
+# SSS G-ABAY v23.10 - BRANCH OPERATING SYSTEM (CORRECTED GRID EDITION)
+# "Visuals: Ticket Hero | Logic: 6-Col Auto-Grid | Display: Nickname Only"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
 
@@ -352,7 +352,7 @@ def handle_safe_logout(reason="MANUAL"):
     for key in ['refer_modal', 'my_station', 'user', 'login_date']:
         if key in st.session_state: del st.session_state[key]
 
-# --- CSS (JUMBO EDITION) ---
+# --- CSS (JUMBO EDITION - OPTIMIZED FOR 6-COL GRID) ---
 st.markdown("""
 <script>
 function startTimer(duration, displayId) {
@@ -377,7 +377,7 @@ function startTimer(duration, displayId) {
     .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
     .brand-footer { position: fixed; bottom: 5px; left: 10px; font-family: monospace; font-size: 12px; color: #888; opacity: 0.7; pointer-events: none; z-index: 9999; }
     
-    /* === JUMBO DISPLAY HIERARCHY === */
+    /* JUMBO CARD CSS - 6 COL GRID OPTIMIZED */
     .serving-card-jumbo { 
         background: white; 
         border-radius: 15px; 
@@ -389,22 +389,21 @@ function startTimer(duration, displayId) {
         height: 100%;
         width: 100%;
         overflow: hidden;
-        padding-top: 5px;
-        padding-bottom: 5px;
+        padding: 5px;
     }
     
-    /* LEVEL 1: TICKET NUMBER (HERO) */
+    /* LEVEL 1: TICKET NUMBER (BIGGEST, 10vw for 6-col fit) */
     .jumbo-ticket {
-        font-size: 15vw !important;
+        font-size: 10vw !important;
         font-weight: 900 !important;
         line-height: 1.0 !important;
         margin: 0 !important;
         padding: 10px 0 !important;
     }
     
-    /* LEVEL 2: COUNTER NAME (CONTEXT) */
+    /* LEVEL 2: COUNTER NAME (2vw) */
     .jumbo-counter {
-        font-size: 4vw !important;
+        font-size: 2vw !important;
         font-weight: 700 !important;
         text-transform: uppercase;
         color: #333;
@@ -412,9 +411,9 @@ function startTimer(duration, displayId) {
         line-height: 1.2 !important;
     }
     
-    /* LEVEL 3: STAFF NICKNAME (FOOTER) */
+    /* LEVEL 3: STAFF NICKNAME (1.5vw, Normal Weight) */
     .jumbo-staff {
-        font-size: 2vw !important;
+        font-size: 1.5vw !important;
         font-weight: 400 !important;
         color: #666;
         margin-top: 0px !important;
@@ -427,7 +426,7 @@ function startTimer(duration, displayId) {
         height: 100%;
         display: flex; flex-direction: column; justify-content: center; text-align: center;
     }
-    .serving-card-break h3 { font-size: 5vw; color: #D97706; margin: 0; }
+    .serving-card-break h3 { font-size: 4vw; color: #D97706; margin: 0; }
     
     .swim-col { background: #f8f9fa; border-radius: 10px; padding: 10px; border-top: 10px solid #ccc; height: 100%; }
     .swim-col h3 { text-align: center; margin-bottom: 10px; font-size: 18px; text-transform: uppercase; color: #333; }
@@ -435,29 +434,10 @@ function startTimer(duration, displayId) {
     .queue-item span { font-size: 24px; font-weight: 900; color: #111; }
     
     .park-appt { background: #dbeafe; color: #1e40af; border-left: 5px solid #2563EB; font-weight: bold; padding: 10px; border-radius: 5px; display: flex; justify-content: space-between; margin-bottom: 5px; }
-    .park-danger { background: #fee2e2; color: #b91c1c; border-left: 5px solid #ef4444; animation: pulse 2s infinite; padding: 10px; border-radius: 5px; font-weight:bold; display:flex; justify-content:space-between; margin-bottom: 5px; }
     .gate-btn > button { height: 350px !important; width: 100% !important; font-size: 40px !important; font-weight: 900 !important; border-radius: 30px !important; }
     .menu-card > button { height: 300px !important; width: 100% !important; font-size: 30px !important; font-weight: 800 !important; border-radius: 20px !important; border: 4px solid #ddd !important; white-space: pre-wrap !important;}
     .swim-btn > button { height: 100px !important; width: 100% !important; font-size: 18px !important; font-weight: 700 !important; text-align: left !important; padding-left: 20px !important; }
-    .info-link { text-decoration: none; display: block; padding: 15px; background: #f0f2f6; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #2563EB; color: #333; font-weight: bold; transition: 0.2s; }
-    .info-link:hover { background: #e0e7ff; }
-    .head-red { background-color: #DC2626; color: white; padding: 5px; border-radius: 5px 5px 0 0; font-weight: bold; text-align: center; } 
-    .border-red > button { border-left: 20px solid #DC2626 !important; }
-    .head-orange { background-color: #EA580C; color: white; padding: 5px; border-radius: 5px 5px 0 0; font-weight: bold; text-align: center; } 
-    .border-orange > button { border-left: 20px solid #EA580C !important; }
-    .head-green { background-color: #16A34A; color: white; padding: 5px; border-radius: 5px 5px 0 0; font-weight: bold; text-align: center; } 
-    .border-green > button { border-left: 20px solid #16A34A !important; }
-    .head-blue { background-color: #2563EB; color: white; padding: 5px; border-radius: 5px 5px 0 0; font-weight: bold; text-align: center; } 
-    .border-blue > button { border-left: 20px solid #2563EB !important; }
-    .metric-card { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; border-top: 5px solid #2563EB; }
-    .metric-card h3 { font-size: 36px; margin: 0; color: #1E3A8A; font-weight: 900; }
-    .metric-card p { margin: 0; color: #666; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
-    .timeout-warning { background: #FEF3C7; border: 2px solid #F59E0B; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 10px; }
-    .wait-estimate { background: #ECFDF5; border: 2px solid #10B981; border-radius: 10px; padding: 15px; text-align: center; margin: 10px 0; }
-    .wait-estimate h3 { margin: 0; color: #059669; font-size: 24px; }
-    .wait-estimate p { margin: 5px 0 0 0; color: #047857; font-size: 14px; }
-    .status-legend { background: #f8fafc; border-radius: 8px; padding: 10px; margin: 10px 0; }
-    .status-item { display: inline-block; margin: 5px 10px; padding: 3px 8px; border-radius: 4px; font-size: 12px; }
+    
     @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     .blink-active { animation: blink 1s infinite; }
 </style>
@@ -784,8 +764,9 @@ def render_display():
         
         if not active_staff_list: st.warning("Waiting for staff to log in...")
         else:
+            # FIX: RESTORE 6-COL GRID
+            cols_per_row = 6
             count = len(active_staff_list)
-            cols_per_row = 4 if count >= 10 else (3 if count >= 5 else 2)
             num_rows = math.ceil(count / cols_per_row)
             card_height = 65 // num_rows
             
@@ -796,7 +777,6 @@ def render_display():
                     with cols[idx]:
                         nickname = get_display_name(staff); station_name = staff.get('default_station', 'Unassigned'); style_str = f"height: {card_height}vh;"
                         if staff.get('status') == "ON_BREAK": 
-                            # Custom HTML structure for Break status with CSS classes
                             st.markdown(f"""
                             <div class="serving-card-break" style="{style_str}">
                                 <div class="jumbo-counter">{sanitize_text(station_name)}</div>
@@ -811,7 +791,6 @@ def render_display():
                             if active_t:
                                 is_blinking = "blink-active" if active_t.get('start_time') and (get_ph_time() - datetime.datetime.fromisoformat(active_t['start_time'])).total_seconds() < 20 else ""
                                 b_color = get_lane_color(active_t['lane'])
-                                # REVISED VISUAL HIERARCHY: Counter Name (Top) -> Ticket Number (Middle/Huge) -> Nickname (Bottom)
                                 st.markdown(f"""
                                 <div class="serving-card-jumbo" style="border-left: 20px solid {b_color}; {style_str}">
                                     <div class="jumbo-counter">{sanitize_text(station_name)}</div>
@@ -1026,7 +1005,7 @@ def render_admin_panel(user):
     st.title("🛠 Admin & IOMS Center")
     if st.sidebar.button("⬅ LOGOUT"): handle_safe_logout(reason="MANUAL"); st.rerun()
     
-    if user['role'] in ADMIN_ROLES:
+    if user['role'] in ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]:
         tabs = ["Dashboard", "Reports", "Book Appt", "Kiosk Menu", "IOMS Master", "Counters", "Users", "Resources", "Exemptions", "Announcements", "Audit Log", "Backup", "System Info"]
     else: st.error("Access Denied"); return
     
@@ -1035,6 +1014,12 @@ def render_admin_panel(user):
     
     if active == "Dashboard":
         st.subheader("📊 G-ABAY Precision Analytics")
+        with st.expander("📖 Status Legend", expanded=False):
+            st.markdown("<div class='status-legend'>", unsafe_allow_html=True)
+            for status_code, status_info in TICKET_STATUSES.items():
+                st.markdown(f"<span class='status-item' style='background-color: {status_info['color']}20; border: 1px solid {status_info['color']};'><strong>{status_info['label']}</strong>: {status_info['desc']}</span>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+        
         c1, c2 = st.columns(2)
         with c1: time_range = st.selectbox("Select Time Range", ["Today", "Yesterday", "This Week", "This Month", "Quarterly", "Semestral", "Annual"])
         with c2: lane_filter = st.selectbox("Select Lane / Section", ["All Lanes", "Teller", "Employer", "Counter", "eCenter", "Fast Lane"])
@@ -1048,23 +1033,18 @@ def render_admin_panel(user):
         
         today = get_ph_time().date()
         filtered_txns = []
+        start_date, end_date = today, today
         
-        if time_range == "Today": 
-            filtered_txns = data_source
+        if time_range == "Today": filtered_txns = data_source
         else:
-            start_date = today
-            end_date = today
             if time_range == "Yesterday": start_date = today - datetime.timedelta(days=1); end_date = start_date
-            elif time_range == "This Week": start_date = today - datetime.timedelta(days=today.weekday()); end_date = today
-            elif time_range == "This Month": start_date = today.replace(day=1); end_date = today
-            elif time_range == "Quarterly": curr_q = (today.month - 1) // 3 + 1; start_date = datetime.date(today.year, 3 * curr_q - 2, 1); end_date = today
+            elif time_range == "This Week": start_date = today - datetime.timedelta(days=today.weekday())
+            elif time_range == "This Month": start_date = today.replace(day=1)
+            elif time_range == "Quarterly": curr_q = (today.month - 1) // 3 + 1; start_date = datetime.date(today.year, 3 * curr_q - 2, 1)
             
             for entry in archive_data:
-                try:
-                    entry_dt = datetime.datetime.strptime(entry['date'], "%Y-%m-%d").date()
-                    if start_date <= entry_dt <= end_date:
-                        filtered_txns.extend(entry.get('history', []))
-                except: continue
+                entry_dt = datetime.datetime.strptime(entry['date'], "%Y-%m-%d").date()
+                if start_date <= entry_dt <= end_date: filtered_txns.extend(entry.get('history', []))
             if time_range != "Yesterday": filtered_txns.extend(data_source)
 
         if lane_filter != "All Lanes":
@@ -1296,7 +1276,7 @@ def render_admin_panel(user):
         st.subheader("⚙️ System Configuration")
         st.write("**Version Information**")
         st.code(f"""
-SSS G-ABAY Version: v23.10 (Visual Perfection Edition)
+SSS G-ABAY Version: v23.10 (Corrected Grid Edition)
 Build Date: 2026-02-02
 Timezone: UTC+{UTC_OFFSET_HOURS} (Philippine Standard Time)
         """)
