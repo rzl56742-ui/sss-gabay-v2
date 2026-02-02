@@ -1,16 +1,13 @@
 # ==============================================================================
-# SSS G-ABAY v23.9 - BRANCH OPERATING SYSTEM (PLATINUM EDITION)
-# "Visuals: V23.4 | Backend: V23.5 | Security: V23.7 | Integrity: V23.8 | Polish: V23.9"
+# SSS G-ABAY v23.10 - BRANCH OPERATING SYSTEM (JUMBO DISPLAY EDITION)
+# "Visuals: JUMBO | Logic: Precision Tracking | Display: Show All Active"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
-# PHASE 3 FIXES (NEW in v23.9):
-#   FIX-v23.9-001: Configurable Timezone Constant (UTC_OFFSET_HOURS)
-#   FIX-v23.9-002: Status Legend in Admin Dashboard
-#   FIX-v23.9-003: Kiosk Wait Time Estimate Display
-#   FIX-v23.9-004: XSS Sanitization for Announcements
-#   FIX-v23.9-005: Centralized Constants (Lane Maps, Colors, Limits)
-#   FIX-v23.9-006: Display Blink Fix (Use get_ph_time())
-#   FIX-v23.9-007: Dashboard Time Range Fix (Explicit end_date)
+# PHASE 4 FIXES (NEW in v23.10):
+#   FIX-v23.10-001: "Jumbo Mode" CSS (Viewport Units for massive text)
+#   FIX-v23.10-002: Removed Station Deduplication (Show ALL active staff)
+#   FIX-v23.10-003: Added 'served_by_staff' to tickets for 1:1 linking
+#   FIX-v23.10-004: Display Grid Auto-Scaling for high density (10+ staff)
 # ==============================================================================
 
 import streamlit as st
@@ -42,27 +39,17 @@ except ImportError:
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v23.9", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v23.10", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 # ==============================================================================
-# FIX-v23.9-001: CONFIGURABLE TIMEZONE CONSTANT
-# Purpose: Centralized timezone offset for deployment flexibility
+# CONSTANTS
 # ==============================================================================
 UTC_OFFSET_HOURS = 8  # Philippine Standard Time (PST = UTC+8)
-
-# ==============================================================================
-# FIX-v23.9-005: CENTRALIZED CONSTANTS
-# Purpose: Single source of truth for all magic numbers and mappings
-# ==============================================================================
-
-# --- FILE PATHS ---
 DATA_FILE = "sss_data.json"
 BACKUP_FILE = "sss_data.bak"
 ARCHIVE_FILE = "sss_archive.json"
 LOCK_FILE = "sss_data.json.lock"
 BACKUP_DIR = "backups"
-
-# --- SYSTEM LIMITS ---
 MAX_HOURLY_BACKUPS = 24
 ARCHIVE_RETENTION_DAYS = 365
 SESSION_TIMEOUT_MINUTES = 30
@@ -79,20 +66,10 @@ LANE_CODES = {
     "F": {"name": "Fast Lane", "desc": "Simple Trans", "color": "#2563EB", "icon": "⚡"}
 }
 
-# --- LANE REVERSE MAPPING ---
 LANE_NAME_TO_CODE = {"Teller": "T", "Employer": "A", "eCenter": "E", "Counter": "C", "Fast Lane": "F"}
 LANE_CODE_TO_NAME = {v: k for k, v in LANE_NAME_TO_CODE.items()}
+LANE_TO_CATEGORY = {"T": "PAYMENTS", "A": "EMPLOYERS", "C": "MEMBER SERVICES", "E": "MEMBER SERVICES", "F": "MEMBER SERVICES"}
 
-# --- CATEGORY MAPPING ---
-LANE_TO_CATEGORY = {
-    "T": "PAYMENTS",
-    "A": "EMPLOYERS",
-    "C": "MEMBER SERVICES",
-    "E": "MEMBER SERVICES",
-    "F": "MEMBER SERVICES"
-}
-
-# --- STATUS DEFINITIONS ---
 TICKET_STATUSES = {
     "WAITING": {"label": "Waiting", "color": "#3B82F6", "desc": "In queue, awaiting service"},
     "SERVING": {"label": "Serving", "color": "#F59E0B", "desc": "Currently being served at counter"},
@@ -103,43 +80,33 @@ TICKET_STATUSES = {
     "SYSTEM_CLOSED": {"label": "System Closed", "color": "#6B7280", "desc": "Auto-completed at midnight rollover"}
 }
 
-# --- ROLE DEFINITIONS ---
 STAFF_ROLES = ["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "DIV_HEAD", "ADMIN"]
 ADMIN_ROLES = ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]
-COUNTER_ROLES = ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]  # Roles with full counter access
+COUNTER_ROLES = ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]
 
 # ==============================================================================
-# FIX-v23.9-001: PHILIPPINE TIME STANDARD (Configurable UTC Offset)
+# UTILITIES
 # ==============================================================================
 def get_ph_time():
-    """Get current Philippine Time based on configurable UTC offset."""
     return datetime.datetime.utcnow() + datetime.timedelta(hours=UTC_OFFSET_HOURS)
 
-# ==============================================================================
-# FIX-v23.9-004: XSS SANITIZATION HELPER
-# Purpose: Prevent script injection in user-generated content
-# ==============================================================================
 def sanitize_text(text):
-    """Escape HTML entities to prevent XSS attacks."""
-    if not text:
-        return ""
+    if not text: return ""
     return html.escape(str(text))
 
-# --- USER VALIDATION ---
 USER_ID_PATTERN = re.compile(r'^[a-zA-Z0-9]{3,20}$')
 def validate_user_id(user_id):
     if not user_id: return False, "User ID cannot be empty"
     if not USER_ID_PATTERN.match(user_id): return False, "User ID must be 3-20 alphanumeric characters"
     return True, "Valid"
 
-# --- DEFAULT MASTER LIST ---
+# --- DEFAULT DATA ---
 DEFAULT_TRANSACTIONS = {
     "PAYMENTS": ["Contribution Payment", "Loan Payment", "Miscellaneous Payment", "Status Inquiry (Payments)"],
     "EMPLOYERS": ["Employer Registration", "Employee Update (R1A)", "Contribution/Loan List", "Status Inquiry (Employer)"],
     "MEMBER SERVICES": ["Sickness/Maternity Claim", "Pension Claim", "Death/Funeral Claim", "Salary Loan Application", "Calamity Loan", "Verification/Static Info", "UMID/Card Inquiry", "My.SSS Reset"]
 }
 
-# --- DEFAULT DATA ---
 DEFAULT_DATA = {
     "system_date": get_ph_time().strftime("%Y-%m-%d"),
     "branch_status": "NORMAL", 
@@ -220,7 +187,7 @@ DEFAULT_DATA = {
     }
 }
 
-# --- AUDIT LOG ---
+# --- AUDIT & BACKUP ---
 def log_audit(action, user_name, details=None, target=None):
     local_db = load_db()
     if 'audit_log' not in local_db: local_db['audit_log'] = []
@@ -237,7 +204,6 @@ def log_audit(action, user_name, details=None, target=None):
         local_db['audit_log'] = local_db['audit_log'][-AUDIT_LOG_MAX_ENTRIES:]
     save_db(local_db)
 
-# --- BACKUP ---
 def create_hourly_backup():
     if not os.path.exists(BACKUP_DIR): os.makedirs(BACKUP_DIR)
     timestamp = get_ph_time().strftime("%Y%m%d_%H")
@@ -249,21 +215,15 @@ def create_hourly_backup():
         try: os.remove(backups.pop(0))
         except: pass
 
-# --- FILE LOCK ---
 def acquire_file_lock(timeout=10):
     if FILE_LOCK_AVAILABLE: return FileLock(LOCK_FILE, timeout=timeout)
     return None
 
-# ==============================================================================
-# DATABASE ENGINE WITH MIDNIGHT SWEEPER & PH TIME
-# ==============================================================================
 def load_db():
     current_date = get_ph_time().strftime("%Y-%m-%d")
-    
     lock = acquire_file_lock()
     try:
         if lock: lock.acquire()
-        
         if os.path.exists(DATA_FILE):
             with open(DATA_FILE, "r") as f:
                 try: data = json.load(f)
@@ -280,10 +240,7 @@ def load_db():
         if "transaction_master" not in data: data['transaction_master'] = DEFAULT_TRANSACTIONS
         if "audit_log" not in data: data['audit_log'] = []
 
-        # --- MIDNIGHT SWEEPER PROTOCOL ---
         if data["system_date"] != current_date:
-            
-            # 1. Force Complete Serving Tickets
             serving_tickets = [t for t in data['tickets'] if t['status'] == 'SERVING']
             for ticket in serving_tickets:
                 ticket['status'] = 'SYSTEM_CLOSED'
@@ -292,7 +249,6 @@ def load_db():
                 ticket['auto_close_reason'] = 'MIDNIGHT_ROLLOVER'
                 data['history'].append(ticket)
             
-            # 2. Expire Waiting/Parked Tickets
             pending_tickets = [t for t in data['tickets'] if t['status'] in ['WAITING', 'PARKED']]
             for ticket in pending_tickets:
                 ticket['status'] = 'EXPIRED'
@@ -301,7 +257,8 @@ def load_db():
                 ticket['auto_close_reason'] = 'MIDNIGHT_EXPIRY'
                 data['history'].append(ticket)
             
-            # 3. Archive
+            data['tickets'] = []
+            
             archive_data = []
             if os.path.exists(ARCHIVE_FILE):
                 with open(ARCHIVE_FILE, "r") as af:
@@ -318,15 +275,12 @@ def load_db():
             }
             archive_data.append(archive_entry)
             
-            # 365-Day Retention
             cutoff_date = (get_ph_time() - datetime.timedelta(days=ARCHIVE_RETENTION_DAYS)).strftime("%Y-%m-%d")
             archive_data = [entry for entry in archive_data if entry.get('date', '9999-99-99') >= cutoff_date]
             
             with open(ARCHIVE_FILE, "w") as af: json.dump(archive_data, af, default=str)
                 
-            # 4. Clean Slate
             data["history"] = []
-            data["tickets"] = []
             data["breaks"] = []
             data["reviews"] = []
             data["incident_log"] = []
@@ -334,7 +288,6 @@ def load_db():
             data["system_date"] = current_date
             data["branch_status"] = "NORMAL"
             
-            # 5. Force Logout All Staff
             for uid in data['staff']:
                 data['staff'][uid]['status'] = "ACTIVE"
                 data['staff'][uid]['online'] = False
@@ -361,8 +314,6 @@ db = load_db()
 # --- INIT ---
 if 'surge_mode' not in st.session_state: st.session_state['surge_mode'] = False
 if 'session_id' not in st.session_state: st.session_state['session_id'] = str(uuid.uuid4())[:8]
-
-# --- SESSION TIMEOUT & DATE SYNC ---
 if 'last_activity' not in st.session_state: st.session_state['last_activity'] = get_ph_time()
 
 def update_activity():
@@ -370,23 +321,14 @@ def update_activity():
 
 def check_session_timeout():
     if 'user' not in st.session_state: return False
-    
-    # 1. Idle Timeout
-    last_activity = st.session_state.get('last_activity', get_ph_time())
-    elapsed = (get_ph_time() - last_activity).total_seconds() / 60
-    
-    # 2. Date Rollover Check (Stale Session)
+    elapsed = (get_ph_time() - st.session_state.get('last_activity', get_ph_time())).total_seconds() / 60
     login_date = st.session_state.get('login_date', '')
     current_date = get_ph_time().strftime("%Y-%m-%d")
     
     if elapsed >= SESSION_TIMEOUT_MINUTES:
-        handle_safe_logout(reason="TIMEOUT")
-        return True
-        
+        handle_safe_logout(reason="TIMEOUT"); return True
     if login_date and login_date != current_date:
-        handle_safe_logout(reason="DATE_ROLLOVER")
-        return True
-        
+        handle_safe_logout(reason="DATE_ROLLOVER"); return True
     return False
 
 def handle_safe_logout(reason="MANUAL"):
@@ -396,9 +338,14 @@ def handle_safe_logout(reason="MANUAL"):
     user_key = next((k for k, v in local_db['staff'].items() if v['name'] == user['name']), None)
     
     if user_key:
-        station = local_db['staff'][user_key].get('default_station', '')
-        serving_ticket = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station), None)
+        # Auto-park serving ticket for this specific staff member
+        serving_ticket = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by_staff') == user['name']), None)
         
+        # Fallback for old tickets without 'served_by_staff'
+        if not serving_ticket:
+             station = local_db['staff'][user_key].get('default_station', '')
+             serving_ticket = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station), None)
+
         if serving_ticket:
             serving_ticket['status'] = 'PARKED'
             serving_ticket['park_timestamp'] = get_ph_time().isoformat()
@@ -407,12 +354,14 @@ def handle_safe_logout(reason="MANUAL"):
         
         local_db['staff'][user_key]['online'] = False
         save_db(local_db)
-        log_audit("LOGOUT", user['name'], details=f"Reason: {reason}", target=station)
+        log_audit("LOGOUT", user['name'], details=f"Reason: {reason}")
     
     for key in ['refer_modal', 'my_station', 'user', 'login_date']:
         if key in st.session_state: del st.session_state[key]
 
-# --- CSS ---
+# ==============================================================================
+# FIX-v23.10-001: JUMBO CSS VISUALS (Viewport Units)
+# ==============================================================================
 st.markdown("""
 <script>
 function startTimer(duration, displayId) {
@@ -436,39 +385,43 @@ function startTimer(duration, displayId) {
     .header-text { text-align: center; font-family: sans-serif; }
     .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
     .brand-footer { position: fixed; bottom: 5px; left: 10px; font-family: monospace; font-size: 12px; color: #888; opacity: 0.7; pointer-events: none; z-index: 9999; }
-    .serving-card-small { background: white; border-left: 25px solid #2563EB; padding: 10px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center; display: flex; flex-direction: column; justify-content: center; transition: all 0.3s ease; width: 100%; }
-    .serving-card-break { background: #FEF3C7; border-left: 25px solid #D97706; padding: 10px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); text-align: center; display: flex; flex-direction: column; justify-content: center; transition: all 0.3s ease; width: 100%; }
-    .serving-card-small h2 { margin: 0; font-size: 80px; color: #0038A8; font-weight: 900; line-height: 1.0; }
-    .serving-card-small p { margin: 0; font-size: 24px; color: #111; font-weight: bold; text-transform: uppercase; }
-    .serving-card-small span { font-size: 20px; color: #777; font-weight: normal; margin-top: 5px; }
+    
+    /* JUMBO CARD CSS */
+    .serving-card-jumbo { 
+        background: white; 
+        border-radius: 20px; 
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15); 
+        text-align: center; 
+        display: flex; 
+        flex-direction: column; 
+        justify-content: center; 
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+    }
+    .serving-card-jumbo h2 { margin: 0; font-size: 11vw; font-weight: 900; line-height: 1.0; padding: 10px 0; }
+    .serving-card-jumbo p { margin: 0; font-size: 2vw; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #333; }
+    .serving-card-jumbo span { font-size: 3vw; font-weight: 600; color: #555; display: block; margin-top: 5px; }
+    
+    .serving-card-break { 
+        background: #FEF3C7; 
+        border: 5px solid #D97706; 
+        border-radius: 20px; 
+        height: 100%;
+        display: flex; flex-direction: column; justify-content: center; text-align: center;
+    }
+    .serving-card-break h3 { font-size: 5vw; color: #D97706; margin: 0; }
+    
     .swim-col { background: #f8f9fa; border-radius: 10px; padding: 10px; border-top: 10px solid #ccc; height: 100%; }
     .swim-col h3 { text-align: center; margin-bottom: 10px; font-size: 18px; text-transform: uppercase; color: #333; }
     .queue-item { background: white; border-bottom: 1px solid #ddd; padding: 15px; margin-bottom: 5px; border-radius: 5px; display: flex; justify-content: space-between; }
     .queue-item span { font-size: 24px; font-weight: 900; color: #111; }
+    
+    .park-appt { background: #dbeafe; color: #1e40af; border-left: 5px solid #2563EB; font-weight: bold; padding: 10px; border-radius: 5px; display: flex; justify-content: space-between; margin-bottom: 5px; }
     .gate-btn > button { height: 350px !important; width: 100% !important; font-size: 40px !important; font-weight: 900 !important; border-radius: 30px !important; }
     .menu-card > button { height: 300px !important; width: 100% !important; font-size: 30px !important; font-weight: 800 !important; border-radius: 20px !important; border: 4px solid #ddd !important; white-space: pre-wrap !important;}
     .swim-btn > button { height: 100px !important; width: 100% !important; font-size: 18px !important; font-weight: 700 !important; text-align: left !important; padding-left: 20px !important; }
-    .info-link { text-decoration: none; display: block; padding: 15px; background: #f0f2f6; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #2563EB; color: #333; font-weight: bold; transition: 0.2s; }
-    .info-link:hover { background: #e0e7ff; }
-    .head-red { background-color: #DC2626; color: white; padding: 5px; border-radius: 5px 5px 0 0; font-weight: bold; text-align: center; } 
-    .border-red > button { border-left: 20px solid #DC2626 !important; }
-    .head-orange { background-color: #EA580C; color: white; padding: 5px; border-radius: 5px 5px 0 0; font-weight: bold; text-align: center; } 
-    .border-orange > button { border-left: 20px solid #EA580C !important; }
-    .head-green { background-color: #16A34A; color: white; padding: 5px; border-radius: 5px 5px 0 0; font-weight: bold; text-align: center; } 
-    .border-green > button { border-left: 20px solid #16A34A !important; }
-    .head-blue { background-color: #2563EB; color: white; padding: 5px; border-radius: 5px 5px 0 0; font-weight: bold; text-align: center; } 
-    .border-blue > button { border-left: 20px solid #2563EB !important; }
-    .metric-card { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; border-top: 5px solid #2563EB; }
-    .metric-card h3 { font-size: 36px; margin: 0; color: #1E3A8A; font-weight: 900; }
-    .metric-card p { margin: 0; color: #666; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
-    .timeout-warning { background: #FEF3C7; border: 2px solid #F59E0B; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 10px; }
-    .park-appt { background: #dbeafe; color: #1e40af; border-left: 5px solid #2563EB; font-weight: bold; padding: 10px; border-radius: 5px; display: flex; justify-content: space-between; margin-bottom: 5px; }
-    .park-danger { background: #fee2e2; color: #b91c1c; border-left: 5px solid #ef4444; animation: pulse 2s infinite; padding: 10px; border-radius: 5px; font-weight:bold; display:flex; justify-content:space-between; margin-bottom: 5px; }
-    .wait-estimate { background: #ECFDF5; border: 2px solid #10B981; border-radius: 10px; padding: 15px; text-align: center; margin: 10px 0; }
-    .wait-estimate h3 { margin: 0; color: #059669; font-size: 24px; }
-    .wait-estimate p { margin: 5px 0 0 0; color: #047857; font-size: 14px; }
-    .status-legend { background: #f8fafc; border-radius: 8px; padding: 10px; margin: 10px 0; }
-    .status-item { display: inline-block; margin: 5px 10px; padding: 3px 8px; border-radius: 4px; font-size: 12px; }
+    
     @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     .blink-active { animation: blink 1s infinite; }
 </style>
@@ -480,38 +433,21 @@ function startTimer(duration, displayId) {
 def get_display_name(staff_data):
     return staff_data.get('nickname') if staff_data.get('nickname') else staff_data['name']
 
-# ==============================================================================
-# FIX-v23.9-003: KIOSK WAIT TIME ESTIMATE CALCULATOR
-# Purpose: Show estimated wait time BEFORE ticket generation
-# ==============================================================================
 def calculate_lane_wait_estimate(lane_code):
-    """Calculate estimated wait time for a specific lane before ticket generation."""
     local_db = load_db()
-    
-    # Count waiting tickets in this lane
     waiting_count = len([t for t in local_db['tickets'] if t['lane'] == lane_code and t['status'] == "WAITING"])
-    
-    # Calculate average transaction time from history
     recent = [t for t in local_db['history'] if t['lane'] == lane_code and t.get('end_time') and t.get('start_time')]
-    
     avg_txn_time = DEFAULT_AVG_TXN_MINUTES
     if recent:
-        total_sec = 0
-        valid_count = 0
-        for t in recent[-20:]:  # Last 20 transactions for better accuracy
+        total_sec = 0; valid_count = 0
+        for t in recent[-20:]:
             try:
                 start = datetime.datetime.fromisoformat(t["start_time"])
                 end = datetime.datetime.fromisoformat(t["end_time"])
                 diff = (end - start).total_seconds()
-                if diff > 0 and diff < 7200:  # Exclude outliers (> 2 hours)
-                    total_sec += diff
-                    valid_count += 1
-            except:
-                continue
-        if valid_count > 0:
-            avg_txn_time = (total_sec / valid_count) / 60
-    
-    # Count active counters serving this lane
+                if diff > 0 and diff < 7200: total_sec += diff; valid_count += 1
+            except: continue
+        if valid_count > 0: avg_txn_time = (total_sec / valid_count) / 60
     active_counters = 0
     for staff in local_db['staff'].values():
         if staff.get('online') and staff.get('status') == 'ACTIVE':
@@ -520,15 +456,9 @@ def calculate_lane_wait_estimate(lane_code):
             if counter_obj:
                 station_type = counter_obj['type']
                 station_lanes = local_db['config']['assignments'].get(station_type, [])
-                if lane_code in station_lanes:
-                    active_counters += 1
-    
-    # Calculate wait time
-    if active_counters > 0:
-        wait_time = round((waiting_count * avg_txn_time) / active_counters)
-    else:
-        wait_time = round(waiting_count * avg_txn_time)
-    
+                if lane_code in station_lanes: active_counters += 1
+    if active_counters > 0: wait_time = round((waiting_count * avg_txn_time) / active_counters)
+    else: wait_time = round(waiting_count * avg_txn_time)
     return waiting_count, wait_time, active_counters
 
 def generate_ticket_callback(service, lane_code, is_priority):
@@ -537,12 +467,10 @@ def generate_ticket_callback(service, lane_code, is_priority):
     branch_code = local_db['config'].get('branch_code', 'H07')
     simple_num = f"{global_count:03d}"
     full_id = f"{branch_code}-{lane_code}-{simple_num}" 
-    
     new_t = {
         "id": str(uuid.uuid4()), "number": simple_num, "full_id": full_id, "lane": lane_code, "service": service, 
         "type": "PRIORITY" if is_priority else "REGULAR", "status": "WAITING", 
-        "timestamp": get_ph_time().isoformat(),
-        "start_time": None, "end_time": None, "park_timestamp": None,
+        "timestamp": get_ph_time().isoformat(), "start_time": None, "end_time": None, "park_timestamp": None,
         "history": [], "served_by": None, "ref_from": None, "referral_reason": None,
         "appt_name": None, "appt_time": None, "actual_transactions": [] 
     }
@@ -558,12 +486,10 @@ def generate_ticket_manual(service, lane_code, is_priority, is_appt=False, appt_
     simple_num = f"{global_count:03d}"
     display_num = f"APT-{simple_num}" if is_appt else simple_num
     full_id = f"{branch_code}-{lane_code}-{display_num}"
-    
     new_t = {
         "id": str(uuid.uuid4()), "number": display_num, "full_id": full_id, "lane": lane_code, "service": service, 
         "type": "APPOINTMENT" if is_appt else ("PRIORITY" if is_priority else "REGULAR"),
-        "status": "WAITING", "timestamp": get_ph_time().isoformat(),
-        "start_time": None, "end_time": None, "park_timestamp": None,
+        "status": "WAITING", "timestamp": get_ph_time().isoformat(), "start_time": None, "end_time": None, "park_timestamp": None,
         "history": [], "served_by": None, "ref_from": None, "referral_reason": None,
         "appt_name": appt_name, "appt_time": str(appt_time) if appt_time else None,
         "assigned_to": assign_counter, "actual_transactions": []
@@ -589,31 +515,25 @@ def get_next_ticket(queue, surge_mode, my_station):
     if not queue: return None
     queue.sort(key=get_queue_sort_key)
     now = get_ph_time().time()
-    
     for t in queue:
         if t.get('assigned_to') == my_station:
             if t['type'] == 'APPOINTMENT' and t['appt_time']:
                 appt_t = datetime.datetime.strptime(t['appt_time'], "%H:%M:%S").time()
                 if now >= appt_t: return t
             else: return t
-            
     for t in queue:
         if t['type'] == 'APPOINTMENT' and t['appt_time'] and not t.get('assigned_to'):
             appt_t = datetime.datetime.strptime(t['appt_time'], "%H:%M:%S").time()
             if now >= appt_t: return t
-    
     if surge_mode:
         for t in queue:
             if t['type'] == 'PRIORITY' and not t.get('assigned_to'): return t
-            
     local_db = load_db()
     last_2 = local_db['history'][-2:]
     p_count = sum(1 for t in last_2 if t['type'] == 'PRIORITY')
-    
-    if p_count >= 2:
+    if p_count == 2:
         reg = [t for t in queue if t['type'] == 'REGULAR' and not t.get('assigned_to')]
         if reg: return reg[0]
-    
     for t in queue:
         if not t.get('assigned_to'): return t
     return None
@@ -639,10 +559,8 @@ def calculate_specific_wait_time(ticket_id, lane_code):
     if recent:
         total_sec = sum([datetime.datetime.fromisoformat(t["end_time"]).timestamp() - datetime.datetime.fromisoformat(t["start_time"]).timestamp() for t in recent[-10:]])
         avg_txn_time = (total_sec / len(recent[-10:])) / 60
-    
     waiting_in_lane = [t for t in local_db['tickets'] if t['lane'] == lane_code and t['status'] == "WAITING"]
     waiting_in_lane.sort(key=get_queue_sort_key)
-    
     position = 0
     for i, t in enumerate(waiting_in_lane):
         if t['id'] == ticket_id: position = i; break
@@ -662,15 +580,13 @@ def get_staff_efficiency(staff_name):
     local_db = load_db()
     my_txns = [t for t in local_db['history'] if t.get("served_by") == staff_name]
     if my_txns:
-        total_handle_time = 0
-        valid_count = 0
+        total_handle_time = 0; valid_count = 0
         for t in my_txns:
             if t.get('start_time') and t.get('end_time'):
                 try:
                     start = datetime.datetime.fromisoformat(t['start_time'])
                     end = datetime.datetime.fromisoformat(t['end_time'])
-                    total_handle_time += (end - start).total_seconds()
-                    valid_count += 1
+                    total_handle_time += (end - start).total_seconds(); valid_count += 1
                 except: pass
         if valid_count > 0:
             avg_mins = round(total_handle_time / valid_count / 60)
@@ -691,11 +607,7 @@ def clear_ticket_modal_states():
     for key in modal_keys:
         if key in st.session_state: del st.session_state[key]
 
-# ==============================================================================
-# FIX-v23.9-005: GET LANE COLOR HELPER (Using Centralized Constants)
-# ==============================================================================
 def get_lane_color(lane_code):
-    """Get color for a lane code from centralized constants."""
     return LANE_CODES.get(lane_code, {}).get('color', '#2563EB')
 
 # ==========================================
@@ -719,12 +631,9 @@ def render_kiosk():
                 st.session_state['is_prio'] = True; st.session_state['kiosk_step'] = 'menu'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
             st.warning("⚠ NOTICE: Non-priority users will be transferred to end of line.")
-    
     elif st.session_state['kiosk_step'] == 'menu':
         st.markdown("### Select Service Category")
         m1, m2, m3 = st.columns(3, gap="medium")
-        
-        # FIX-v23.9-003: Show wait estimates on main menu
         with m1:
             waiting, wait_min, counters = calculate_lane_wait_estimate("T")
             st.markdown('<div class="menu-card">', unsafe_allow_html=True)
@@ -732,7 +641,6 @@ def render_kiosk():
                 generate_ticket_callback("Payment", "T", st.session_state['is_prio']); st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
             st.markdown(f"<div class='wait-estimate'><h3>~{wait_min} min</h3><p>{waiting} in queue • {counters} counter(s)</p></div>", unsafe_allow_html=True)
-            
         with m2:
             waiting, wait_min, counters = calculate_lane_wait_estimate("A")
             st.markdown('<div class="menu-card">', unsafe_allow_html=True)
@@ -740,25 +648,20 @@ def render_kiosk():
                 generate_ticket_callback("Account Management", "A", st.session_state['is_prio']); st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
             st.markdown(f"<div class='wait-estimate'><h3>~{wait_min} min</h3><p>{waiting} in queue • {counters} counter(s)</p></div>", unsafe_allow_html=True)
-            
         with m3:
-            # For Member Services, show combined estimate for C, E, F lanes
             waiting_c, wait_c, counters_c = calculate_lane_wait_estimate("C")
             waiting_e, wait_e, counters_e = calculate_lane_wait_estimate("E")
             waiting_f, wait_f, counters_f = calculate_lane_wait_estimate("F")
             total_waiting = waiting_c + waiting_e + waiting_f
             total_counters = counters_c + counters_e + counters_f
             avg_wait = round((wait_c + wait_e + wait_f) / 3) if total_counters > 0 else round((total_waiting * DEFAULT_AVG_TXN_MINUTES))
-            
             st.markdown('<div class="menu-card">', unsafe_allow_html=True)
             if st.button("👤 MEMBER SERVICES\n(Claims, Requests, Updates)"):
                 st.session_state['kiosk_step'] = 'mss'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
             st.markdown(f"<div class='wait-estimate'><h3>~{avg_wait} min</h3><p>{total_waiting} in queue • {total_counters} counter(s)</p></div>", unsafe_allow_html=True)
-            
         st.markdown("<br><br>", unsafe_allow_html=True)
         if st.button("⬅ GO BACK", type="secondary", use_container_width=True): del st.session_state['kiosk_step']; st.rerun()
-    
     elif st.session_state['kiosk_step'] == 'mss':
         st.markdown("### 👤 Member Services")
         cols = st.columns(4, gap="small")
@@ -781,7 +684,6 @@ def render_kiosk():
                 st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("⬅ GO BACK", type="secondary", use_container_width=True): st.session_state['kiosk_step'] = 'menu'; st.rerun()
-    
     elif st.session_state['kiosk_step'] == 'gate_check':
         target = st.session_state.get('gate_target', {})
         label = target.get('label', 'Transaction')
@@ -797,16 +699,12 @@ def render_kiosk():
             if st.button("💻 NO, none of these apply to me", type="primary", use_container_width=True):
                 generate_ticket_callback(f"{label} (Online)", "E", st.session_state['is_prio']); st.rerun()
         if st.button("⬅ CANCEL"): st.session_state['kiosk_step'] = 'mss'; st.rerun()
-    
     elif st.session_state['kiosk_step'] == 'ticket':
         t = st.session_state['last_ticket']
         bg = "#FFC107" if t['type'] == 'PRIORITY' else "#2563EB"
         col = "#0038A8" if t['type'] == 'PRIORITY' else "white"
         print_dt = get_ph_time().strftime("%B %d, %Y - %I:%M %p")
-        
-        # FIX-v23.9-003: Show wait estimate on ticket
         waiting, wait_min, counters = calculate_lane_wait_estimate(t['lane'])
-        
         c_left, c_right = st.columns([2, 1])
         with c_left:
             st.markdown(f"""<div class="ticket-card no-print" style='background:{bg}; color:{col}; padding:40px; border-radius:20px; text-align:center; margin:20px 0;'><h1>{t['number']}</h1><h3>{t['service']}</h3><p style="font-size:18px;">{print_dt}</p></div>""", unsafe_allow_html=True)
@@ -824,8 +722,7 @@ def render_kiosk():
             if st.button("✅ DONE", type="primary", use_container_width=True): del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
         with c3:
             if st.button("🖨️ PRINT", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
-    
-    st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.9</div>", unsafe_allow_html=True)
+    st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.10</div>", unsafe_allow_html=True)
 
 def render_display():
     check_session_timeout()
@@ -835,7 +732,6 @@ def render_display():
     last_audio_id = st.session_state.get('last_audio_id', "")
     if current_audio.get('id') != last_audio_id and current_audio.get('text'):
         st.session_state['last_audio_id'] = current_audio['id']
-        # FIX-v23.9-004: Sanitize audio text
         text_safe = sanitize_text(current_audio['text']).replace("'", "")
         audio_script = f"""<script>var msg = new SpeechSynthesisUtterance(); msg.text = "{text_safe}"; msg.rate = 1.0; msg.pitch = 1.1; var voices = window.speechSynthesis.getVoices(); var fVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Zira')); if(fVoice) msg.voice = fVoice; window.speechSynthesis.speak(msg);</script>"""
     placeholder = st.empty()
@@ -847,34 +743,40 @@ def render_display():
             text = "⚠ SYSTEM OFFLINE: MANUAL PROCESSING" if status == "OFFLINE" else "⚠ INTERMITTENT CONNECTION"
             st.markdown(f"<h2 style='text-align:center; color:{color}; animation: blink 1.5s infinite;'>{text}</h2>", unsafe_allow_html=True)
         st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
-        raw_staff = [s for s in local_db['staff'].values() if s.get('online') is True and s['role'] != "ADMIN" and s['name'] != "System Admin"]
-        unique_staff_map = {} 
-        for s in raw_staff:
-            st_name = s.get('default_station', 'Unassigned')
-            if st_name not in unique_staff_map: unique_staff_map[st_name] = s
-            else:
-                curr = unique_staff_map[st_name]
-                is_curr_serving = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == st_name), None)
-                is_new_serving = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == st_name and t.get('served_by') == s.get('default_station')), None) 
-                if not is_curr_serving and is_new_serving: unique_staff_map[st_name] = s
-        unique_staff = list(unique_staff_map.values())
-        if not unique_staff: st.warning("Waiting for staff to log in...")
+        
+        # FIX-v23.10-002: REMOVED DEDUPLICATION LOGIC - SHOW ALL ACTIVE STAFF
+        active_staff_list = [s for s in local_db['staff'].values() if s.get('online') is True and s['role'] != "ADMIN" and s['name'] != "System Admin"]
+        
+        if not active_staff_list: st.warning("Waiting for staff to log in...")
         else:
-            count = len(unique_staff); num_rows = math.ceil(count / 6); card_height = 65 // num_rows; font_scale = 1.0 if num_rows == 1 else (0.8 if num_rows == 2 else 0.7)
-            for i in range(0, count, 6):
-                batch = unique_staff[i:i+6]; cols = st.columns(len(batch))
+            # FIX-v23.10-004: AUTO-GRID SIZING
+            count = len(active_staff_list)
+            # Dynamic grid logic: 1-4 users (2 cols), 5-9 users (3 cols), 10+ users (4 cols)
+            cols_per_row = 4 if count >= 10 else (3 if count >= 5 else 2)
+            num_rows = math.ceil(count / cols_per_row)
+            # Dynamic height: Less rows = Taller cards
+            card_height = 65 // num_rows
+            
+            for i in range(0, count, cols_per_row):
+                batch = active_staff_list[i:i+cols_per_row]
+                cols = st.columns(len(batch))
                 for idx, staff in enumerate(batch):
                     with cols[idx]:
                         nickname = get_display_name(staff); station_name = staff.get('default_station', 'Unassigned'); style_str = f"height: {card_height}vh;"
-                        if staff.get('status') == "ON_BREAK": st.markdown(f"""<div class="serving-card-break" style="{style_str}"><p style="font-size: {35*font_scale}px;">{sanitize_text(station_name)}</p><h3 style="margin:0; font-size:{50*font_scale}px; color:#92400E;">ON BREAK</h3><span style="font-size: {24*font_scale}px;">{sanitize_text(nickname)}</span></div>""", unsafe_allow_html=True)
+                        if staff.get('status') == "ON_BREAK": st.markdown(f"""<div class="serving-card-break" style="{style_str}"><p style="font-size: 2vw;">{sanitize_text(station_name)}</p><h3 style="margin:0; font-size:4vw; color:#D97706;">ON BREAK</h3><span style="font-size: 2vw;">{sanitize_text(nickname)}</span></div>""", unsafe_allow_html=True)
                         elif staff.get('status') == "ACTIVE":
-                            active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station_name), None)
+                            # FIX-v23.10-003: MATCH TICKET BY STAFF ID FIRST
+                            active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by_staff') == staff['name']), None)
+                            # Fallback for old tickets
+                            if not active_t:
+                                active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by') == station_name and not t.get('served_by_staff')), None)
+                            
                             if active_t:
-                                # FIX-v23.9-006: Use get_ph_time() for blink calculation
                                 is_blinking = "blink-active" if active_t.get('start_time') and (get_ph_time() - datetime.datetime.fromisoformat(active_t['start_time'])).total_seconds() < 20 else ""
                                 b_color = get_lane_color(active_t['lane'])
-                                st.markdown(f"""<div class="serving-card-small" style="border-left: 25px solid {b_color}; {style_str}"><p style="font-size: {35*font_scale}px;">{sanitize_text(station_name)}</p><h2 style="color:{b_color}; font-size: {110*font_scale}px;" class="{is_blinking}">{sanitize_text(active_t['number'])}</h2><span style="font-size: {24*font_scale}px;">{sanitize_text(nickname)}</span></div>""", unsafe_allow_html=True)
-                            else: st.markdown(f"""<div class="serving-card-small" style="border-left: 25px solid #ccc; {style_str}"><p style="font-size: {35*font_scale}px;">{sanitize_text(station_name)}</p><h2 style="color:#22c55e; font-size: {70*font_scale}px;">READY</h2><span style="font-size: {24*font_scale}px;">{sanitize_text(nickname)}</span></div>""", unsafe_allow_html=True)
+                                # FIX-v23.10-001: JUMBO CSS (11vw for Number, 2vw for Station, 3vw for Name)
+                                st.markdown(f"""<div class="serving-card-jumbo" style="border-left: 20px solid {b_color}; {style_str}"><p>{sanitize_text(station_name)}</p><h2 style="color:{b_color};" class="{is_blinking}">{sanitize_text(active_t['number'])}</h2><span>{sanitize_text(nickname)}</span></div>""", unsafe_allow_html=True)
+                            else: st.markdown(f"""<div class="serving-card-jumbo" style="border-left: 20px solid #ccc; {style_str}"><p>{sanitize_text(station_name)}</p><h2 style="color:#22c55e; font-size: 6vw;">READY</h2><span>{sanitize_text(nickname)}</span></div>""", unsafe_allow_html=True)
         st.markdown("---")
         c_queue, c_park = st.columns([3, 1])
         with c_queue:
@@ -904,15 +806,13 @@ def render_display():
                     disp_txt = p['appt_name'] if p.get('appt_name') else p['number']
                     css_class = "park-appt" if p.get('appt_name') else "park-danger"
                     st.markdown(f"""<div class="{css_class}"><span>{sanitize_text(disp_txt)}</span><span>{int(mins):02d}:{int(secs):02d}</span></div>""", unsafe_allow_html=True)
-        
-        # FIX-v23.9-004: Sanitize announcement marquee text
         txt = " | ".join([sanitize_text(a) for a in local_db['announcements']])
         status = local_db.get('branch_status', 'NORMAL')
         bg_color = "#DC2626" if status == "OFFLINE" else ("#F97316" if status == "SLOW" else "#FFD700")
         text_color = "white" if status in ["OFFLINE", "SLOW"] else "black"
         if status != "NORMAL": txt = f"⚠ NOTICE: We are currently experiencing {status} connection. Please bear with us. {txt}"
         st.markdown(f"<div style='background: {bg_color}; color: {text_color}; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%; font-size:20px;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
-        st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.9</div>", unsafe_allow_html=True)
+        st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.10</div>", unsafe_allow_html=True)
     time.sleep(3); st.rerun()
 
 def render_counter(user):
@@ -1058,8 +958,15 @@ def render_counter(user):
                 if nxt:
                     db_ticket = next((x for x in local_db['tickets'] if x['id'] == nxt['id']), None)
                     if db_ticket:
-                        db_ticket["status"] = "SERVING"; db_ticket["served_by"] = st.session_state['my_station']; db_ticket["start_time"] = get_ph_time().isoformat()
-                        trigger_audio(db_ticket['number'], st.session_state['my_station']); save_db(local_db); log_audit("TICKET_CALL", user['name'], target=db_ticket['number']); st.rerun()
+                        # FIX-v23.10-003: SAVE STAFF ID FOR 1:1 LINKING
+                        db_ticket["status"] = "SERVING"
+                        db_ticket["served_by"] = st.session_state['my_station']
+                        db_ticket["served_by_staff"] = user['name'] # NEW: Precise tracking
+                        db_ticket["start_time"] = get_ph_time().isoformat()
+                        trigger_audio(db_ticket['number'], st.session_state['my_station'])
+                        save_db(local_db)
+                        log_audit("TICKET_CALL", user['name'], target=db_ticket['number'])
+                        st.rerun()
                 else: st.warning(f"No tickets for {station_type}.")
     with c2:
         count, avg_time = get_staff_efficiency(user['name'])
@@ -1070,7 +977,9 @@ def render_counter(user):
         for p in parked:
             if st.button(f"🔊 {p['number']}", key=p['id']):
                 update_activity()
-                p["status"] = "SERVING"; p["served_by"] = st.session_state['my_station']; p["start_time"] = get_ph_time().isoformat(); trigger_audio(p['number'], st.session_state['my_station']); save_db(local_db); log_audit("TICKET_RECALL_PARKED", user['name'], target=p['number']); st.rerun()
+                p["status"] = "SERVING"; p["served_by"] = st.session_state['my_station']; 
+                p["served_by_staff"] = user['name'] # NEW: Precise tracking
+                p["start_time"] = get_ph_time().isoformat(); trigger_audio(p['number'], st.session_state['my_station']); save_db(local_db); log_audit("TICKET_RECALL_PARKED", user['name'], target=p['number']); st.rerun()
 
 def render_admin_panel(user):
     update_activity()
@@ -1087,10 +996,6 @@ def render_admin_panel(user):
     
     if active == "Dashboard":
         st.subheader("📊 G-ABAY Precision Analytics")
-        
-        # ==============================================================================
-        # FIX-v23.9-002: STATUS LEGEND
-        # ==============================================================================
         with st.expander("📖 Status Legend", expanded=False):
             st.markdown("<div class='status-legend'>", unsafe_allow_html=True)
             for status_code, status_info in TICKET_STATUSES.items():
@@ -1110,55 +1015,20 @@ def render_admin_panel(user):
         
         today = get_ph_time().date()
         filtered_txns = []
+        start_date, end_date = today, today
         
-        # ==============================================================================
-        # FIX-v23.9-007: DASHBOARD TIME RANGE FIX (Explicit end_date)
-        # ==============================================================================
-        if time_range == "Today": 
-            filtered_txns = data_source
+        if time_range == "Today": filtered_txns = data_source
         else:
-            # Initialize date range with explicit values
-            start_date = today
-            end_date = today
-            
-            if time_range == "Yesterday": 
-                start_date = today - datetime.timedelta(days=1)
-                end_date = start_date  # Single day
-                
-            elif time_range == "This Week": 
-                # Monday = start of week (ISO standard)
-                start_date = today - datetime.timedelta(days=today.weekday())
-                end_date = today  # EXPLICITLY set
-                
-            elif time_range == "This Month": 
-                start_date = today.replace(day=1)
-                end_date = today  # EXPLICITLY set
-                
-            elif time_range == "Quarterly": 
-                curr_q = (today.month - 1) // 3 + 1
-                start_date = datetime.date(today.year, 3 * curr_q - 2, 1)
-                end_date = today  # EXPLICITLY set
-                
-            elif time_range == "Semestral": 
-                start_date = datetime.date(today.year, 1, 1) if today.month <= 6 else datetime.date(today.year, 7, 1)
-                end_date = today  # EXPLICITLY set
-                
-            elif time_range == "Annual": 
-                start_date = datetime.date(today.year, 1, 1)
-                end_date = today  # EXPLICITLY set
-            
-            # Pull from archives (previous days within range)
+            if time_range == "Yesterday": start_date = today - datetime.timedelta(days=1); end_date = start_date
+            elif time_range == "This Week": start_date = today - datetime.timedelta(days=today.weekday()); end_date = today
+            elif time_range == "This Month": start_date = today.replace(day=1); end_date = today
+            elif time_range == "Quarterly": curr_q = (today.month - 1) // 3 + 1; start_date = datetime.date(today.year, 3 * curr_q - 2, 1); end_date = today
             for entry in archive_data:
                 try:
                     entry_dt = datetime.datetime.strptime(entry['date'], "%Y-%m-%d").date()
-                    if start_date <= entry_dt <= end_date:
-                        filtered_txns.extend(entry.get('history', []))
-                except (ValueError, KeyError):
-                    continue  # Skip malformed archive entries
-            
-            # Add today's live data (except for Yesterday which is archive-only)
-            if time_range != "Yesterday": 
-                filtered_txns.extend(data_source)
+                    if start_date <= entry_dt <= end_date: filtered_txns.extend(entry.get('history', []))
+                except: continue
+            if time_range != "Yesterday": filtered_txns.extend(data_source)
 
         if lane_filter != "All Lanes":
             target_code = LANE_NAME_TO_CODE.get(lane_filter)
@@ -1193,7 +1063,6 @@ def render_admin_panel(user):
             csv_export = df[export_cols].to_csv(index=False).encode('utf-8')
             st.download_button("📥 Export Raw Data (CSV)", csv_export, "raw_data.csv", "text/csv")
             
-            # Exclude expired/system-closed tickets from averages
             df_valid = df[df['Total Handle Time (Mins)'] > 0]
             avg_wait = round(df_valid['Total Waiting Time (Mins)'].mean()) if not df_valid.empty else 0
             avg_handle = round(df_valid['Total Handle Time (Mins)'].mean()) if not df_valid.empty else 0
@@ -1386,19 +1255,14 @@ def render_admin_panel(user):
                 for b in backups[:10]: st.text(f"• {os.path.basename(b)} ({os.path.getsize(b)/1024:.1f} KB)")
             else: st.info("No hourly backups yet.")
     
-    # ==============================================================================
-    # FIX-v23.9-002: SYSTEM INFO TAB (New Admin Module)
-    # ==============================================================================
     elif active == "System Info":
         st.subheader("⚙️ System Configuration")
-        
         st.write("**Version Information**")
         st.code(f"""
-SSS G-ABAY Version: v23.9 (Platinum Edition)
+SSS G-ABAY Version: v23.10 (Jumbo Display Edition)
 Build Date: 2026-02-02
 Timezone: UTC+{UTC_OFFSET_HOURS} (Philippine Standard Time)
         """)
-        
         st.write("**System Constants**")
         c1, c2 = st.columns(2)
         with c1:
@@ -1409,11 +1273,9 @@ Timezone: UTC+{UTC_OFFSET_HOURS} (Philippine Standard Time)
             st.metric("Max Hourly Backups", MAX_HOURLY_BACKUPS)
             st.metric("Audit Log Max", f"{AUDIT_LOG_MAX_ENTRIES:,}")
             st.metric("Default Avg Txn Time", f"{DEFAULT_AVG_TXN_MINUTES} min")
-        
         st.write("**Status Legend**")
         for status_code, status_info in TICKET_STATUSES.items():
             st.markdown(f"- **{status_code}** ({status_info['label']}): {status_info['desc']}")
-        
         st.write("**Lane Configuration**")
         for lane_code, lane_info in LANE_CODES.items():
             st.markdown(f"- **{lane_code}** - {lane_info['icon']} {lane_info['name']}: {lane_info['desc']} (Color: {lane_info['color']})")
@@ -1506,7 +1368,3 @@ else:
                         review_entry = {"ticket": verify_t, "rating": (rate if rate else 0) + 1, "personnel": pers, "comment": comm, "timestamp": get_ph_time().isoformat()}
                         local_db['reviews'].append(review_entry); save_db(local_db); st.success("Thank you!"); time.sleep(2); st.rerun()
             else: st.error("Ticket not found.")
-
-# ==============================================================================
-# END OF SSS G-ABAY v23.9 - PHASE 3 POLISH & UX
-# ==============================================================================
