@@ -396,10 +396,10 @@ function startTimer(duration, displayId) {
         padding-bottom: 5px;
     }
     
-    /* TICKET NUMBER: BIGGEST (13vw) & BOLDEST (900) */
+    /* TICKET NUMBER: BIGGEST (5vw) & BOLDEST (900) */
     .serving-card-jumbo h2 { 
         margin: 0; 
-        font-size: 13vw; 
+        font-size: 5vw; 
         font-weight: 900; 
         line-height: 1.0; 
         padding: 5px 0; 
