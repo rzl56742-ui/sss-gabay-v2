@@ -1,13 +1,7 @@
 # ==============================================================================
-# SSS G-ABAY v23.10 - BRANCH OPERATING SYSTEM (JUMBO DISPLAY EDITION)
-# "Visuals: JUMBO | Logic: Precision Tracking | Display: Show All Active"
+# SSS G-ABAY v23.10 - BRANCH OPERATING SYSTEM (FINAL JUMBO EDITION)
+# "Visuals: Hi-Contrast Hierarchy | Logic: Precision Tracking | Display: Show All"
 # COPYRIGHT: © 2026 rpt/sssgingoog
-# ==============================================================================
-# PHASE 4 FIXES (NEW in v23.10):
-#   FIX-v23.10-001: "Jumbo Mode" CSS (Viewport Units for massive text)
-#   FIX-v23.10-002: Removed Station Deduplication (Show ALL active staff)
-#   FIX-v23.10-003: Added 'served_by_staff' to tickets for 1:1 linking
-#   FIX-v23.10-004: Display Grid Auto-Scaling for high density (10+ staff)
 # ==============================================================================
 
 import streamlit as st
@@ -360,7 +354,7 @@ def handle_safe_logout(reason="MANUAL"):
         if key in st.session_state: del st.session_state[key]
 
 # ==============================================================================
-# FIX-v23.10-001: JUMBO CSS VISUALS (Viewport Units)
+# FIX-v23.10-001: JUMBO CSS VISUALS (HIERARCHY TUNED)
 # ==============================================================================
 st.markdown("""
 <script>
@@ -386,10 +380,10 @@ function startTimer(duration, displayId) {
     .header-branch { font-size: 30px; font-weight: 800; color: #333; margin-top: 5px; text-transform: uppercase; }
     .brand-footer { position: fixed; bottom: 5px; left: 10px; font-family: monospace; font-size: 12px; color: #888; opacity: 0.7; pointer-events: none; z-index: 9999; }
     
-    /* JUMBO CARD CSS */
+    /* JUMBO CARD CSS - REVISED HIERARCHY */
     .serving-card-jumbo { 
         background: white; 
-        border-radius: 20px; 
+        border-radius: 15px; 
         box-shadow: 0 10px 25px rgba(0,0,0,0.15); 
         text-align: center; 
         display: flex; 
@@ -398,10 +392,37 @@ function startTimer(duration, displayId) {
         height: 100%;
         width: 100%;
         overflow: hidden;
+        padding-top: 5px;
+        padding-bottom: 5px;
     }
-    .serving-card-jumbo h2 { margin: 0; font-size: 11vw; font-weight: 900; line-height: 1.0; padding: 10px 0; }
-    .serving-card-jumbo p { margin: 0; font-size: 2vw; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #333; }
-    .serving-card-jumbo span { font-size: 3vw; font-weight: 600; color: #555; display: block; margin-top: 5px; }
+    
+    /* TICKET NUMBER: BIGGEST (13vw) & BOLDEST (900) */
+    .serving-card-jumbo h2 { 
+        margin: 0; 
+        font-size: 13vw; 
+        font-weight: 900; 
+        line-height: 1.0; 
+        padding: 5px 0; 
+    }
+    
+    /* COUNTER NAME: MEDIUM (2.5vw) & BOLD (800) */
+    .serving-card-jumbo p { 
+        margin: 0; 
+        font-size: 2.5vw; 
+        font-weight: 800; 
+        text-transform: uppercase; 
+        letter-spacing: 1px; 
+        color: #222; 
+    }
+    
+    /* NICKNAME: SMALLEST (1.8vw) & NORMAL (400) */
+    .serving-card-jumbo span { 
+        font-size: 1.8vw; 
+        font-weight: 400; 
+        color: #555; 
+        display: block; 
+        margin-top: 0px; 
+    }
     
     .serving-card-break { 
         background: #FEF3C7; 
@@ -763,7 +784,7 @@ def render_display():
                 for idx, staff in enumerate(batch):
                     with cols[idx]:
                         nickname = get_display_name(staff); station_name = staff.get('default_station', 'Unassigned'); style_str = f"height: {card_height}vh;"
-                        if staff.get('status') == "ON_BREAK": st.markdown(f"""<div class="serving-card-break" style="{style_str}"><p style="font-size: 2vw;">{sanitize_text(station_name)}</p><h3 style="margin:0; font-size:4vw; color:#D97706;">ON BREAK</h3><span style="font-size: 2vw;">{sanitize_text(nickname)}</span></div>""", unsafe_allow_html=True)
+                        if staff.get('status') == "ON_BREAK": st.markdown(f"""<div class="serving-card-break" style="{style_str}"><p style="font-size: 2.5vw;">{sanitize_text(station_name)}</p><h3 style="margin:0; font-size:4vw; color:#D97706;">ON BREAK</h3><span style="font-size: 1.8vw;">{sanitize_text(nickname)}</span></div>""", unsafe_allow_html=True)
                         elif staff.get('status') == "ACTIVE":
                             # FIX-v23.10-003: MATCH TICKET BY STAFF ID FIRST
                             active_t = next((t for t in local_db['tickets'] if t['status'] == 'SERVING' and t.get('served_by_staff') == staff['name']), None)
@@ -774,7 +795,7 @@ def render_display():
                             if active_t:
                                 is_blinking = "blink-active" if active_t.get('start_time') and (get_ph_time() - datetime.datetime.fromisoformat(active_t['start_time'])).total_seconds() < 20 else ""
                                 b_color = get_lane_color(active_t['lane'])
-                                # FIX-v23.10-001: JUMBO CSS (11vw for Number, 2vw for Station, 3vw for Name)
+                                # FIX-v23.10-001: JUMBO CSS (13vw for Number, 2.5vw for Station, 1.8vw for Name)
                                 st.markdown(f"""<div class="serving-card-jumbo" style="border-left: 20px solid {b_color}; {style_str}"><p>{sanitize_text(station_name)}</p><h2 style="color:{b_color};" class="{is_blinking}">{sanitize_text(active_t['number'])}</h2><span>{sanitize_text(nickname)}</span></div>""", unsafe_allow_html=True)
                             else: st.markdown(f"""<div class="serving-card-jumbo" style="border-left: 20px solid #ccc; {style_str}"><p>{sanitize_text(station_name)}</p><h2 style="color:#22c55e; font-size: 6vw;">READY</h2><span>{sanitize_text(nickname)}</span></div>""", unsafe_allow_html=True)
         st.markdown("---")
