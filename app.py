@@ -1,10 +1,14 @@
 # ==============================================================================
-# SSS G-ABAY v23.13 - BRANCH OPERATING SYSTEM (DATA FORTRESS EDITION)
+# SSS G-ABAY v23.14 - BRANCH OPERATING SYSTEM (PLATINUM EDITION)
 # "Visuals: V23.4 | Backend: V23.5 | Security: V23.7 | Integrity: V23.8 | 
-#  Polish: V23.9 | Precision: V23.12 | Data Protection: V23.13"
+#  Polish: V23.9 | Precision: V23.12 | Data Protection: V23.13 | Platinum: V23.14"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
-# v23.13 SURGICAL FIXES (Safe-Fail Data Protection):
+# v23.14 PLATINUM SURGICAL FIXES:
+#   FIX-v23.14-001: GATE Lane in LANE_CODES (enables routing visibility)
+#   FIX-v23.14-002: Add Menu Item Form (Kiosk Menu admin can add items)
+# ==============================================================================
+# INHERITED FROM v23.13 (Safe-Fail Data Protection):
 #   FIX-v23.13-001: Absolute Path Resolution (prevents working directory issues)
 #   FIX-v23.13-002: Fail-Safe Loading with Backup Cascade (no silent reset)
 #   FIX-v23.13-003: Rollover Persistence (force save after midnight sweeper)
@@ -51,7 +55,7 @@ except ImportError:
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v23.13", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v23.14", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 # ==============================================================================
 # FIX-v23.13-001: ABSOLUTE PATH RESOLUTION
@@ -95,12 +99,14 @@ DEFAULT_AVG_TXN_MINUTES = 15
 DISPLAY_GRID_COLUMNS = 6  # Fixed 6-column grid
 
 # --- LANE CONFIGURATION ---
+# FIX-v23.14-001: Added GATE lane for pre-qualification routing
 LANE_CODES = {
     "T": {"name": "Teller", "desc": "Payments", "color": "#DC2626", "icon": "💳"},
     "A": {"name": "Employer", "desc": "Account Mgmt", "color": "#16A34A", "icon": "💼"},
     "C": {"name": "Counter", "desc": "Complex Trans", "color": "#2563EB", "icon": "👤"},
     "E": {"name": "eCenter", "desc": "Online Services", "color": "#2563EB", "icon": "💻"},
-    "F": {"name": "Fast Lane", "desc": "Simple Trans", "color": "#2563EB", "icon": "⚡"}
+    "F": {"name": "Fast Lane", "desc": "Simple Trans", "color": "#2563EB", "icon": "⚡"},
+    "GATE": {"name": "Screening", "desc": "Pre-Qualification", "color": "#7C3AED", "icon": "🛡️"}
 }
 
 # --- LANE REVERSE MAPPING ---
@@ -1281,7 +1287,7 @@ def render_kiosk():
         with c3:
             if st.button("🖨️ PRINT", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
     
-    st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.13</div>", unsafe_allow_html=True)
+    st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.14</div>", unsafe_allow_html=True)
 
 # ==============================================================================
 # DISPLAY MODULE (TV Display)
@@ -1453,7 +1459,7 @@ def render_display():
         if status != "NORMAL": 
             txt = f"⚠ NOTICE: We are currently experiencing {status} connection. Please bear with us. {txt}"
         st.markdown(f"<div style='background: {bg_color}; color: {text_color}; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%; font-size:20px;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
-        st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.13</div>", unsafe_allow_html=True)
+        st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.14</div>", unsafe_allow_html=True)
     
     time.sleep(3)
     st.rerun()
@@ -1895,6 +1901,25 @@ def render_admin_panel(user):
                         save_db(local_db); log_audit("KIOSK_MENU_UPDATE", user.get('name', 'Unknown'), details=f"{label} -> {new_label}"); st.success("Updated!"); st.rerun()
                     if st.button("Delete", key=f"del_{i}"): 
                         local_db['menu'][sel_cat].pop(i); save_db(local_db); log_audit("KIOSK_MENU_DELETE", user.get('name', 'Unknown'), target=label); st.rerun()
+            
+            # FIX-v23.14-002: Add New Menu Item form
+            st.markdown("---")
+            st.write("**➕ Add New Item**")
+            with st.form("add_new_menu_item"):
+                new_label = st.text_input("Label (Display Name)")
+                new_code = st.text_input("Code (Internal ID)")
+                new_lane = st.selectbox("Route to Lane", ["C", "E", "F", "T", "A", "GATE"], 
+                                        help="GATE = Pre-qualification screening")
+                if st.form_submit_button("Add Item"):
+                    if new_label and new_code:
+                        local_db['menu'][sel_cat].append((new_label, new_code, new_lane))
+                        save_db(local_db)
+                        log_audit("KIOSK_MENU_ADD", user.get('name', 'Unknown'), 
+                                  details=f"Added '{new_label}' ({new_code}) to {sel_cat}", target=new_code)
+                        st.success(f"Added '{new_label}' to {sel_cat}!")
+                        st.rerun()
+                    else:
+                        st.error("Label and Code are required.")
 
     elif active == "Counters":
         for i, c in enumerate(local_db.get('config', {}).get('counter_map', [])): 
@@ -2018,19 +2043,27 @@ def render_admin_panel(user):
             st.success("No corrupt files detected.")
     
     elif active == "System Info":
-        st.subheader("⚙️ System Configuration - v23.13 Data Fortress Edition")
+        st.subheader("⚙️ System Configuration - v23.14 PLATINUM Edition")
         
         st.write("**Version Information**")
         st.code(f"""
-SSS G-ABAY Version: v23.13 (Data Fortress Edition)
-Build Date: 2026-02-03
+SSS G-ABAY Version: v23.14 (PLATINUM COMPLETE Edition)
+Build Date: 2026-02-04
 Timezone: UTC+{UTC_OFFSET_HOURS} (Philippine Standard Time)
 Display Grid: {DISPLAY_GRID_COLUMNS} columns (fixed)
 Script Directory: {SCRIPT_DIR}
 Data File: {DATA_FILE}
         """)
         
-        st.write("**v23.13 Safe-Fail Data Protection Fixes**")
+        st.write("**v23.14 PLATINUM Fixes**")
+        v14_fixes = [
+            "FIX-v23.14-001: GATE Lane in LANE_CODES (enables Display/Reports visibility)",
+            "FIX-v23.14-002: Add Menu Item Form (Kiosk Menu admin can add items)"
+        ]
+        for fix in v14_fixes:
+            st.markdown(f"🆕 {fix}")
+        
+        st.write("**v23.13 Safe-Fail Data Protection (Inherited)**")
         fixes = [
             "FIX-001: Absolute Path Resolution (prevents working directory issues)",
             "FIX-002: Fail-Safe Loading with Backup Cascade (no silent reset)",
@@ -2182,5 +2215,5 @@ else:
                 st.error("Ticket not found in completed transactions.")
 
 # ==============================================================================
-# END OF SSS G-ABAY v23.13 - DATA FORTRESS EDITION
+# END OF SSS G-ABAY v23.14 - PLATINUM COMPLETE EDITION
 # ==============================================================================
