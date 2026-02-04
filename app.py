@@ -1,28 +1,28 @@
 # ==============================================================================
-# SSS G-ABAY v23.14 - BRANCH OPERATING SYSTEM (PLATINUM EDITION)
+# SSS G-ABAY v23.14 - BRANCH OPERATING SYSTEM (ANALYTICS PRECISION EDITION)
 # "Visuals: V23.4 | Backend: V23.5 | Security: V23.7 | Integrity: V23.8 | 
-#  Polish: V23.9 | Precision: V23.12 | Data Protection: V23.13 | Platinum: V23.14"
-# COPYRIGHT: © 2026 rpt/sssgingoog
+#  Polish: V23.9 | Precision: V23.12 | Data Protection: V23.13 | Analytics: V23.14"
+# COPYRIGHT: Â© 2026 rpt/sssgingoog
 # ==============================================================================
-# v23.14 PLATINUM SURGICAL FIXES:
-#   FIX-v23.14-001: GATE Lane in LANE_CODES (enables routing visibility)
-#   FIX-v23.14-002: Add Menu Item Form (Kiosk Menu admin can add items)
+# v23.14 SURGICAL FIXES (Analytics & UX Enhancements):
+#   FIX-v23.14-001: Rate Us - Search by full_id AND number
+#   FIX-v23.14-002: Tracker/Rate Us - Add explicit Track/Verify buttons
+#   FIX-v23.14-003: Rate Us - Require rating (1-5) before submit
+#   FIX-v23.14-004: Enhanced Review Structure (lane, staff, service tracking)
+#   FIX-v23.14-005: Dashboard CSAT - Calculate from actual reviews
+#   FIX-v23.14-006: Reality Log - Filter by staff role (IOMS categories)
+#   FIX-v23.14-007: CSV Export - Add Ticket Type, Lane, Category columns
+#   FIX-v23.14-008: Dashboard - Priority/Regular count metrics
+#   FIX-v23.14-009: Dashboard - Service Quality Analytics (Rating by Staff/Lane)
+#   FIX-v23.14-010: Dashboard - Efficiency Analytics (FCR, Referral Rate)
+#   FIX-v23.14-011: Dashboard - Queue Analytics (Park Rate, No-Show Rate)
+#   FIX-v23.14-012: Dashboard - Transaction Analytics (Multi-Txn, Peak Hour)
+#   FIX-v23.14-013: Separate Reviews CSV Export
 # ==============================================================================
-# INHERITED FROM v23.13 (Safe-Fail Data Protection):
-#   FIX-v23.13-001: Absolute Path Resolution (prevents working directory issues)
-#   FIX-v23.13-002: Fail-Safe Loading with Backup Cascade (no silent reset)
-#   FIX-v23.13-003: Rollover Persistence (force save after midnight sweeper)
-#   FIX-v23.13-004: Atomic Save with Verification (0-byte protection)
-#   FIX-v23.13-005: Startup Health Check (staff count validation)
-#   FIX-v23.13-006: Specific Exception Handling (no bare except)
-#   FIX-v23.13-007: Corrupt File Forensics (rename, don't delete)
-# ==============================================================================
-# INHERITED FROM v23.12:
-#   - Ghost Ticket Logic Repair (Two-Phase Matching)
-#   - CSS-Based Responsive Scaling (vw units)
-#   - Global Constant Optimization
-#   - 6-Column Fixed Grid, Supervisor Exclusion, Role-Based Colors
-#   - Precision Staff Tracking (served_by_staff)
+# INHERITED FROM v23.13 (Data Fortress):
+#   - Absolute Path Resolution, Fail-Safe Loading, Backup Cascade
+#   - Rollover Persistence, Atomic Save, Startup Health Check
+#   - Specific Exception Handling, Corrupt File Forensics
 # ==============================================================================
 
 import streamlit as st
@@ -36,6 +36,7 @@ import math
 import re
 import html
 import plotly.express as px
+import plotly.graph_objects as go
 import urllib.parse
 import io
 import base64
@@ -55,7 +56,7 @@ except ImportError:
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v23.14", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v23.14", page_icon="ðŸ‡µðŸ‡­", layout="wide", initial_sidebar_state="collapsed")
 
 # ==============================================================================
 # FIX-v23.13-001: ABSOLUTE PATH RESOLUTION
@@ -99,14 +100,12 @@ DEFAULT_AVG_TXN_MINUTES = 15
 DISPLAY_GRID_COLUMNS = 6  # Fixed 6-column grid
 
 # --- LANE CONFIGURATION ---
-# FIX-v23.14-001: Added GATE lane for pre-qualification routing
 LANE_CODES = {
-    "T": {"name": "Teller", "desc": "Payments", "color": "#DC2626", "icon": "💳"},
-    "A": {"name": "Employer", "desc": "Account Mgmt", "color": "#16A34A", "icon": "💼"},
-    "C": {"name": "Counter", "desc": "Complex Trans", "color": "#2563EB", "icon": "👤"},
-    "E": {"name": "eCenter", "desc": "Online Services", "color": "#2563EB", "icon": "💻"},
-    "F": {"name": "Fast Lane", "desc": "Simple Trans", "color": "#2563EB", "icon": "⚡"},
-    "GATE": {"name": "Screening", "desc": "Pre-Qualification", "color": "#7C3AED", "icon": "🛡️"}
+    "T": {"name": "Teller", "desc": "Payments", "color": "#DC2626", "icon": "ðŸ’³"},
+    "A": {"name": "Employer", "desc": "Account Mgmt", "color": "#16A34A", "icon": "ðŸ’¼"},
+    "C": {"name": "Counter", "desc": "Complex Trans", "color": "#2563EB", "icon": "ðŸ‘¤"},
+    "E": {"name": "eCenter", "desc": "Online Services", "color": "#2563EB", "icon": "ðŸ’»"},
+    "F": {"name": "Fast Lane", "desc": "Simple Trans", "color": "#2563EB", "icon": "âš¡"}
 }
 
 # --- LANE REVERSE MAPPING ---
@@ -120,6 +119,20 @@ LANE_TO_CATEGORY = {
     "C": "MEMBER SERVICES",
     "E": "MEMBER SERVICES",
     "F": "MEMBER SERVICES"
+}
+
+# ==============================================================================
+# FIX-v23.14-006: ROLE TO IOMS CATEGORY MAPPING
+# Controls which transaction categories each role can see in Reality Log
+# ==============================================================================
+ROLE_TO_IOMS_CATEGORY = {
+    "TELLER": ["PAYMENTS"],
+    "AO": ["EMPLOYERS"],
+    "MSR": ["MEMBER SERVICES"],
+    "ADMIN": ["PAYMENTS", "EMPLOYERS", "MEMBER SERVICES"],
+    "BRANCH_HEAD": ["PAYMENTS", "EMPLOYERS", "MEMBER SERVICES"],
+    "SECTION_HEAD": ["PAYMENTS", "EMPLOYERS", "MEMBER SERVICES"],
+    "DIV_HEAD": ["PAYMENTS", "EMPLOYERS", "MEMBER SERVICES"]
 }
 
 # --- STATUS DEFINITIONS ---
@@ -196,8 +209,8 @@ DEFAULT_DATA = {
     "audit_log": [],
     "transaction_master": DEFAULT_TRANSACTIONS,
     "resources": [
-        {"type": "LINK", "label": "🌐 SSS Official Website", "value": "https://www.sss.gov.ph"},
-        {"type": "LINK", "label": "💻 My.SSS Member Portal", "value": "https://member.sss.gov.ph/members/"},
+        {"type": "LINK", "label": "ðŸŒ SSS Official Website", "value": "https://www.sss.gov.ph"},
+        {"type": "LINK", "label": "ðŸ’» My.SSS Member Portal", "value": "https://member.sss.gov.ph/members/"},
         {"type": "FAQ", "label": "How to reset My.SSS password?", "value": "Please visit our e-Center."}
     ],
     "announcements": ["Welcome to SSS Gingoog. Operating Hours: 8:00 AM - 5:00 PM."],
@@ -648,7 +661,7 @@ def load_db():
 # ==============================================================================
 def render_data_failure_screen():
     """Display critical error screen when all data sources fail."""
-    st.error("🚨 CRITICAL: DATA LOAD FAILURE")
+    st.error("ðŸš¨ CRITICAL: DATA LOAD FAILURE")
     st.markdown("""
     ### The system cannot load your data.
     
@@ -660,12 +673,12 @@ def render_data_failure_screen():
     # Show error details
     errors = st.session_state.get('data_load_errors', [])
     if errors:
-        with st.expander("📋 Error Details", expanded=True):
+        with st.expander("ðŸ“‹ Error Details", expanded=True):
             for err in errors:
                 st.code(err)
     
     st.markdown("---")
-    st.markdown("### 🔧 Recovery Options")
+    st.markdown("### ðŸ”§ Recovery Options")
     
     col1, col2 = st.columns(2)
     
@@ -690,9 +703,9 @@ def render_data_failure_screen():
     st.markdown("---")
     
     # Emergency reset option (with confirmation)
-    st.warning("⚠️ **LAST RESORT:** Start fresh with empty database")
+    st.warning("âš ï¸ **LAST RESORT:** Start fresh with empty database")
     if st.checkbox("I understand this will create a new empty database"):
-        if st.button("🔄 Initialize New Database", type="primary"):
+        if st.button("ðŸ”„ Initialize New Database", type="primary"):
             try:
                 save_db(DEFAULT_DATA.copy())
                 st.session_state['data_load_failed'] = False
@@ -715,7 +728,7 @@ if db.get('_LOAD_FAILED') or st.session_state.get('data_load_failed'):
 
 # Show recovery notification if applicable
 if 'recovery_source' in st.session_state:
-    st.warning(f"⚠️ Data recovered from: {st.session_state['recovery_source']} at {st.session_state.get('recovery_time', 'unknown')}")
+    st.warning(f"âš ï¸ Data recovered from: {st.session_state['recovery_source']} at {st.session_state.get('recovery_time', 'unknown')}")
 
 # --- INIT ---
 if 'surge_mode' not in st.session_state: st.session_state['surge_mode'] = False
@@ -933,6 +946,152 @@ def get_role_colors(role):
 def get_lane_color(lane_code):
     """Get color for a lane code from centralized constants."""
     return LANE_CODES.get(lane_code, {}).get('color', '#2563EB')
+
+# ==============================================================================
+# FIX-v23.14-006: GET FILTERED TRANSACTIONS BY ROLE
+# ==============================================================================
+def get_filtered_transactions_for_role(role, transaction_master):
+    """
+    Returns filtered transaction list based on staff role.
+    TELLER sees PAYMENTS only, AO sees EMPLOYERS only, MSR sees MEMBER SERVICES only.
+    ADMIN/BRANCH_HEAD/SECTION_HEAD/DIV_HEAD see ALL categories.
+    """
+    allowed_categories = ROLE_TO_IOMS_CATEGORY.get(role, ["MEMBER SERVICES"])
+    filtered_txns = []
+    for cat in allowed_categories:
+        items = transaction_master.get(cat, [])
+        for item in items:
+            filtered_txns.append(f"[{cat}] {item}")
+    return filtered_txns
+
+# ==============================================================================
+# FIX-v23.14-005 & 009: CALCULATE ACTUAL CSAT FROM REVIEWS
+# ==============================================================================
+def calculate_csat(reviews_list):
+    """Calculate Customer Satisfaction score from reviews."""
+    if not reviews_list:
+        return 0.0, 0
+    
+    valid_ratings = [r.get('rating', 0) for r in reviews_list if r.get('rating') and r.get('rating') > 0]
+    if not valid_ratings:
+        return 0.0, 0
+    
+    avg_rating = sum(valid_ratings) / len(valid_ratings)
+    return round(avg_rating, 1), len(valid_ratings)
+
+def calculate_staff_ratings(reviews_list):
+    """Calculate average rating per staff member."""
+    staff_ratings = {}
+    for review in reviews_list:
+        staff = review.get('served_by_staff') or review.get('personnel') or 'Unknown'
+        rating = review.get('rating', 0)
+        if staff and rating > 0:
+            if staff not in staff_ratings:
+                staff_ratings[staff] = {'total': 0, 'count': 0}
+            staff_ratings[staff]['total'] += rating
+            staff_ratings[staff]['count'] += 1
+    
+    result = []
+    for staff, data in staff_ratings.items():
+        avg = round(data['total'] / data['count'], 1) if data['count'] > 0 else 0
+        result.append({'Staff': staff, 'Avg Rating': avg, 'Reviews': data['count']})
+    
+    return sorted(result, key=lambda x: x['Avg Rating'], reverse=True)
+
+def calculate_lane_ratings(reviews_list):
+    """Calculate average rating per lane."""
+    lane_ratings = {}
+    for review in reviews_list:
+        lane = review.get('lane', 'Unknown')
+        lane_name = LANE_CODE_TO_NAME.get(lane, lane)
+        rating = review.get('rating', 0)
+        if rating > 0:
+            if lane_name not in lane_ratings:
+                lane_ratings[lane_name] = {'total': 0, 'count': 0}
+            lane_ratings[lane_name]['total'] += rating
+            lane_ratings[lane_name]['count'] += 1
+    
+    result = []
+    for lane, data in lane_ratings.items():
+        avg = round(data['total'] / data['count'], 1) if data['count'] > 0 else 0
+        result.append({'Lane': lane, 'Avg Rating': avg, 'Reviews': data['count']})
+    
+    return result
+
+# ==============================================================================
+# FIX-v23.14-010: EFFICIENCY ANALYTICS
+# ==============================================================================
+def calculate_efficiency_metrics(history_list):
+    """Calculate First Call Resolution and Referral Rate."""
+    if not history_list:
+        return 0.0, 0.0
+    
+    total = len(history_list)
+    referred = len([t for t in history_list if t.get('ref_from')])
+    
+    referral_rate = round((referred / total) * 100, 1) if total > 0 else 0.0
+    fcr_rate = round(((total - referred) / total) * 100, 1) if total > 0 else 0.0
+    
+    return fcr_rate, referral_rate
+
+# ==============================================================================
+# FIX-v23.14-011: QUEUE ANALYTICS
+# ==============================================================================
+def calculate_queue_metrics(history_list):
+    """Calculate Park Rate and No-Show Rate."""
+    if not history_list:
+        return 0.0, 0.0, 0.0
+    
+    total = len(history_list)
+    parked = len([t for t in history_list if t.get('park_timestamp')])
+    no_show = len([t for t in history_list if t.get('status') == 'NO_SHOW'])
+    completed_after_park = len([t for t in history_list if t.get('park_timestamp') and t.get('status') == 'COMPLETED'])
+    
+    park_rate = round((parked / total) * 100, 1) if total > 0 else 0.0
+    no_show_rate = round((no_show / total) * 100, 1) if total > 0 else 0.0
+    park_recovery = round((completed_after_park / parked) * 100, 1) if parked > 0 else 0.0
+    
+    return park_rate, no_show_rate, park_recovery
+
+# ==============================================================================
+# FIX-v23.14-012: TRANSACTION ANALYTICS
+# ==============================================================================
+def calculate_transaction_metrics(history_list):
+    """Calculate Multi-Transaction Rate and Peak Hours."""
+    if not history_list:
+        return 0.0, []
+    
+    total = len(history_list)
+    multi_txn = len([t for t in history_list if len(t.get('actual_transactions', [])) > 1])
+    multi_txn_rate = round((multi_txn / total) * 100, 1) if total > 0 else 0.0
+    
+    # Peak hour analysis
+    hour_counts = {}
+    for t in history_list:
+        try:
+            ts = datetime.datetime.fromisoformat(t.get('timestamp', ''))
+            hour = ts.hour
+            hour_counts[hour] = hour_counts.get(hour, 0) + 1
+        except (ValueError, TypeError):
+            continue
+    
+    peak_hours = [{'Hour': f"{h:02d}:00", 'Tickets': c} for h, c in sorted(hour_counts.items())]
+    
+    return multi_txn_rate, peak_hours
+
+# ==============================================================================
+# FIX-v23.14-008: TICKET TYPE COUNTS
+# ==============================================================================
+def calculate_ticket_type_counts(history_list):
+    """Count tickets by type (PRIORITY, REGULAR, APPOINTMENT)."""
+    counts = {'PRIORITY': 0, 'REGULAR': 0, 'APPOINTMENT': 0}
+    for t in history_list:
+        t_type = t.get('type', 'REGULAR')
+        if t_type in counts:
+            counts[t_type] += 1
+        else:
+            counts['REGULAR'] += 1
+    return counts
 
 # ==============================================================================
 # KIOSK WAIT TIME ESTIMATE CALCULATOR
@@ -1169,15 +1328,15 @@ def render_kiosk():
         col_reg, col_prio = st.columns([1, 1], gap="large")
         with col_reg:
             st.markdown('<div class="gate-btn" style="border: 8px solid #1E40AF; border-radius:30px; overflow:hidden;">', unsafe_allow_html=True)
-            if st.button("👤 REGULAR\n\nStandard Access"):
+            if st.button("ðŸ‘¤ REGULAR\n\nStandard Access"):
                 st.session_state['is_prio'] = False; st.session_state['kiosk_step'] = 'menu'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         with col_prio:
             st.markdown('<div class="gate-btn" style="border: 8px solid #B45309; border-radius:30px; overflow:hidden;">', unsafe_allow_html=True)
-            if st.button("❤️ PRIORITY\n\nSenior, PWD, Pregnant"):
+            if st.button("â¤ï¸ PRIORITY\n\nSenior, PWD, Pregnant"):
                 st.session_state['is_prio'] = True; st.session_state['kiosk_step'] = 'menu'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
-            st.warning("⚠ NOTICE: Non-priority users will be transferred to end of line.")
+            st.warning("âš  NOTICE: Non-priority users will be transferred to end of line.")
     
     elif st.session_state['kiosk_step'] == 'menu':
         st.markdown("### Select Service Category")
@@ -1186,18 +1345,18 @@ def render_kiosk():
         with m1:
             waiting, wait_min, counters = calculate_lane_wait_estimate("T")
             st.markdown('<div class="menu-card">', unsafe_allow_html=True)
-            if st.button("💳 PAYMENTS\n(Contri/Loans)"):
+            if st.button("ðŸ’³ PAYMENTS\n(Contri/Loans)"):
                 generate_ticket_callback("Payment", "T", st.session_state['is_prio']); st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
-            st.markdown(f"<div class='wait-estimate'><h3>~{wait_min} min</h3><p>{waiting} in queue • {counters} counter(s)</p></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='wait-estimate'><h3>~{wait_min} min</h3><p>{waiting} in queue â€¢ {counters} counter(s)</p></div>", unsafe_allow_html=True)
             
         with m2:
             waiting, wait_min, counters = calculate_lane_wait_estimate("A")
             st.markdown('<div class="menu-card">', unsafe_allow_html=True)
-            if st.button("💼 EMPLOYERS\n(Account Management)"):
+            if st.button("ðŸ’¼ EMPLOYERS\n(Account Management)"):
                 generate_ticket_callback("Account Management", "A", st.session_state['is_prio']); st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
-            st.markdown(f"<div class='wait-estimate'><h3>~{wait_min} min</h3><p>{waiting} in queue • {counters} counter(s)</p></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='wait-estimate'><h3>~{wait_min} min</h3><p>{waiting} in queue â€¢ {counters} counter(s)</p></div>", unsafe_allow_html=True)
             
         with m3:
             waiting_c, wait_c, counters_c = calculate_lane_wait_estimate("C")
@@ -1208,20 +1367,20 @@ def render_kiosk():
             avg_wait = round((wait_c + wait_e + wait_f) / 3) if total_counters > 0 else round((total_waiting * DEFAULT_AVG_TXN_MINUTES))
             
             st.markdown('<div class="menu-card">', unsafe_allow_html=True)
-            if st.button("👤 MEMBER SERVICES\n(Claims, Requests, Updates)"):
+            if st.button("ðŸ‘¤ MEMBER SERVICES\n(Claims, Requests, Updates)"):
                 st.session_state['kiosk_step'] = 'mss'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
-            st.markdown(f"<div class='wait-estimate'><h3>~{avg_wait} min</h3><p>{total_waiting} in queue • {total_counters} counter(s)</p></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='wait-estimate'><h3>~{avg_wait} min</h3><p>{total_waiting} in queue â€¢ {total_counters} counter(s)</p></div>", unsafe_allow_html=True)
             
         st.markdown("<br><br>", unsafe_allow_html=True)
-        if st.button("⬅ GO BACK", type="secondary", use_container_width=True): del st.session_state['kiosk_step']; st.rerun()
+        if st.button("â¬… GO BACK", type="secondary", use_container_width=True): del st.session_state['kiosk_step']; st.rerun()
     
     elif st.session_state['kiosk_step'] == 'mss':
-        st.markdown("### 👤 Member Services")
+        st.markdown("### ðŸ‘¤ Member Services")
         cols = st.columns(4, gap="small")
         categories = list(db.get('menu', {}).keys())
         colors = ["red", "orange", "green", "blue", "red", "orange"]
-        icons = ["🏥", "💰", "📝", "💻", "❓", "⚙️"]
+        icons = ["ðŸ¥", "ðŸ’°", "ðŸ“", "ðŸ’»", "â“", "âš™ï¸"]
         for i, cat_name in enumerate(categories):
             with cols[i % 4]:
                 color = colors[i % len(colors)]
@@ -1237,23 +1396,23 @@ def render_kiosk():
                             generate_ticket_callback(code, lane, st.session_state['is_prio']); st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("⬅ GO BACK", type="secondary", use_container_width=True): st.session_state['kiosk_step'] = 'menu'; st.rerun()
+        if st.button("â¬… GO BACK", type="secondary", use_container_width=True): st.session_state['kiosk_step'] = 'menu'; st.rerun()
     
     elif st.session_state['kiosk_step'] == 'gate_check':
         target = st.session_state.get('gate_target', {})
         label = target.get('label', 'Transaction')
         exemptions = db.get('exemptions', {}).get(target.get('label', ''), [])
-        st.warning(f"⚠️ PRE-QUALIFICATION FOR {label.upper()}")
+        st.warning(f"âš ï¸ PRE-QUALIFICATION FOR {label.upper()}")
         for ex in exemptions: st.markdown(f"- {ex}")
         st.markdown("---")
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("📂 YES, I have one of these issues", type="primary", use_container_width=True):
+            if st.button("ðŸ“‚ YES, I have one of these issues", type="primary", use_container_width=True):
                 generate_ticket_callback(f"{label} (Complex)", "C", st.session_state['is_prio']); st.rerun()
         with c2:
-            if st.button("💻 NO, none of these apply to me", type="primary", use_container_width=True):
+            if st.button("ðŸ’» NO, none of these apply to me", type="primary", use_container_width=True):
                 generate_ticket_callback(f"{label} (Online)", "E", st.session_state['is_prio']); st.rerun()
-        if st.button("⬅ CANCEL"): st.session_state['kiosk_step'] = 'mss'; st.rerun()
+        if st.button("â¬… CANCEL"): st.session_state['kiosk_step'] = 'mss'; st.rerun()
     
     elif st.session_state['kiosk_step'] == 'ticket':
         t = st.session_state['last_ticket']
@@ -1266,16 +1425,16 @@ def render_kiosk():
         c_left, c_right = st.columns([2, 1])
         with c_left:
             st.markdown(f"""<div class="ticket-card no-print" style='background:{bg}; color:{col}; padding:40px; border-radius:20px; text-align:center; margin:20px 0;'><h1>{t['number']}</h1><h3>{t['service']}</h3><p style="font-size:18px;">{print_dt}</p></div>""", unsafe_allow_html=True)
-            st.markdown(f"<div class='wait-estimate'><h3>Estimated Wait: ~{wait_min} min</h3><p>{waiting} people ahead • {counters} counter(s) active</p></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='wait-estimate'><h3>Estimated Wait: ~{wait_min} min</h3><p>{waiting} people ahead â€¢ {counters} counter(s) active</p></div>", unsafe_allow_html=True)
         with c_right:
             base_url = st.query_params.get("base_url", "http://192.168.1.X:8501")
             if isinstance(base_url, list): base_url = base_url[0]
             st.markdown(f"<div style='text-align:center; margin-top:30px; font-weight:bold;'>TRACK YOUR TICKET<br><br>Scan or Go To:<br><span style='color:blue;'>{base_url}</span><br>Enter: {t['number']}</div>", unsafe_allow_html=True)
-        if t['type'] == 'PRIORITY': st.error("**⚠ PRIORITY LANE:** For Seniors, PWDs, Pregnant ONLY.")
-        st.markdown(f"<h4 style='color:red; text-align:center;'>⚠ POLICY: Ticket forfeited if parked for {PARK_GRACE_MINUTES} MINUTES.</h4>", unsafe_allow_html=True)
+        if t['type'] == 'PRIORITY': st.error("**âš  PRIORITY LANE:** For Seniors, PWDs, Pregnant ONLY.")
+        st.markdown(f"<h4 style='color:red; text-align:center;'>âš  POLICY: Ticket forfeited if parked for {PARK_GRACE_MINUTES} MINUTES.</h4>", unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         with c1: 
-            if st.button("❌ CANCEL", use_container_width=True): 
+            if st.button("âŒ CANCEL", use_container_width=True): 
                 curr_db = load_db()
                 curr_db['tickets'] = [x for x in curr_db.get('tickets', []) if x.get('id') != t['id']]
                 save_db(curr_db)
@@ -1283,11 +1442,11 @@ def render_kiosk():
                 del st.session_state['kiosk_step']
                 st.rerun()
         with c2:
-            if st.button("✅ DONE", type="primary", use_container_width=True): del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
+            if st.button("âœ… DONE", type="primary", use_container_width=True): del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
         with c3:
-            if st.button("🖨️ PRINT", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
+            if st.button("ðŸ–¨ï¸ PRINT", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
     
-    st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.14</div>", unsafe_allow_html=True)
+    st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog Â© 2026 | v23.13</div>", unsafe_allow_html=True)
 
 # ==============================================================================
 # DISPLAY MODULE (TV Display)
@@ -1310,7 +1469,7 @@ def render_display():
         status = local_db.get('branch_status', 'NORMAL')
         if status != "NORMAL":
             color = "red" if status == "OFFLINE" else "orange"
-            text = "⚠ SYSTEM OFFLINE: MANUAL PROCESSING" if status == "OFFLINE" else "⚠ INTERMITTENT CONNECTION"
+            text = "âš  SYSTEM OFFLINE: MANUAL PROCESSING" if status == "OFFLINE" else "âš  INTERMITTENT CONNECTION"
             st.markdown(f"<h2 style='text-align:center; color:{color}; animation: blink 1.5s infinite;'>{text}</h2>", unsafe_allow_html=True)
         
         st.markdown(f"<h1 style='text-align: center; color: #0038A8;'>NOW SERVING</h1>", unsafe_allow_html=True)
@@ -1428,13 +1587,13 @@ def render_display():
                 st.markdown("</div>", unsafe_allow_html=True)
             
             with q3:
-                st.markdown(f"<div class='swim-col' style='border-top-color:{get_lane_color('C')};'><h3>👤 SERVICES</h3>", unsafe_allow_html=True)
+                st.markdown(f"<div class='swim-col' style='border-top-color:{get_lane_color('C')};'><h3>ðŸ‘¤ SERVICES</h3>", unsafe_allow_html=True)
                 for t in [x for x in waiting if x.get('lane') in ['C','E','F']][:5]: 
                     st.markdown(f"<div class='queue-item'><span>{sanitize_text(t.get('number', ''))}</span></div>", unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
         
         with c_park:
-            st.markdown("### 🅿️ PARKED")
+            st.markdown("### ðŸ…¿ï¸ PARKED")
             parked = [t for t in local_db.get('tickets', []) if t.get("status") == "PARKED"]
             for p in parked:
                 try:
@@ -1457,9 +1616,9 @@ def render_display():
         bg_color = "#DC2626" if status == "OFFLINE" else ("#F97316" if status == "SLOW" else "#FFD700")
         text_color = "white" if status in ["OFFLINE", "SLOW"] else "black"
         if status != "NORMAL": 
-            txt = f"⚠ NOTICE: We are currently experiencing {status} connection. Please bear with us. {txt}"
+            txt = f"âš  NOTICE: We are currently experiencing {status} connection. Please bear with us. {txt}"
         st.markdown(f"<div style='background: {bg_color}; color: {text_color}; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%; font-size:20px;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
-        st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.14</div>", unsafe_allow_html=True)
+        st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog Â© 2026 | v23.13</div>", unsafe_allow_html=True)
     
     time.sleep(3)
     st.rerun()
@@ -1471,23 +1630,23 @@ def render_counter(user):
     if not user_key: st.error("User Sync Error. Please Relogin."); return
     current_user_state = local_db['staff'][user_key]
 
-    st.sidebar.title(f"👮 {user.get('name', 'User')}")
+    st.sidebar.title(f"ðŸ‘® {user.get('name', 'User')}")
     
     last_activity = st.session_state.get('last_activity', get_ph_time())
     elapsed = (get_ph_time() - last_activity).total_seconds() / 60
     remaining_mins = SESSION_TIMEOUT_MINUTES - elapsed
-    if remaining_mins <= 5: st.sidebar.markdown(f"""<div class='timeout-warning'>⚠️ Session expires in {int(remaining_mins)} min</div>""", unsafe_allow_html=True)
+    if remaining_mins <= 5: st.sidebar.markdown(f"""<div class='timeout-warning'>âš ï¸ Session expires in {int(remaining_mins)} min</div>""", unsafe_allow_html=True)
     
-    if st.sidebar.button("⬅ LOGOUT"): handle_safe_logout(reason="MANUAL"); st.rerun()
+    if st.sidebar.button("â¬… LOGOUT"): handle_safe_logout(reason="MANUAL"); st.rerun()
 
     st.sidebar.markdown("---")
-    st.session_state['surge_mode'] = st.sidebar.checkbox("🚨 PRIORITY SURGE MODE", value=st.session_state.get('surge_mode', False))
-    if st.session_state['surge_mode']: st.sidebar.warning("⚠ SURGE ACTIVE: Only Priority Tickets will be called!")
+    st.session_state['surge_mode'] = st.sidebar.checkbox("ðŸš¨ PRIORITY SURGE MODE", value=st.session_state.get('surge_mode', False))
+    if st.session_state['surge_mode']: st.sidebar.warning("âš  SURGE ACTIVE: Only Priority Tickets will be called!")
     
     st.sidebar.markdown("---")
-    with st.sidebar.expander("☕ Go On Break"):
+    with st.sidebar.expander("â˜• Go On Break"):
         b_reason = st.selectbox("Reason", ["Lunch Break", "Coffee Break (15m)", "Bio-Break", "Emergency"])
-        if st.button("⏸ START BREAK"):
+        if st.button("â¸ START BREAK"):
             station = current_user_state.get('default_station', '')
             serving_ticket = next((t for t in local_db.get('tickets', []) 
                                    if t.get('status') == 'SERVING' and t.get('served_by_staff') == user.get('name')), None)
@@ -1496,7 +1655,7 @@ def render_counter(user):
                                        if t.get('status') == 'SERVING' 
                                        and t.get('served_by') == station 
                                        and not t.get('served_by_staff')), None)
-            if serving_ticket: st.error("⛔ You have an active ticket. Complete or Park it first.")
+            if serving_ticket: st.error("â›” You have an active ticket. Complete or Park it first.")
             else:
                 local_db['staff'][user_key]['status'] = "ON_BREAK"
                 local_db['staff'][user_key]['break_reason'] = b_reason
@@ -1506,7 +1665,7 @@ def render_counter(user):
                 log_audit("BREAK_START", user.get('name', 'Unknown'), details=b_reason)
                 st.rerun()
 
-    with st.sidebar.expander("🔒 Change Password"):
+    with st.sidebar.expander("ðŸ”’ Change Password"):
         with st.form("pwd_chg"):
             n_pass = st.text_input("New Password", type="password")
             if st.form_submit_button("Update"):
@@ -1517,13 +1676,13 @@ def render_counter(user):
                     st.success("Updated!")
 
     st.sidebar.markdown("---")
-    st.sidebar.write("**⚠ Report Issue**")
-    if st.sidebar.button("🟡 Intermittent Net"): log_incident(user.get('name', 'Unknown'), "SLOW"); st.toast("Reported: Slow Connection")
-    if st.sidebar.button("🔴 System Offline"): log_incident(user.get('name', 'Unknown'), "OFFLINE"); st.toast("Reported: System Offline")
-    if st.sidebar.button("🟢 System Restored"): log_incident(user.get('name', 'Unknown'), "NORMAL"); st.toast("System Restored")
+    st.sidebar.write("**âš  Report Issue**")
+    if st.sidebar.button("ðŸŸ¡ Intermittent Net"): log_incident(user.get('name', 'Unknown'), "SLOW"); st.toast("Reported: Slow Connection")
+    if st.sidebar.button("ðŸ”´ System Offline"): log_incident(user.get('name', 'Unknown'), "OFFLINE"); st.toast("Reported: System Offline")
+    if st.sidebar.button("ðŸŸ¢ System Restored"): log_incident(user.get('name', 'Unknown'), "NORMAL"); st.toast("System Restored")
     st.sidebar.markdown("---")
     
-    with st.sidebar.expander("📅 Book Appointment"):
+    with st.sidebar.expander("ðŸ“… Book Appointment"):
         with st.form("staff_appt"):
             nm = st.text_input("Client Name")
             tm = st.time_input("Time Slot")
@@ -1535,8 +1694,8 @@ def render_counter(user):
                 st.success("Booked!")
 
     if current_user_state.get('status') == "ON_BREAK":
-        st.warning(f"⛔ YOU ARE CURRENTLY ON BREAK ({current_user_state.get('break_reason', 'Break')})")
-        if st.button("▶ RESUME WORK", type="primary"):
+        st.warning(f"â›” YOU ARE CURRENTLY ON BREAK ({current_user_state.get('break_reason', 'Break')})")
+        if st.button("â–¶ RESUME WORK", type="primary"):
             local_db['staff'][user_key]['status'] = "ACTIVE"
             save_db(local_db)
             st.session_state['user'] = local_db['staff'][user_key]
@@ -1583,9 +1742,9 @@ def render_counter(user):
             lane_color = get_lane_color(current.get('lane', 'C'))
             st.markdown(f"""<div style='padding:30px; background:#e0f2fe; border-radius:15px; border-left:10px solid {lane_color};'><h1 style='margin:0; color:{lane_color}; font-size: 60px;'>{sanitize_text(display_num)}</h1><h3>{sanitize_text(current.get('service', ''))}</h3></div>""", unsafe_allow_html=True)
             if current.get("ref_from"): 
-                st.markdown(f"""<div style='background:#fee2e2; border-left:5px solid #ef4444; padding:10px; margin-top:10px;'><span style='color:#b91c1c; font-weight:bold;'>↩ REFERRED FROM: {sanitize_text(current.get("ref_from", ''))}</span><br><span style='color:#b91c1c; font-weight:bold;'>📝 REASON: {sanitize_text(current.get("referral_reason", "No reason provided"))}</span></div>""", unsafe_allow_html=True)
+                st.markdown(f"""<div style='background:#fee2e2; border-left:5px solid #ef4444; padding:10px; margin-top:10px;'><span style='color:#b91c1c; font-weight:bold;'>â†© REFERRED FROM: {sanitize_text(current.get("ref_from", ''))}</span><br><span style='color:#b91c1c; font-weight:bold;'>ðŸ“ REASON: {sanitize_text(current.get("referral_reason", "No reason provided"))}</span></div>""", unsafe_allow_html=True)
             
-            if st.button("🔄 REFER", use_container_width=True): st.session_state['refer_modal'] = True
+            if st.button("ðŸ”„ REFER", use_container_width=True): st.session_state['refer_modal'] = True
             
             if st.session_state.get('refer_modal'):
                 with st.form("refer_form"):
@@ -1608,34 +1767,41 @@ def render_counter(user):
                         clear_ticket_modal_states()
                         st.rerun()
 
-            with st.expander("📝 Reality Log (IOMS - Verify & Edit)", expanded=True):
-                all_txns = []
-                for cat, items in local_db.get('transaction_master', {}).items():
-                    for item in items: all_txns.append(f"[{cat}] {item}")
-                c_txn, c_btn = st.columns([3, 1])
-                new_txn = c_txn.selectbox("Add Transaction", all_txns)
-                if c_btn.button("➕ Add"):
-                    if 'actual_transactions' not in current: current['actual_transactions'] = []
-                    clean_txn = new_txn.split("] ")[1] if "]" in new_txn else new_txn
-                    category = new_txn.split("] ")[0].replace("[","") if "]" in new_txn else "GENERAL"
-                    current['actual_transactions'].append({"txn": clean_txn, "category": category, "staff": user.get('name', 'Unknown'), "timestamp": get_ph_time().isoformat()})
-                    save_db(local_db)
-                    st.rerun()
+            # ==============================================================
+            # FIX-v23.14-006: ROLE-FILTERED REALITY LOG
+            # ==============================================================
+            with st.expander("ðŸ“ Reality Log (IOMS - Verify & Edit)", expanded=True):
+                user_role = user.get('role', 'MSR')
+                filtered_txns = get_filtered_transactions_for_role(user_role, local_db.get('transaction_master', {}))
+                
+                if not filtered_txns:
+                    st.warning("No transactions available for your role.")
+                else:
+                    c_txn, c_btn = st.columns([3, 1])
+                    new_txn = c_txn.selectbox("Add Transaction", filtered_txns)
+                    if c_btn.button("âž• Add"):
+                        if 'actual_transactions' not in current: current['actual_transactions'] = []
+                        clean_txn = new_txn.split("] ")[1] if "]" in new_txn else new_txn
+                        category = new_txn.split("] ")[0].replace("[","") if "]" in new_txn else "GENERAL"
+                        current['actual_transactions'].append({"txn": clean_txn, "category": category, "staff": user.get('name', 'Unknown'), "timestamp": get_ph_time().isoformat()})
+                        save_db(local_db)
+                        st.rerun()
+                
                 if current.get('actual_transactions'):
                     st.write("---")
                     st.caption("Transactions Logged for this Ticket:")
                     for i, txn in enumerate(current['actual_transactions']):
                         col_text, col_del = st.columns([4, 1])
-                        col_text.text(f"• {txn.get('txn', '')}")
-                        if col_del.button("🗑", key=f"del_txn_{i}"): 
+                        col_text.text(f"â€¢ {txn.get('txn', '')} [{txn.get('category', '')}]")
+                        if col_del.button("ðŸ—‘", key=f"del_txn_{i}"): 
                             current['actual_transactions'].pop(i)
                             save_db(local_db)
                             st.rerun()
 
             st.markdown("<br>", unsafe_allow_html=True)
             b1, b2, b3 = st.columns(3)
-            if b1.button("✅ COMPLETE", use_container_width=True): 
-                if not current.get('actual_transactions'): st.error("⛔ BLOCKED: You must log at least one Actual Transaction first.")
+            if b1.button("âœ… COMPLETE", use_container_width=True): 
+                if not current.get('actual_transactions'): st.error("â›” BLOCKED: You must log at least one Actual Transaction first.")
                 else:
                     current["status"] = "COMPLETED"
                     current["end_time"] = get_ph_time().isoformat()
@@ -1645,14 +1811,14 @@ def render_counter(user):
                     save_db(local_db)
                     log_audit("TICKET_COMPLETE", user.get('name', 'Unknown'), target=current.get('number', ''))
                     st.rerun()
-            if b2.button("🅿️ PARK", use_container_width=True): 
+            if b2.button("ðŸ…¿ï¸ PARK", use_container_width=True): 
                 current["status"] = "PARKED"
                 current["park_timestamp"] = get_ph_time().isoformat()
                 clear_ticket_modal_states()
                 save_db(local_db)
                 log_audit("TICKET_PARK", user.get('name', 'Unknown'), target=current.get('number', ''))
                 st.rerun()
-            if b3.button("🔔 RE-CALL", use_container_width=True):
+            if b3.button("ðŸ”” RE-CALL", use_container_width=True):
                 current["start_time"] = get_ph_time().isoformat()
                 trigger_audio(current.get('number', ''), st.session_state['my_station'])
                 save_db(local_db)
@@ -1660,7 +1826,7 @@ def render_counter(user):
                 time.sleep(0.5)
                 st.rerun()
         else:
-            if st.button("🔊 CALL NEXT", type="primary", use_container_width=True):
+            if st.button("ðŸ”Š CALL NEXT", type="primary", use_container_width=True):
                 update_activity()
                 nxt = get_next_ticket(queue, st.session_state.get('surge_mode', False), st.session_state['my_station'])
                 if nxt:
@@ -1681,10 +1847,10 @@ def render_counter(user):
         count, avg_time = get_staff_efficiency(user.get('name', 'Unknown'))
         st.metric("Performance", count, delta=avg_time + " avg/txn")
         st.divider()
-        st.write("🅿️ Parked Tickets")
+        st.write("ðŸ…¿ï¸ Parked Tickets")
         parked = [t for t in local_db.get('tickets', []) if t.get("status") == "PARKED" and t.get("lane") in my_lanes]
         for p in parked:
-            if st.button(f"🔊 {p.get('number', '')}", key=p.get('id', '')):
+            if st.button(f"ðŸ”Š {p.get('number', '')}", key=p.get('id', '')):
                 update_activity()
                 p["status"] = "SERVING"
                 p["served_by"] = st.session_state['my_station']
@@ -1698,20 +1864,23 @@ def render_counter(user):
 def render_admin_panel(user):
     update_activity()
     local_db = load_db()
-    st.title("🛠 Admin & IOMS Center")
-    if st.sidebar.button("⬅ LOGOUT"): handle_safe_logout(reason="MANUAL"); st.rerun()
+    st.title("ðŸ›  Admin & IOMS Center")
+    if st.sidebar.button("â¬… LOGOUT"): handle_safe_logout(reason="MANUAL"); st.rerun()
     
     if user.get('role') in ADMIN_ROLES:
-        tabs = ["Dashboard", "Reports", "Book Appt", "Kiosk Menu", "IOMS Master", "Counters", "Users", "Resources", "Exemptions", "Announcements", "Audit Log", "Backup", "System Info"]
+        tabs = ["Dashboard", "Reports", "Reviews", "Book Appt", "Kiosk Menu", "IOMS Master", "Counters", "Users", "Resources", "Exemptions", "Announcements", "Audit Log", "Backup", "System Info"]
     else: st.error("Access Denied"); return
     
     active = st.radio("Module", tabs, horizontal=True)
     st.divider()
     
+    # ==========================================================================
+    # FIX-v23.14-005 to 012: DASHBOARD WITH COMPREHENSIVE ANALYTICS
+    # ==========================================================================
     if active == "Dashboard":
-        st.subheader("📊 G-ABAY Precision Analytics")
+        st.subheader("ðŸ“Š G-ABAY Precision Analytics Dashboard")
         
-        with st.expander("📖 Status Legend", expanded=False):
+        with st.expander("ðŸ“– Status Legend", expanded=False):
             st.markdown("<div class='status-legend'>", unsafe_allow_html=True)
             for status_code, status_info in TICKET_STATUSES.items():
                 st.markdown(f"<span class='status-item' style='background-color: {status_info['color']}20; border: 1px solid {status_info['color']};'><strong>{status_info['label']}</strong>: {status_info['desc']}</span>", unsafe_allow_html=True)
@@ -1721,7 +1890,9 @@ def render_admin_panel(user):
         with c1: time_range = st.selectbox("Select Time Range", ["Today", "Yesterday", "This Week", "This Month", "Quarterly", "Semestral", "Annual"])
         with c2: lane_filter = st.selectbox("Select Lane / Section", ["All Lanes", "Teller", "Employer", "Counter", "eCenter", "Fast Lane"])
         
+        # Gather data from current and archive
         data_source = local_db.get('history', [])
+        reviews_source = local_db.get('reviews', [])
         archive_data = []
         if os.path.exists(ARCHIVE_FILE):
             try:
@@ -1732,9 +1903,11 @@ def render_admin_panel(user):
         
         today = get_ph_time().date()
         filtered_txns = []
+        filtered_reviews = []
         
         if time_range == "Today": 
-            filtered_txns = data_source
+            filtered_txns = data_source.copy()
+            filtered_reviews = reviews_source.copy()
         else:
             start_date = today
             end_date = today
@@ -1742,24 +1915,19 @@ def render_admin_panel(user):
             if time_range == "Yesterday": 
                 start_date = today - datetime.timedelta(days=1)
                 end_date = start_date
-                
             elif time_range == "This Week": 
                 start_date = today - datetime.timedelta(days=today.weekday())
                 end_date = today
-                
             elif time_range == "This Month": 
                 start_date = today.replace(day=1)
                 end_date = today
-                
             elif time_range == "Quarterly": 
                 curr_q = (today.month - 1) // 3 + 1
                 start_date = datetime.date(today.year, 3 * curr_q - 2, 1)
                 end_date = today
-                
             elif time_range == "Semestral": 
                 start_date = datetime.date(today.year, 1, 1) if today.month <= 6 else datetime.date(today.year, 7, 1)
                 end_date = today
-                
             elif time_range == "Annual": 
                 start_date = datetime.date(today.year, 1, 1)
                 end_date = today
@@ -1769,15 +1937,18 @@ def render_admin_panel(user):
                     entry_dt = datetime.datetime.strptime(entry.get('date', ''), "%Y-%m-%d").date()
                     if start_date <= entry_dt <= end_date:
                         filtered_txns.extend(entry.get('history', []))
+                        filtered_reviews.extend(entry.get('reviews', []))
                 except (ValueError, KeyError):
                     continue
             
             if time_range != "Yesterday": 
                 filtered_txns.extend(data_source)
+                filtered_reviews.extend(reviews_source)
 
         if lane_filter != "All Lanes":
             target_code = LANE_NAME_TO_CODE.get(lane_filter)
             filtered_txns = [t for t in filtered_txns if t.get('lane') == target_code]
+            filtered_reviews = [r for r in filtered_reviews if r.get('lane') == target_code]
 
         if filtered_txns:
             df = pd.DataFrame(filtered_txns)
@@ -1807,35 +1978,187 @@ def render_admin_panel(user):
             df['Total Waiting Time (Mins)'] = df.apply(lambda x: calc_diff_mins(x.get('start_time'), x.get('timestamp')), axis=1)
             df['Total Handle Time (Mins)'] = df.apply(lambda x: calc_diff_mins(x.get('end_time'), x.get('start_time')), axis=1)
             df['Served By'] = df.apply(lambda x: x.get('served_by_staff') or x.get('served_by', 'Unknown'), axis=1)
-
-            export_cols = ['Date', 'Ticket Number', 'Time Issued', 'Time Called', 'Time Ended', 'Total Waiting Time (Mins)', 'Total Handle Time (Mins)', 'Served By']
-            csv_export = df[export_cols].to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Export Raw Data (CSV)", csv_export, "raw_data.csv", "text/csv")
             
+            # FIX-v23.14-007: Add new columns
+            df['Ticket Type'] = df['type'].fillna('REGULAR')
+            df['Lane Code'] = df['lane'].fillna('C')
+            df['Lane Name'] = df['lane'].map(LANE_CODE_TO_NAME).fillna('Unknown')
+            df['Service Category'] = df['lane'].map(LANE_TO_CATEGORY).fillna('MEMBER SERVICES')
+
+            # Enhanced Export with new columns
+            export_cols = ['Date', 'Ticket Number', 'Ticket Type', 'Lane Code', 'Lane Name', 'Service Category', 
+                          'Time Issued', 'Time Called', 'Time Ended', 'Total Waiting Time (Mins)', 
+                          'Total Handle Time (Mins)', 'Served By']
+            csv_export = df[export_cols].to_csv(index=False).encode('utf-8')
+            st.download_button("ðŸ“¥ Export Transaction Data (CSV)", csv_export, "transaction_data.csv", "text/csv")
+            
+            # Calculate metrics
             df_valid = df[df['Total Handle Time (Mins)'] > 0]
             avg_wait = round(df_valid['Total Waiting Time (Mins)'].mean()) if not df_valid.empty else 0
             avg_handle = round(df_valid['Total Handle Time (Mins)'].mean()) if not df_valid.empty else 0
             
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Volume", len(filtered_txns))
-            m2.metric("Avg Wait", f"{avg_wait}m")
-            m3.metric("Avg Handle", f"{avg_handle}m")
-            m4.metric("CSAT", "4.8⭐")
+            # FIX-v23.14-005: Calculate actual CSAT
+            csat_score, review_count = calculate_csat(filtered_reviews)
+            csat_display = f"{csat_score}â­" if review_count > 0 else "N/A"
             
+            # FIX-v23.14-008: Ticket type counts
+            type_counts = calculate_ticket_type_counts(filtered_txns)
+            
+            # FIX-v23.14-010: Efficiency metrics
+            fcr_rate, referral_rate = calculate_efficiency_metrics(filtered_txns)
+            
+            # FIX-v23.14-011: Queue metrics
+            park_rate, no_show_rate, park_recovery = calculate_queue_metrics(filtered_txns)
+            
+            # FIX-v23.14-012: Transaction metrics
+            multi_txn_rate, peak_hours = calculate_transaction_metrics(filtered_txns)
+            
+            # ROW 1: Volume Metrics
+            st.markdown("#### ðŸ“ˆ Volume Metrics")
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Total Volume", len(filtered_txns))
+            m2.metric("Priority", type_counts['PRIORITY'], delta=f"{round(type_counts['PRIORITY']/len(filtered_txns)*100) if filtered_txns else 0}%")
+            m3.metric("Regular", type_counts['REGULAR'], delta=f"{round(type_counts['REGULAR']/len(filtered_txns)*100) if filtered_txns else 0}%")
+            m4.metric("Appointment", type_counts['APPOINTMENT'])
+            
+            # ROW 2: Time & Quality Metrics
+            st.markdown("#### â±ï¸ Time & Quality Metrics")
+            m5, m6, m7, m8 = st.columns(4)
+            m5.metric("Avg Wait", f"{avg_wait}m")
+            m6.metric("Avg Handle", f"{avg_handle}m")
+            m7.metric("CSAT", csat_display, delta=f"{review_count} reviews")
+            m8.metric("First Call Resolution", f"{fcr_rate}%")
+            
+            # ROW 3: Efficiency Metrics
+            st.markdown("#### ðŸŽ¯ Efficiency Metrics")
+            m9, m10, m11, m12 = st.columns(4)
+            m9.metric("Referral Rate", f"{referral_rate}%")
+            m10.metric("Park Rate", f"{park_rate}%")
+            m11.metric("No-Show Rate", f"{no_show_rate}%")
+            m12.metric("Multi-Txn Rate", f"{multi_txn_rate}%")
+            
+            st.markdown("---")
+            
+            # CHARTS ROW 1
             c1, c2 = st.columns(2)
             with c1:
                 svc_stats = df.groupby('service').size().reset_index(name='count')
-                fig_pie = px.pie(svc_stats, names='service', values='count', title='Transaction Mix', hole=0.4)
+                fig_pie = px.pie(svc_stats, names='service', values='count', title='Transaction Mix by Service', hole=0.4)
                 st.plotly_chart(fig_pie, use_container_width=True)
             with c2:
-                df['lane_name'] = df['lane'].map(LANE_CODE_TO_NAME)
-                lane_stats = df.groupby('lane_name')['Total Waiting Time (Mins)'].mean().reset_index()
-                fig_bar = px.bar(lane_stats, x='lane_name', y='Total Waiting Time (Mins)', title='Avg Wait by Lane', color='Total Waiting Time (Mins)', color_continuous_scale=['green', 'orange', 'red'])
+                lane_stats = df.groupby('Lane Name')['Total Waiting Time (Mins)'].mean().reset_index()
+                fig_bar = px.bar(lane_stats, x='Lane Name', y='Total Waiting Time (Mins)', 
+                                title='Avg Wait Time by Lane', 
+                                color='Total Waiting Time (Mins)', 
+                                color_continuous_scale=['green', 'orange', 'red'])
                 st.plotly_chart(fig_bar, use_container_width=True)
-        else: st.info("No data available for the selected time range.")
+            
+            # CHARTS ROW 2
+            c3, c4 = st.columns(2)
+            with c3:
+                # Priority vs Regular pie
+                type_df = pd.DataFrame([
+                    {'Type': 'Priority', 'Count': type_counts['PRIORITY']},
+                    {'Type': 'Regular', 'Count': type_counts['REGULAR']},
+                    {'Type': 'Appointment', 'Count': type_counts['APPOINTMENT']}
+                ])
+                fig_type = px.pie(type_df, names='Type', values='Count', title='Ticket Type Distribution', 
+                                 color='Type', color_discrete_map={'Priority': '#F59E0B', 'Regular': '#2563EB', 'Appointment': '#10B981'})
+                st.plotly_chart(fig_type, use_container_width=True)
+            
+            with c4:
+                # Peak Hour Analysis
+                if peak_hours:
+                    peak_df = pd.DataFrame(peak_hours)
+                    fig_peak = px.bar(peak_df, x='Hour', y='Tickets', title='Peak Hour Analysis',
+                                     color='Tickets', color_continuous_scale=['green', 'yellow', 'red'])
+                    st.plotly_chart(fig_peak, use_container_width=True)
+                else:
+                    st.info("No peak hour data available")
+            
+            # Staff Performance Section
+            st.markdown("#### ðŸ‘¥ Staff Performance")
+            staff_ratings = calculate_staff_ratings(filtered_reviews)
+            if staff_ratings:
+                staff_df = pd.DataFrame(staff_ratings)
+                st.dataframe(staff_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No staff ratings available for selected period")
+                
+        else: 
+            st.info("No data available for the selected time range.")
+
+    # ==========================================================================
+    # FIX-v23.14-013: REVIEWS MODULE (Separate Export)
+    # ==========================================================================
+    elif active == "Reviews":
+        st.subheader("â­ Customer Reviews & Ratings")
+        
+        # Gather reviews
+        reviews_source = local_db.get('reviews', [])
+        archive_data = []
+        if os.path.exists(ARCHIVE_FILE):
+            try:
+                with open(ARCHIVE_FILE, "r", encoding="utf-8") as af:
+                    archive_data = json.load(af)
+            except (json.JSONDecodeError, IOError):
+                archive_data = []
+        
+        all_reviews = reviews_source.copy()
+        for entry in archive_data:
+            all_reviews.extend(entry.get('reviews', []))
+        
+        if all_reviews:
+            # Summary metrics
+            csat_score, review_count = calculate_csat(all_reviews)
+            
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Overall CSAT", f"{csat_score}â­")
+            c2.metric("Total Reviews", review_count)
+            c3.metric("5-Star Reviews", len([r for r in all_reviews if r.get('rating') == 5]))
+            
+            # Reviews table
+            reviews_df = pd.DataFrame(all_reviews)
+            if not reviews_df.empty:
+                reviews_df['Date'] = reviews_df['timestamp'].apply(
+                    lambda x: datetime.datetime.fromisoformat(x).strftime('%Y-%m-%d %I:%M %p') if x else '')
+                reviews_df['Rating'] = reviews_df['rating'].fillna(0).astype(int)
+                reviews_df['Ticket'] = reviews_df['ticket'].fillna('')
+                reviews_df['Staff'] = reviews_df.apply(
+                    lambda x: x.get('served_by_staff') or x.get('personnel') or 'Unknown', axis=1)
+                reviews_df['Lane'] = reviews_df['lane'].map(LANE_CODE_TO_NAME).fillna('N/A') if 'lane' in reviews_df.columns else 'N/A'
+                reviews_df['Comment'] = reviews_df['comment'].fillna('')
+                
+                display_cols = ['Date', 'Ticket', 'Rating', 'Staff', 'Lane', 'Comment']
+                available_cols = [c for c in display_cols if c in reviews_df.columns]
+                st.dataframe(reviews_df[available_cols], use_container_width=True, hide_index=True)
+                
+                # Export button
+                csv_export = reviews_df[available_cols].to_csv(index=False).encode('utf-8')
+                st.download_button("ðŸ“¥ Export Reviews (CSV)", csv_export, "reviews_export.csv", "text/csv")
+            
+            # Rating distribution chart
+            st.markdown("#### Rating Distribution")
+            rating_counts = [len([r for r in all_reviews if r.get('rating') == i]) for i in range(1, 6)]
+            rating_df = pd.DataFrame({
+                'Rating': ['1â­', '2â­', '3â­', '4â­', '5â­'],
+                'Count': rating_counts
+            })
+            fig_rating = px.bar(rating_df, x='Rating', y='Count', title='Rating Distribution',
+                               color='Count', color_continuous_scale=['red', 'orange', 'yellow', 'lightgreen', 'green'])
+            st.plotly_chart(fig_rating, use_container_width=True)
+            
+            # Staff ratings
+            st.markdown("#### Staff Performance by Rating")
+            staff_ratings = calculate_staff_ratings(all_reviews)
+            if staff_ratings:
+                staff_df = pd.DataFrame(staff_ratings)
+                st.dataframe(staff_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No reviews available yet.")
 
     elif active == "Reports":
-        st.subheader("📋 IOMS Report Generator")
+        st.subheader("ðŸ“‹ IOMS Report Generator")
         c1, c2 = st.columns(2)
         d_range = c1.date_input("Date Range", [get_ph_time().date(), get_ph_time().date()])
         staff_filter = c2.multiselect("Filter Staff", [s.get('name', '') for s in local_db.get('staff', {}).values()])
@@ -1873,11 +2196,11 @@ def render_admin_panel(user):
                 df_rep = pd.DataFrame(all_txns_flat)
                 st.write("**Summary**"); st.dataframe(df_rep.groupby(['Category', 'Transaction']).size().reset_index(name='Volume'), use_container_width=True)
                 st.write("**Detailed Log**"); st.dataframe(df_rep, use_container_width=True)
-                st.download_button("📥 Download IOMS CSV", df_rep.to_csv(index=False).encode('utf-8'), "ioms_report.csv", "text/csv")
+                st.download_button("ðŸ“¥ Download IOMS CSV", df_rep.to_csv(index=False).encode('utf-8'), "ioms_report.csv", "text/csv")
             else: st.info("No records found.")
 
     elif active == "Book Appt":
-        st.subheader("📅 Book Appointment")
+        st.subheader("ðŸ“… Book Appointment")
         with st.form("admin_appt"):
             nm = st.text_input("Client Name"); tm = st.time_input("Time Slot"); svc = st.text_input("Transaction"); ctr = st.selectbox("Assign to Counter (Optional)", [""] + [c['name'] for c in local_db.get('config', {}).get('counter_map', [])])
             if st.form_submit_button("Book Slot"):
@@ -1901,32 +2224,13 @@ def render_admin_panel(user):
                         save_db(local_db); log_audit("KIOSK_MENU_UPDATE", user.get('name', 'Unknown'), details=f"{label} -> {new_label}"); st.success("Updated!"); st.rerun()
                     if st.button("Delete", key=f"del_{i}"): 
                         local_db['menu'][sel_cat].pop(i); save_db(local_db); log_audit("KIOSK_MENU_DELETE", user.get('name', 'Unknown'), target=label); st.rerun()
-            
-            # FIX-v23.14-002: Add New Menu Item form
-            st.markdown("---")
-            st.write("**➕ Add New Item**")
-            with st.form("add_new_menu_item"):
-                new_label = st.text_input("Label (Display Name)")
-                new_code = st.text_input("Code (Internal ID)")
-                new_lane = st.selectbox("Route to Lane", ["C", "E", "F", "T", "A", "GATE"], 
-                                        help="GATE = Pre-qualification screening")
-                if st.form_submit_button("Add Item"):
-                    if new_label and new_code:
-                        local_db['menu'][sel_cat].append((new_label, new_code, new_lane))
-                        save_db(local_db)
-                        log_audit("KIOSK_MENU_ADD", user.get('name', 'Unknown'), 
-                                  details=f"Added '{new_label}' ({new_code}) to {sel_cat}", target=new_code)
-                        st.success(f"Added '{new_label}' to {sel_cat}!")
-                        st.rerun()
-                    else:
-                        st.error("Label and Code are required.")
 
     elif active == "Counters":
         for i, c in enumerate(local_db.get('config', {}).get('counter_map', [])): 
             c1, c2, c3, c4 = st.columns([3, 2, 1, 1])
             c1.text(c.get('name', '')); c2.text(c.get('type', ''))
             with c3:
-                with st.popover("✏️"):
+                with st.popover("âœï¸"):
                     new_n = st.text_input("Rename", c.get('name', ''), key=f"rn_{i}")
                     if st.button("Save", key=f"sv_{i}"):
                         old_name = c['name']
@@ -1935,7 +2239,7 @@ def render_admin_panel(user):
                             if local_db['staff'][s_key].get('default_station') == old_name:
                                 local_db['staff'][s_key]['default_station'] = new_n
                         save_db(local_db); log_audit("COUNTER_RENAME", user.get('name', 'Unknown'), details=f"{old_name} -> {new_n}"); st.rerun()
-            if c4.button("🗑", key=f"dc_{i}"): local_db['config']['counter_map'].pop(i); save_db(local_db); log_audit("COUNTER_DELETE", user.get('name', 'Unknown'), target=c.get('name', '')); st.rerun()
+            if c4.button("ðŸ—‘", key=f"dc_{i}"): local_db['config']['counter_map'].pop(i); save_db(local_db); log_audit("COUNTER_DELETE", user.get('name', 'Unknown'), target=c.get('name', '')); st.rerun()
         with st.form("add_counter"): 
             cn = st.text_input("Name"); ct = st.selectbox("Type", ["Counter", "Teller", "Employer", "eCenter"])
             if st.form_submit_button("Add"): local_db['config']['counter_map'].append({"name": cn, "type": ct}); save_db(local_db); log_audit("COUNTER_CREATE", user.get('name', 'Unknown'), target=cn); st.rerun()
@@ -1954,7 +2258,7 @@ def render_admin_panel(user):
         for uid, u in list(local_db.get('staff', {}).items()):
             c1, c2, c3, c4, c5 = st.columns([1.5, 3, 2, 0.5, 0.5]); c1.text(uid); c2.text(f"{u.get('name', '')} ({u.get('role', '')})"); c3.text(u.get('default_station', '-'))
             with c4:
-                with st.popover("✏️"):
+                with st.popover("âœï¸"):
                     with st.form(f"edit_{uid}"):
                         en = st.text_input("Name", u.get('name', ''))
                         enick = st.text_input("Nickname", u.get('nickname', ''))
@@ -1962,8 +2266,8 @@ def render_admin_panel(user):
                         counter_names = [c['name'] for c in local_db.get('config', {}).get('counter_map', [])]
                         est = st.selectbox("Station", counter_names, index=counter_names.index(u.get('default_station', '')) if u.get('default_station') in counter_names else 0)
                         if st.form_submit_button("Save"): local_db['staff'][uid].update({'name': en, 'nickname': enick, 'role': er, 'default_station': est}); save_db(local_db); log_audit("USER_UPDATE", user.get('name', 'Unknown'), target=uid); st.rerun()
-                    if st.button("🔑 RESET", key=f"rst_{uid}"): local_db['staff'][uid]['pass'] = "sss2026"; save_db(local_db); log_audit("PASSWORD_RESET", user.get('name', 'Unknown'), target=uid); st.toast("Reset to 'sss2026'")
-            if c5.button("🗑", key=f"del_{uid}"): del local_db['staff'][uid]; save_db(local_db); log_audit("USER_DELETE", user.get('name', 'Unknown'), target=uid); st.rerun()
+                    if st.button("ðŸ”‘ RESET", key=f"rst_{uid}"): local_db['staff'][uid]['pass'] = "sss2026"; save_db(local_db); log_audit("PASSWORD_RESET", user.get('name', 'Unknown'), target=uid); st.toast("Reset to 'sss2026'")
+            if c5.button("ðŸ—‘", key=f"del_{uid}"): del local_db['staff'][uid]; save_db(local_db); log_audit("USER_DELETE", user.get('name', 'Unknown'), target=uid); st.rerun()
         st.markdown("---")
         st.write("**Add New User**")
         with st.form("add_user_form"):
@@ -1974,7 +2278,7 @@ def render_admin_panel(user):
             new_station = st.selectbox("Assign Default Station", [c['name'] for c in local_db.get('config', {}).get('counter_map', [])])
             if st.form_submit_button("Create User"):
                 valid, msg = validate_user_id(new_id)
-                if not valid: st.error(f"⛔ {msg}")
+                if not valid: st.error(f"â›” {msg}")
                 elif new_id in local_db.get('staff', {}): st.error("User ID already exists!")
                 else: 
                     local_db['staff'][new_id] = {"pass": "123", "role": new_role, "name": new_name, "nickname": new_nick if new_nick else new_name.split()[0], "default_station": new_station, "status": "ACTIVE", "online": False}
@@ -1983,7 +2287,7 @@ def render_admin_panel(user):
     elif active == "Resources":
         st.subheader("Manage Info Hub Content")
         for i, res in enumerate(local_db.get('resources', [])):
-            with st.expander(f"{'🔗' if res.get('type') == 'LINK' else '❓'} {res.get('label', '')}"):
+            with st.expander(f"{'ðŸ”—' if res.get('type') == 'LINK' else 'â“'} {res.get('label', '')}"):
                 st.write(f"**Value:** {res.get('value', '')}")
                 if st.button("Delete", key=f"res_del_{i}"): local_db['resources'].pop(i); save_db(local_db); st.rerun()
         st.write("**Add New Resource**")
@@ -1997,8 +2301,8 @@ def render_admin_panel(user):
         def render_exemption_tab(claim_type):
             current_list = local_db.get('exemptions', {}).get(claim_type, [])
             for i, ex in enumerate(current_list):
-                c1, c2 = st.columns([4, 1]); c1.text(f"• {ex}"); 
-                if c2.button("🗑", key=f"del_{claim_type}_{i}"): local_db['exemptions'][claim_type].pop(i); save_db(local_db); st.rerun()
+                c1, c2 = st.columns([4, 1]); c1.text(f"â€¢ {ex}"); 
+                if c2.button("ðŸ—‘", key=f"del_{claim_type}_{i}"): local_db['exemptions'][claim_type].pop(i); save_db(local_db); st.rerun()
             new_ex = st.text_input(f"Add New {claim_type} Exemption", key=f"new_{claim_type}")
             if st.button(f"Add", key=f"add_{claim_type}"): local_db['exemptions'][claim_type].append(new_ex); save_db(local_db); st.rerun()
         with t_ret: render_exemption_tab("Retirement")
@@ -2010,60 +2314,52 @@ def render_admin_panel(user):
         if st.button("Update"): local_db['announcements'] = [new_txt]; save_db(local_db); log_audit("ANNOUNCEMENT_UPDATE", user.get('name', 'Unknown')); st.success("Updated!")
 
     elif active == "Audit Log":
-        st.subheader("🔍 Audit Trail Viewer")
+        st.subheader("ðŸ” Audit Trail Viewer")
         audit_entries = local_db.get('audit_log', [])
         if audit_entries:
             df_audit = pd.DataFrame(audit_entries)
             df_audit['Time'] = df_audit['timestamp'].apply(lambda x: datetime.datetime.fromisoformat(x).strftime('%Y-%m-%d %I:%M %p') if x else '')
             st.dataframe(df_audit[['Time', 'action', 'user', 'target', 'details']], use_container_width=True, hide_index=True)
-            st.download_button("📥 Export Audit Log", df_audit.to_csv(index=False).encode('utf-8'), "audit_log.csv", "text/csv")
+            st.download_button("ðŸ“¥ Export Audit Log", df_audit.to_csv(index=False).encode('utf-8'), "audit_log.csv", "text/csv")
         else: st.info("No audit entries.")
 
     elif active == "Backup": 
-        st.subheader("💾 Backup & Recovery")
-        st.download_button("📥 BACKUP NOW", data=json.dumps(local_db, indent=2), file_name="sss_backup.json")
+        st.subheader("ðŸ’¾ Backup & Recovery")
+        st.download_button("ðŸ“¥ BACKUP NOW", data=json.dumps(local_db, indent=2), file_name="sss_backup.json")
         st.markdown("---")
         st.write("**Hourly Backups (Last 24)**")
         if os.path.exists(BACKUP_DIR):
             backups = sorted(glob.glob(os.path.join(BACKUP_DIR, "sss_data_*.json")), reverse=True)
             if backups:
-                for b in backups[:10]: st.text(f"• {os.path.basename(b)} ({os.path.getsize(b)/1024:.1f} KB)")
+                for b in backups[:10]: st.text(f"â€¢ {os.path.basename(b)} ({os.path.getsize(b)/1024:.1f} KB)")
             else: st.info("No hourly backups yet.")
         
         st.markdown("---")
-        st.write("**🔴 Quarantined Corrupt Files**")
+        st.write("**ðŸ”´ Quarantined Corrupt Files**")
         if os.path.exists(CORRUPT_DIR):
             corrupt_files = glob.glob(os.path.join(CORRUPT_DIR, "*"))
             if corrupt_files:
                 for cf in corrupt_files[:10]: 
-                    st.text(f"• {os.path.basename(cf)} ({os.path.getsize(cf)/1024:.1f} KB)")
+                    st.text(f"â€¢ {os.path.basename(cf)} ({os.path.getsize(cf)/1024:.1f} KB)")
             else: 
                 st.success("No corrupt files detected.")
         else:
             st.success("No corrupt files detected.")
     
     elif active == "System Info":
-        st.subheader("⚙️ System Configuration - v23.14 PLATINUM Edition")
+        st.subheader("âš™ï¸ System Configuration - v23.13 Data Fortress Edition")
         
         st.write("**Version Information**")
         st.code(f"""
-SSS G-ABAY Version: v23.14 (PLATINUM COMPLETE Edition)
-Build Date: 2026-02-04
+SSS G-ABAY Version: v23.13 (Data Fortress Edition)
+Build Date: 2026-02-03
 Timezone: UTC+{UTC_OFFSET_HOURS} (Philippine Standard Time)
 Display Grid: {DISPLAY_GRID_COLUMNS} columns (fixed)
 Script Directory: {SCRIPT_DIR}
 Data File: {DATA_FILE}
         """)
         
-        st.write("**v23.14 PLATINUM Fixes**")
-        v14_fixes = [
-            "FIX-v23.14-001: GATE Lane in LANE_CODES (enables Display/Reports visibility)",
-            "FIX-v23.14-002: Add Menu Item Form (Kiosk Menu admin can add items)"
-        ]
-        for fix in v14_fixes:
-            st.markdown(f"🆕 {fix}")
-        
-        st.write("**v23.13 Safe-Fail Data Protection (Inherited)**")
+        st.write("**v23.13 Safe-Fail Data Protection Fixes**")
         fixes = [
             "FIX-001: Absolute Path Resolution (prevents working directory issues)",
             "FIX-002: Fail-Safe Loading with Backup Cascade (no silent reset)",
@@ -2074,7 +2370,7 @@ Data File: {DATA_FILE}
             "FIX-007: Corrupt File Forensics (quarantine, don't delete)"
         ]
         for fix in fixes:
-            st.markdown(f"✅ {fix}")
+            st.markdown(f"âœ… {fix}")
         
         st.write("**Backup Cascade Order**")
         st.code("""
@@ -2110,7 +2406,7 @@ params = st.query_params
 mode = params.get("mode")
 
 if mode == "staff" and 'user' in st.session_state:
-    if check_session_timeout(): st.warning("⚠️ Session expired due to inactivity."); st.rerun()
+    if check_session_timeout(): st.warning("âš ï¸ Session expired due to inactivity."); st.rerun()
 
 if mode == "kiosk": render_kiosk()
 elif mode == "staff":
@@ -2145,16 +2441,46 @@ elif mode == "staff":
         else: render_counter(user)
 elif mode == "display": render_display()
 else:
+    # ===========================================================================
+    # MOBILE CONSOLE WITH FIXED RATE US AND TRACKER (v23.14)
+    # ===========================================================================
     if db.get('config', {}).get("logo_url", "").startswith("http"): 
         st.image(db['config']["logo_url"], width=50)
     st.title("G-ABAY Mobile Tracker")
-    t1, t2, t3 = st.tabs(["🎫 Tracker", "ℹ️ Info Hub", "⭐ Rate Us"])
+    t1, t2, t3 = st.tabs(["ðŸŽ« Tracker", "â„¹ï¸ Info Hub", "â­ Rate Us"])
+    
+    # ==========================================================================
+    # FIX-v23.14-002: TRACKER TAB WITH EXPLICIT TRACK BUTTON
+    # ==========================================================================
     with t1:
-        tn = st.text_input("Enter Ticket # (e.g. 001)")
-        if tn:
-            local_db = load_db()
-            t = next((x for x in local_db.get('tickets', []) if x.get("number") == tn or x.get('full_id') == tn), None)
-            t_hist = next((x for x in local_db.get('history', []) if x.get("number") == tn or x.get('full_id') == tn), None)
+        st.subheader("Track Your Ticket")
+        tn = st.text_input("Enter Ticket # (e.g. 001 or H07-C-001)", key="tracker_input")
+        
+        # FIX-v23.14-002: Explicit Track button
+        if st.button("ðŸ” Track Ticket", type="primary", use_container_width=True):
+            if tn:
+                local_db = load_db()
+                # FIX-v23.14-001: Search by BOTH number AND full_id
+                t = next((x for x in local_db.get('tickets', []) 
+                         if x.get("number") == tn or x.get('full_id') == tn or tn in x.get('full_id', '')), None)
+                t_hist = next((x for x in local_db.get('history', []) 
+                              if x.get("number") == tn or x.get('full_id') == tn or tn in x.get('full_id', '')), None)
+                
+                if t:
+                    st.session_state['tracked_ticket'] = t
+                    st.session_state['track_found'] = True
+                elif t_hist:
+                    st.session_state['tracked_ticket'] = t_hist
+                    st.session_state['track_found'] = 'completed'
+                else:
+                    st.session_state['track_found'] = False
+                st.rerun()
+            else:
+                st.warning("Please enter a ticket number")
+        
+        # Display tracking result
+        if st.session_state.get('track_found') == True:
+            t = st.session_state.get('tracked_ticket')
             if t:
                 if t.get('status') == "PARKED":
                     try:
@@ -2162,29 +2488,41 @@ else:
                         remaining = datetime.timedelta(minutes=PARK_GRACE_MINUTES) - (get_ph_time() - park_time)
                         if remaining.total_seconds() > 0:
                             mins, secs = divmod(remaining.total_seconds(), 60)
-                            st.markdown(f"""<div style="font-size:30px; font-weight:bold; color:#b91c1c; text-align:center;">PARKED: {int(mins):02d}:{int(secs):02d}</div>""", unsafe_allow_html=True)
-                            st.error("⚠️ PLEASE APPROACH COUNTER IMMEDIATELY TO AVOID FORFEITURE.")
+                            st.markdown(f"""<div style="font-size:30px; font-weight:bold; color:#b91c1c; text-align:center;">ðŸ…¿ï¸ PARKED: {int(mins):02d}:{int(secs):02d}</div>""", unsafe_allow_html=True)
+                            st.error("âš ï¸ PLEASE APPROACH COUNTER IMMEDIATELY TO AVOID FORFEITURE.")
                         else: 
-                            st.error("❌ TICKET EXPIRED")
+                            st.error("âŒ TICKET EXPIRED")
                     except (ValueError, TypeError):
-                        st.error("❌ TICKET STATUS ERROR")
+                        st.error("âŒ TICKET STATUS ERROR")
                 elif t.get('status') == "SERVING": 
-                    st.success(f"🔊 NOW SERVING at {t.get('served_by', 'Counter')}. Please proceed immediately.")
+                    st.success(f"ðŸ”Š NOW SERVING at {t.get('served_by', 'Counter')}. Please proceed immediately!")
+                    st.balloons()
                 else:
-                    st.info(f"Status: {t.get('status', 'UNKNOWN')}")
+                    st.info(f"Status: **{t.get('status', 'WAITING')}**")
                     wait_str = calculate_specific_wait_time(t.get('id', ''), t.get('lane', 'C'))
                     people_ahead = calculate_people_ahead(t.get('id', ''), t.get('lane', 'C'))
                     c1, c2 = st.columns(2)
                     c1.metric("Est. Wait", wait_str)
-                    if people_ahead == 0: c2.success("You are Next!")
-                    else: c2.metric("People Ahead", people_ahead)
-                    st.write(f"Your Ticket: {t.get('number', '')}")
-                time.sleep(5)
+                    if people_ahead == 0: 
+                        c2.success("ðŸŽ‰ You are Next!")
+                    else: 
+                        c2.metric("People Ahead", people_ahead)
+                    st.write(f"**Ticket:** {t.get('full_id', t.get('number', ''))}")
+                    st.write(f"**Service:** {t.get('service', 'N/A')}")
+                
+                # Refresh button
+                if st.button("ðŸ”„ Refresh Status"):
+                    st.rerun()
+                    
+        elif st.session_state.get('track_found') == 'completed':
+            st.success("âœ… TRANSACTION COMPLETE. Thank you for visiting SSS Gingoog!")
+            if st.button("â­ Rate Your Experience"):
+                t = st.session_state.get('tracked_ticket', {})
+                st.session_state['rate_ticket'] = t.get('number', '')
                 st.rerun()
-            elif t_hist: 
-                st.success("✅ TRANSACTION COMPLETE. Thank you!")
-            else: 
-                st.error("Not Found (Check Ticket Number)")
+        elif st.session_state.get('track_found') == False:
+            st.error("âŒ Ticket not found. Please check the ticket number and try again.")
+    
     with t2:
         st.subheader("Member Resources")
         for l in [r for r in db.get('resources', []) if r.get('type') == 'LINK']: 
@@ -2192,28 +2530,95 @@ else:
         for f in [r for r in db.get('resources', []) if r.get('type') == 'FAQ']: 
             with st.expander(sanitize_text(f.get('label', ''))): 
                 st.write(sanitize_text(f.get('value', '')))
+    
+    # ==========================================================================
+    # FIX-v23.14-001, 002, 003, 004: RATE US TAB WITH ALL FIXES
+    # ==========================================================================
     with t3:
         st.subheader("Rate Our Service")
-        verify_t = st.text_input("Enter your Ticket Number to rate:", key="rate_t")
-        if verify_t:
-            local_db = load_db()
-            active_t = next((x for x in local_db.get('history', []) if x.get('number') == verify_t), None)
+        
+        # Pre-fill from tracker if available
+        default_ticket = st.session_state.get('rate_ticket', '')
+        verify_t = st.text_input("Enter your Ticket Number to rate:", value=default_ticket, key="rate_t")
+        
+        # FIX-v23.14-002: Explicit Verify button
+        if st.button("ðŸ” Verify Ticket", type="primary", use_container_width=True, key="verify_btn"):
+            if verify_t:
+                local_db = load_db()
+                # FIX-v23.14-001: Search by BOTH number AND full_id
+                active_t = next((x for x in local_db.get('history', []) 
+                                if x.get('number') == verify_t 
+                                or x.get('full_id') == verify_t 
+                                or verify_t in x.get('full_id', '')), None)
+                if active_t:
+                    st.session_state['verified_ticket'] = active_t
+                    st.session_state['verify_success'] = True
+                else:
+                    st.session_state['verify_success'] = False
+                st.rerun()
+            else:
+                st.warning("Please enter a ticket number")
+        
+        # Display rating form if verified
+        if st.session_state.get('verify_success') == True:
+            active_t = st.session_state.get('verified_ticket')
             if active_t:
-                st.success(f"Verified! Served by: {active_t.get('served_by_staff') or active_t.get('served_by', 'Unknown')}")
-                with st.form("rev"):
+                staff_name = active_t.get('served_by_staff') or active_t.get('served_by', 'Unknown')
+                st.success(f"âœ… Verified! Served by: **{staff_name}**")
+                st.write(f"**Service:** {active_t.get('service', 'N/A')}")
+                st.write(f"**Ticket:** {active_t.get('full_id', active_t.get('number', ''))}")
+                
+                st.markdown("---")
+                st.markdown("### How would you rate your experience?")
+                
+                with st.form("rating_form"):
+                    # FIX-v23.14-003: Rating selection
                     rate = st.feedback("stars")
-                    pers = st.text_input("Personnel Served You (Optional)")
-                    comm = st.text_area("Comments")
-                    if st.form_submit_button("Submit Rating"):
-                        review_entry = {"ticket": verify_t, "rating": (rate if rate else 0) + 1, "personnel": pers, "comment": comm, "timestamp": get_ph_time().isoformat()}
-                        local_db['reviews'].append(review_entry)
-                        save_db(local_db)
-                        st.success("Thank you!")
-                        time.sleep(2)
-                        st.rerun()
-            else: 
-                st.error("Ticket not found in completed transactions.")
+                    
+                    st.markdown("---")
+                    pers = st.text_input("Personnel who served you (Optional - auto-filled)", value=staff_name)
+                    comm = st.text_area("Comments / Suggestions (Optional)")
+                    
+                    submitted = st.form_submit_button("ðŸ“¤ Submit Rating", type="primary", use_container_width=True)
+                    
+                    if submitted:
+                        # FIX-v23.14-003: REQUIRE rating before submit
+                        if rate is None:
+                            st.error("â›” Please select a star rating (1-5) before submitting.")
+                        else:
+                            local_db = load_db()
+                            
+                            # FIX-v23.14-004: Enhanced review structure with all tracking fields
+                            review_entry = {
+                                "ticket": verify_t,
+                                "ticket_full_id": active_t.get('full_id', verify_t),
+                                "lane": active_t.get('lane', 'C'),
+                                "served_by_staff": staff_name,
+                                "service": active_t.get('service', ''),
+                                "ticket_type": active_t.get('type', 'REGULAR'),
+                                "rating": rate + 1,  # st.feedback returns 0-4, we need 1-5
+                                "personnel": pers,
+                                "comment": comm,
+                                "timestamp": get_ph_time().isoformat()
+                            }
+                            
+                            local_db['reviews'].append(review_entry)
+                            save_db(local_db)
+                            
+                            # Clear session state
+                            st.session_state['verify_success'] = None
+                            st.session_state['verified_ticket'] = None
+                            st.session_state['rate_ticket'] = ''
+                            
+                            st.success("ðŸŽ‰ Thank you for your feedback! Your rating has been recorded.")
+                            st.balloons()
+                            time.sleep(2)
+                            st.rerun()
+        
+        elif st.session_state.get('verify_success') == False:
+            st.error("âŒ Ticket not found in completed transactions. Please check the ticket number.")
+            st.info("ðŸ’¡ You can only rate after your transaction is completed.")
 
 # ==============================================================================
-# END OF SSS G-ABAY v23.14 - PLATINUM COMPLETE EDITION
+# END OF SSS G-ABAY v23.14 - ANALYTICS PRECISION EDITION
 # ==============================================================================
