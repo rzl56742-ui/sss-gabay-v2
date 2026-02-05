@@ -1,28 +1,28 @@
 # ==============================================================================
-# SSS G-ABAY v23.14 - BRANCH OPERATING SYSTEM (PLATINUM EDITION)
+# SSS G-ABAY v23.14 - BRANCH OPERATING SYSTEM (ANALYTICS PRECISION EDITION)
 # "Visuals: V23.4 | Backend: V23.5 | Security: V23.7 | Integrity: V23.8 | 
-#  Polish: V23.9 | Precision: V23.12 | Data Protection: V23.13 | Platinum: V23.14"
+#  Polish: V23.9 | Precision: V23.12 | Data Protection: V23.13 | Analytics: V23.14"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
-# v23.14 PLATINUM SURGICAL FIXES:
-#   FIX-v23.14-001: GATE Lane in LANE_CODES (enables routing visibility)
-#   FIX-v23.14-002: Add Menu Item Form (Kiosk Menu admin can add items)
+# v23.14 SURGICAL FIXES (Analytics & UX Enhancements):
+#   FIX-v23.14-001: Rate Us - Search by full_id AND number
+#   FIX-v23.14-002: Tracker/Rate Us - Add explicit Track/Verify buttons
+#   FIX-v23.14-003: Rate Us - Require rating (1-5) before submit
+#   FIX-v23.14-004: Enhanced Review Structure (lane, staff, service tracking)
+#   FIX-v23.14-005: Dashboard CSAT - Calculate from actual reviews
+#   FIX-v23.14-006: Reality Log - Filter by staff role (IOMS categories)
+#   FIX-v23.14-007: CSV Export - Add Ticket Type, Lane, Category columns
+#   FIX-v23.14-008: Dashboard - Priority/Regular count metrics
+#   FIX-v23.14-009: Dashboard - Service Quality Analytics (Rating by Staff/Lane)
+#   FIX-v23.14-010: Dashboard - Efficiency Analytics (FCR, Referral Rate)
+#   FIX-v23.14-011: Dashboard - Queue Analytics (Park Rate, No-Show Rate)
+#   FIX-v23.14-012: Dashboard - Transaction Analytics (Multi-Txn, Peak Hour)
+#   FIX-v23.14-013: Separate Reviews CSV Export
 # ==============================================================================
-# INHERITED FROM v23.13 (Safe-Fail Data Protection):
-#   FIX-v23.13-001: Absolute Path Resolution (prevents working directory issues)
-#   FIX-v23.13-002: Fail-Safe Loading with Backup Cascade (no silent reset)
-#   FIX-v23.13-003: Rollover Persistence (force save after midnight sweeper)
-#   FIX-v23.13-004: Atomic Save with Verification (0-byte protection)
-#   FIX-v23.13-005: Startup Health Check (staff count validation)
-#   FIX-v23.13-006: Specific Exception Handling (no bare except)
-#   FIX-v23.13-007: Corrupt File Forensics (rename, don't delete)
-# ==============================================================================
-# INHERITED FROM v23.12:
-#   - Ghost Ticket Logic Repair (Two-Phase Matching)
-#   - CSS-Based Responsive Scaling (vw units)
-#   - Global Constant Optimization
-#   - 6-Column Fixed Grid, Supervisor Exclusion, Role-Based Colors
-#   - Precision Staff Tracking (served_by_staff)
+# INHERITED FROM v23.13 (Data Fortress):
+#   - Absolute Path Resolution, Fail-Safe Loading, Backup Cascade
+#   - Rollover Persistence, Atomic Save, Startup Health Check
+#   - Specific Exception Handling, Corrupt File Forensics
 # ==============================================================================
 
 import streamlit as st
@@ -36,6 +36,7 @@ import math
 import re
 import html
 import plotly.express as px
+import plotly.graph_objects as go
 import urllib.parse
 import io
 import base64
@@ -99,14 +100,12 @@ DEFAULT_AVG_TXN_MINUTES = 15
 DISPLAY_GRID_COLUMNS = 6  # Fixed 6-column grid
 
 # --- LANE CONFIGURATION ---
-# FIX-v23.14-001: Added GATE lane for pre-qualification routing
 LANE_CODES = {
     "T": {"name": "Teller", "desc": "Payments", "color": "#DC2626", "icon": "💳"},
     "A": {"name": "Employer", "desc": "Account Mgmt", "color": "#16A34A", "icon": "💼"},
     "C": {"name": "Counter", "desc": "Complex Trans", "color": "#2563EB", "icon": "👤"},
     "E": {"name": "eCenter", "desc": "Online Services", "color": "#2563EB", "icon": "💻"},
-    "F": {"name": "Fast Lane", "desc": "Simple Trans", "color": "#2563EB", "icon": "⚡"},
-    "GATE": {"name": "Screening", "desc": "Pre-Qualification", "color": "#7C3AED", "icon": "🛡️"}
+    "F": {"name": "Fast Lane", "desc": "Simple Trans", "color": "#2563EB", "icon": "⚡"}
 }
 
 # --- LANE REVERSE MAPPING ---
@@ -120,6 +119,20 @@ LANE_TO_CATEGORY = {
     "C": "MEMBER SERVICES",
     "E": "MEMBER SERVICES",
     "F": "MEMBER SERVICES"
+}
+
+# ==============================================================================
+# FIX-v23.14-006: ROLE TO IOMS CATEGORY MAPPING
+# Controls which transaction categories each role can see in Reality Log
+# ==============================================================================
+ROLE_TO_IOMS_CATEGORY = {
+    "TELLER": ["PAYMENTS"],
+    "AO": ["EMPLOYERS"],
+    "MSR": ["MEMBER SERVICES"],
+    "ADMIN": ["PAYMENTS", "EMPLOYERS", "MEMBER SERVICES"],
+    "BRANCH_HEAD": ["PAYMENTS", "EMPLOYERS", "MEMBER SERVICES"],
+    "SECTION_HEAD": ["PAYMENTS", "EMPLOYERS", "MEMBER SERVICES"],
+    "DIV_HEAD": ["PAYMENTS", "EMPLOYERS", "MEMBER SERVICES"]
 }
 
 # --- STATUS DEFINITIONS ---
@@ -935,6 +948,152 @@ def get_lane_color(lane_code):
     return LANE_CODES.get(lane_code, {}).get('color', '#2563EB')
 
 # ==============================================================================
+# FIX-v23.14-006: GET FILTERED TRANSACTIONS BY ROLE
+# ==============================================================================
+def get_filtered_transactions_for_role(role, transaction_master):
+    """
+    Returns filtered transaction list based on staff role.
+    TELLER sees PAYMENTS only, AO sees EMPLOYERS only, MSR sees MEMBER SERVICES only.
+    ADMIN/BRANCH_HEAD/SECTION_HEAD/DIV_HEAD see ALL categories.
+    """
+    allowed_categories = ROLE_TO_IOMS_CATEGORY.get(role, ["MEMBER SERVICES"])
+    filtered_txns = []
+    for cat in allowed_categories:
+        items = transaction_master.get(cat, [])
+        for item in items:
+            filtered_txns.append(f"[{cat}] {item}")
+    return filtered_txns
+
+# ==============================================================================
+# FIX-v23.14-005 & 009: CALCULATE ACTUAL CSAT FROM REVIEWS
+# ==============================================================================
+def calculate_csat(reviews_list):
+    """Calculate Customer Satisfaction score from reviews."""
+    if not reviews_list:
+        return 0.0, 0
+    
+    valid_ratings = [r.get('rating', 0) for r in reviews_list if r.get('rating') and r.get('rating') > 0]
+    if not valid_ratings:
+        return 0.0, 0
+    
+    avg_rating = sum(valid_ratings) / len(valid_ratings)
+    return round(avg_rating, 1), len(valid_ratings)
+
+def calculate_staff_ratings(reviews_list):
+    """Calculate average rating per staff member."""
+    staff_ratings = {}
+    for review in reviews_list:
+        staff = review.get('served_by_staff') or review.get('personnel') or 'Unknown'
+        rating = review.get('rating', 0)
+        if staff and rating > 0:
+            if staff not in staff_ratings:
+                staff_ratings[staff] = {'total': 0, 'count': 0}
+            staff_ratings[staff]['total'] += rating
+            staff_ratings[staff]['count'] += 1
+    
+    result = []
+    for staff, data in staff_ratings.items():
+        avg = round(data['total'] / data['count'], 1) if data['count'] > 0 else 0
+        result.append({'Staff': staff, 'Avg Rating': avg, 'Reviews': data['count']})
+    
+    return sorted(result, key=lambda x: x['Avg Rating'], reverse=True)
+
+def calculate_lane_ratings(reviews_list):
+    """Calculate average rating per lane."""
+    lane_ratings = {}
+    for review in reviews_list:
+        lane = review.get('lane', 'Unknown')
+        lane_name = LANE_CODE_TO_NAME.get(lane, lane)
+        rating = review.get('rating', 0)
+        if rating > 0:
+            if lane_name not in lane_ratings:
+                lane_ratings[lane_name] = {'total': 0, 'count': 0}
+            lane_ratings[lane_name]['total'] += rating
+            lane_ratings[lane_name]['count'] += 1
+    
+    result = []
+    for lane, data in lane_ratings.items():
+        avg = round(data['total'] / data['count'], 1) if data['count'] > 0 else 0
+        result.append({'Lane': lane, 'Avg Rating': avg, 'Reviews': data['count']})
+    
+    return result
+
+# ==============================================================================
+# FIX-v23.14-010: EFFICIENCY ANALYTICS
+# ==============================================================================
+def calculate_efficiency_metrics(history_list):
+    """Calculate First Call Resolution and Referral Rate."""
+    if not history_list:
+        return 0.0, 0.0
+    
+    total = len(history_list)
+    referred = len([t for t in history_list if t.get('ref_from')])
+    
+    referral_rate = round((referred / total) * 100, 1) if total > 0 else 0.0
+    fcr_rate = round(((total - referred) / total) * 100, 1) if total > 0 else 0.0
+    
+    return fcr_rate, referral_rate
+
+# ==============================================================================
+# FIX-v23.14-011: QUEUE ANALYTICS
+# ==============================================================================
+def calculate_queue_metrics(history_list):
+    """Calculate Park Rate and No-Show Rate."""
+    if not history_list:
+        return 0.0, 0.0, 0.0
+    
+    total = len(history_list)
+    parked = len([t for t in history_list if t.get('park_timestamp')])
+    no_show = len([t for t in history_list if t.get('status') == 'NO_SHOW'])
+    completed_after_park = len([t for t in history_list if t.get('park_timestamp') and t.get('status') == 'COMPLETED'])
+    
+    park_rate = round((parked / total) * 100, 1) if total > 0 else 0.0
+    no_show_rate = round((no_show / total) * 100, 1) if total > 0 else 0.0
+    park_recovery = round((completed_after_park / parked) * 100, 1) if parked > 0 else 0.0
+    
+    return park_rate, no_show_rate, park_recovery
+
+# ==============================================================================
+# FIX-v23.14-012: TRANSACTION ANALYTICS
+# ==============================================================================
+def calculate_transaction_metrics(history_list):
+    """Calculate Multi-Transaction Rate and Peak Hours."""
+    if not history_list:
+        return 0.0, []
+    
+    total = len(history_list)
+    multi_txn = len([t for t in history_list if len(t.get('actual_transactions', [])) > 1])
+    multi_txn_rate = round((multi_txn / total) * 100, 1) if total > 0 else 0.0
+    
+    # Peak hour analysis
+    hour_counts = {}
+    for t in history_list:
+        try:
+            ts = datetime.datetime.fromisoformat(t.get('timestamp', ''))
+            hour = ts.hour
+            hour_counts[hour] = hour_counts.get(hour, 0) + 1
+        except (ValueError, TypeError):
+            continue
+    
+    peak_hours = [{'Hour': f"{h:02d}:00", 'Tickets': c} for h, c in sorted(hour_counts.items())]
+    
+    return multi_txn_rate, peak_hours
+
+# ==============================================================================
+# FIX-v23.14-008: TICKET TYPE COUNTS
+# ==============================================================================
+def calculate_ticket_type_counts(history_list):
+    """Count tickets by type (PRIORITY, REGULAR, APPOINTMENT)."""
+    counts = {'PRIORITY': 0, 'REGULAR': 0, 'APPOINTMENT': 0}
+    for t in history_list:
+        t_type = t.get('type', 'REGULAR')
+        if t_type in counts:
+            counts[t_type] += 1
+        else:
+            counts['REGULAR'] += 1
+    return counts
+
+# ==============================================================================
 # KIOSK WAIT TIME ESTIMATE CALCULATOR
 # ==============================================================================
 def calculate_lane_wait_estimate(lane_code):
@@ -1287,7 +1446,7 @@ def render_kiosk():
         with c3:
             if st.button("🖨️ PRINT", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
     
-    st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.14</div>", unsafe_allow_html=True)
+    st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.13</div>", unsafe_allow_html=True)
 
 # ==============================================================================
 # DISPLAY MODULE (TV Display)
@@ -1459,7 +1618,7 @@ def render_display():
         if status != "NORMAL": 
             txt = f"⚠ NOTICE: We are currently experiencing {status} connection. Please bear with us. {txt}"
         st.markdown(f"<div style='background: {bg_color}; color: {text_color}; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%; font-size:20px;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
-        st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.14</div>", unsafe_allow_html=True)
+        st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.13</div>", unsafe_allow_html=True)
     
     time.sleep(3)
     st.rerun()
@@ -1608,25 +1767,32 @@ def render_counter(user):
                         clear_ticket_modal_states()
                         st.rerun()
 
+            # ==============================================================
+            # FIX-v23.14-006: ROLE-FILTERED REALITY LOG
+            # ==============================================================
             with st.expander("📝 Reality Log (IOMS - Verify & Edit)", expanded=True):
-                all_txns = []
-                for cat, items in local_db.get('transaction_master', {}).items():
-                    for item in items: all_txns.append(f"[{cat}] {item}")
-                c_txn, c_btn = st.columns([3, 1])
-                new_txn = c_txn.selectbox("Add Transaction", all_txns)
-                if c_btn.button("➕ Add"):
-                    if 'actual_transactions' not in current: current['actual_transactions'] = []
-                    clean_txn = new_txn.split("] ")[1] if "]" in new_txn else new_txn
-                    category = new_txn.split("] ")[0].replace("[","") if "]" in new_txn else "GENERAL"
-                    current['actual_transactions'].append({"txn": clean_txn, "category": category, "staff": user.get('name', 'Unknown'), "timestamp": get_ph_time().isoformat()})
-                    save_db(local_db)
-                    st.rerun()
+                user_role = user.get('role', 'MSR')
+                filtered_txns = get_filtered_transactions_for_role(user_role, local_db.get('transaction_master', {}))
+                
+                if not filtered_txns:
+                    st.warning("No transactions available for your role.")
+                else:
+                    c_txn, c_btn = st.columns([3, 1])
+                    new_txn = c_txn.selectbox("Add Transaction", filtered_txns)
+                    if c_btn.button("➕ Add"):
+                        if 'actual_transactions' not in current: current['actual_transactions'] = []
+                        clean_txn = new_txn.split("] ")[1] if "]" in new_txn else new_txn
+                        category = new_txn.split("] ")[0].replace("[","") if "]" in new_txn else "GENERAL"
+                        current['actual_transactions'].append({"txn": clean_txn, "category": category, "staff": user.get('name', 'Unknown'), "timestamp": get_ph_time().isoformat()})
+                        save_db(local_db)
+                        st.rerun()
+                
                 if current.get('actual_transactions'):
                     st.write("---")
                     st.caption("Transactions Logged for this Ticket:")
                     for i, txn in enumerate(current['actual_transactions']):
                         col_text, col_del = st.columns([4, 1])
-                        col_text.text(f"• {txn.get('txn', '')}")
+                        col_text.text(f"• {txn.get('txn', '')} [{txn.get('category', '')}]")
                         if col_del.button("🗑", key=f"del_txn_{i}"): 
                             current['actual_transactions'].pop(i)
                             save_db(local_db)
@@ -1702,14 +1868,17 @@ def render_admin_panel(user):
     if st.sidebar.button("⬅ LOGOUT"): handle_safe_logout(reason="MANUAL"); st.rerun()
     
     if user.get('role') in ADMIN_ROLES:
-        tabs = ["Dashboard", "Reports", "Book Appt", "Kiosk Menu", "IOMS Master", "Counters", "Users", "Resources", "Exemptions", "Announcements", "Audit Log", "Backup", "System Info"]
+        tabs = ["Dashboard", "Reports", "Reviews", "Book Appt", "Kiosk Menu", "IOMS Master", "Counters", "Users", "Resources", "Exemptions", "Announcements", "Audit Log", "Backup", "System Info"]
     else: st.error("Access Denied"); return
     
     active = st.radio("Module", tabs, horizontal=True)
     st.divider()
     
+    # ==========================================================================
+    # FIX-v23.14-005 to 012: DASHBOARD WITH COMPREHENSIVE ANALYTICS
+    # ==========================================================================
     if active == "Dashboard":
-        st.subheader("📊 G-ABAY Precision Analytics")
+        st.subheader("📊 G-ABAY Precision Analytics Dashboard")
         
         with st.expander("📖 Status Legend", expanded=False):
             st.markdown("<div class='status-legend'>", unsafe_allow_html=True)
@@ -1721,7 +1890,9 @@ def render_admin_panel(user):
         with c1: time_range = st.selectbox("Select Time Range", ["Today", "Yesterday", "This Week", "This Month", "Quarterly", "Semestral", "Annual"])
         with c2: lane_filter = st.selectbox("Select Lane / Section", ["All Lanes", "Teller", "Employer", "Counter", "eCenter", "Fast Lane"])
         
+        # Gather data from current and archive
         data_source = local_db.get('history', [])
+        reviews_source = local_db.get('reviews', [])
         archive_data = []
         if os.path.exists(ARCHIVE_FILE):
             try:
@@ -1732,9 +1903,11 @@ def render_admin_panel(user):
         
         today = get_ph_time().date()
         filtered_txns = []
+        filtered_reviews = []
         
         if time_range == "Today": 
-            filtered_txns = data_source
+            filtered_txns = data_source.copy()
+            filtered_reviews = reviews_source.copy()
         else:
             start_date = today
             end_date = today
@@ -1742,24 +1915,19 @@ def render_admin_panel(user):
             if time_range == "Yesterday": 
                 start_date = today - datetime.timedelta(days=1)
                 end_date = start_date
-                
             elif time_range == "This Week": 
                 start_date = today - datetime.timedelta(days=today.weekday())
                 end_date = today
-                
             elif time_range == "This Month": 
                 start_date = today.replace(day=1)
                 end_date = today
-                
             elif time_range == "Quarterly": 
                 curr_q = (today.month - 1) // 3 + 1
                 start_date = datetime.date(today.year, 3 * curr_q - 2, 1)
                 end_date = today
-                
             elif time_range == "Semestral": 
                 start_date = datetime.date(today.year, 1, 1) if today.month <= 6 else datetime.date(today.year, 7, 1)
                 end_date = today
-                
             elif time_range == "Annual": 
                 start_date = datetime.date(today.year, 1, 1)
                 end_date = today
@@ -1769,15 +1937,18 @@ def render_admin_panel(user):
                     entry_dt = datetime.datetime.strptime(entry.get('date', ''), "%Y-%m-%d").date()
                     if start_date <= entry_dt <= end_date:
                         filtered_txns.extend(entry.get('history', []))
+                        filtered_reviews.extend(entry.get('reviews', []))
                 except (ValueError, KeyError):
                     continue
             
             if time_range != "Yesterday": 
                 filtered_txns.extend(data_source)
+                filtered_reviews.extend(reviews_source)
 
         if lane_filter != "All Lanes":
             target_code = LANE_NAME_TO_CODE.get(lane_filter)
             filtered_txns = [t for t in filtered_txns if t.get('lane') == target_code]
+            filtered_reviews = [r for r in filtered_reviews if r.get('lane') == target_code]
 
         if filtered_txns:
             df = pd.DataFrame(filtered_txns)
@@ -1807,32 +1978,184 @@ def render_admin_panel(user):
             df['Total Waiting Time (Mins)'] = df.apply(lambda x: calc_diff_mins(x.get('start_time'), x.get('timestamp')), axis=1)
             df['Total Handle Time (Mins)'] = df.apply(lambda x: calc_diff_mins(x.get('end_time'), x.get('start_time')), axis=1)
             df['Served By'] = df.apply(lambda x: x.get('served_by_staff') or x.get('served_by', 'Unknown'), axis=1)
-
-            export_cols = ['Date', 'Ticket Number', 'Time Issued', 'Time Called', 'Time Ended', 'Total Waiting Time (Mins)', 'Total Handle Time (Mins)', 'Served By']
-            csv_export = df[export_cols].to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Export Raw Data (CSV)", csv_export, "raw_data.csv", "text/csv")
             
+            # FIX-v23.14-007: Add new columns
+            df['Ticket Type'] = df['type'].fillna('REGULAR')
+            df['Lane Code'] = df['lane'].fillna('C')
+            df['Lane Name'] = df['lane'].map(LANE_CODE_TO_NAME).fillna('Unknown')
+            df['Service Category'] = df['lane'].map(LANE_TO_CATEGORY).fillna('MEMBER SERVICES')
+
+            # Enhanced Export with new columns
+            export_cols = ['Date', 'Ticket Number', 'Ticket Type', 'Lane Code', 'Lane Name', 'Service Category', 
+                          'Time Issued', 'Time Called', 'Time Ended', 'Total Waiting Time (Mins)', 
+                          'Total Handle Time (Mins)', 'Served By']
+            csv_export = df[export_cols].to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Export Transaction Data (CSV)", csv_export, "transaction_data.csv", "text/csv")
+            
+            # Calculate metrics
             df_valid = df[df['Total Handle Time (Mins)'] > 0]
             avg_wait = round(df_valid['Total Waiting Time (Mins)'].mean()) if not df_valid.empty else 0
             avg_handle = round(df_valid['Total Handle Time (Mins)'].mean()) if not df_valid.empty else 0
             
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Volume", len(filtered_txns))
-            m2.metric("Avg Wait", f"{avg_wait}m")
-            m3.metric("Avg Handle", f"{avg_handle}m")
-            m4.metric("CSAT", "4.8⭐")
+            # FIX-v23.14-005: Calculate actual CSAT
+            csat_score, review_count = calculate_csat(filtered_reviews)
+            csat_display = f"{csat_score}⭐" if review_count > 0 else "N/A"
             
+            # FIX-v23.14-008: Ticket type counts
+            type_counts = calculate_ticket_type_counts(filtered_txns)
+            
+            # FIX-v23.14-010: Efficiency metrics
+            fcr_rate, referral_rate = calculate_efficiency_metrics(filtered_txns)
+            
+            # FIX-v23.14-011: Queue metrics
+            park_rate, no_show_rate, park_recovery = calculate_queue_metrics(filtered_txns)
+            
+            # FIX-v23.14-012: Transaction metrics
+            multi_txn_rate, peak_hours = calculate_transaction_metrics(filtered_txns)
+            
+            # ROW 1: Volume Metrics
+            st.markdown("#### 📈 Volume Metrics")
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Total Volume", len(filtered_txns))
+            m2.metric("Priority", type_counts['PRIORITY'], delta=f"{round(type_counts['PRIORITY']/len(filtered_txns)*100) if filtered_txns else 0}%")
+            m3.metric("Regular", type_counts['REGULAR'], delta=f"{round(type_counts['REGULAR']/len(filtered_txns)*100) if filtered_txns else 0}%")
+            m4.metric("Appointment", type_counts['APPOINTMENT'])
+            
+            # ROW 2: Time & Quality Metrics
+            st.markdown("#### ⏱️ Time & Quality Metrics")
+            m5, m6, m7, m8 = st.columns(4)
+            m5.metric("Avg Wait", f"{avg_wait}m")
+            m6.metric("Avg Handle", f"{avg_handle}m")
+            m7.metric("CSAT", csat_display, delta=f"{review_count} reviews")
+            m8.metric("First Call Resolution", f"{fcr_rate}%")
+            
+            # ROW 3: Efficiency Metrics
+            st.markdown("#### 🎯 Efficiency Metrics")
+            m9, m10, m11, m12 = st.columns(4)
+            m9.metric("Referral Rate", f"{referral_rate}%")
+            m10.metric("Park Rate", f"{park_rate}%")
+            m11.metric("No-Show Rate", f"{no_show_rate}%")
+            m12.metric("Multi-Txn Rate", f"{multi_txn_rate}%")
+            
+            st.markdown("---")
+            
+            # CHARTS ROW 1
             c1, c2 = st.columns(2)
             with c1:
                 svc_stats = df.groupby('service').size().reset_index(name='count')
-                fig_pie = px.pie(svc_stats, names='service', values='count', title='Transaction Mix', hole=0.4)
+                fig_pie = px.pie(svc_stats, names='service', values='count', title='Transaction Mix by Service', hole=0.4)
                 st.plotly_chart(fig_pie, use_container_width=True)
             with c2:
-                df['lane_name'] = df['lane'].map(LANE_CODE_TO_NAME)
-                lane_stats = df.groupby('lane_name')['Total Waiting Time (Mins)'].mean().reset_index()
-                fig_bar = px.bar(lane_stats, x='lane_name', y='Total Waiting Time (Mins)', title='Avg Wait by Lane', color='Total Waiting Time (Mins)', color_continuous_scale=['green', 'orange', 'red'])
+                lane_stats = df.groupby('Lane Name')['Total Waiting Time (Mins)'].mean().reset_index()
+                fig_bar = px.bar(lane_stats, x='Lane Name', y='Total Waiting Time (Mins)', 
+                                title='Avg Wait Time by Lane', 
+                                color='Total Waiting Time (Mins)', 
+                                color_continuous_scale=['green', 'orange', 'red'])
                 st.plotly_chart(fig_bar, use_container_width=True)
-        else: st.info("No data available for the selected time range.")
+            
+            # CHARTS ROW 2
+            c3, c4 = st.columns(2)
+            with c3:
+                # Priority vs Regular pie
+                type_df = pd.DataFrame([
+                    {'Type': 'Priority', 'Count': type_counts['PRIORITY']},
+                    {'Type': 'Regular', 'Count': type_counts['REGULAR']},
+                    {'Type': 'Appointment', 'Count': type_counts['APPOINTMENT']}
+                ])
+                fig_type = px.pie(type_df, names='Type', values='Count', title='Ticket Type Distribution', 
+                                 color='Type', color_discrete_map={'Priority': '#F59E0B', 'Regular': '#2563EB', 'Appointment': '#10B981'})
+                st.plotly_chart(fig_type, use_container_width=True)
+            
+            with c4:
+                # Peak Hour Analysis
+                if peak_hours:
+                    peak_df = pd.DataFrame(peak_hours)
+                    fig_peak = px.bar(peak_df, x='Hour', y='Tickets', title='Peak Hour Analysis',
+                                     color='Tickets', color_continuous_scale=['green', 'yellow', 'red'])
+                    st.plotly_chart(fig_peak, use_container_width=True)
+                else:
+                    st.info("No peak hour data available")
+            
+            # Staff Performance Section
+            st.markdown("#### 👥 Staff Performance")
+            staff_ratings = calculate_staff_ratings(filtered_reviews)
+            if staff_ratings:
+                staff_df = pd.DataFrame(staff_ratings)
+                st.dataframe(staff_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No staff ratings available for selected period")
+                
+        else: 
+            st.info("No data available for the selected time range.")
+
+    # ==========================================================================
+    # FIX-v23.14-013: REVIEWS MODULE (Separate Export)
+    # ==========================================================================
+    elif active == "Reviews":
+        st.subheader("⭐ Customer Reviews & Ratings")
+        
+        # Gather reviews
+        reviews_source = local_db.get('reviews', [])
+        archive_data = []
+        if os.path.exists(ARCHIVE_FILE):
+            try:
+                with open(ARCHIVE_FILE, "r", encoding="utf-8") as af:
+                    archive_data = json.load(af)
+            except (json.JSONDecodeError, IOError):
+                archive_data = []
+        
+        all_reviews = reviews_source.copy()
+        for entry in archive_data:
+            all_reviews.extend(entry.get('reviews', []))
+        
+        if all_reviews:
+            # Summary metrics
+            csat_score, review_count = calculate_csat(all_reviews)
+            
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Overall CSAT", f"{csat_score}⭐")
+            c2.metric("Total Reviews", review_count)
+            c3.metric("5-Star Reviews", len([r for r in all_reviews if r.get('rating') == 5]))
+            
+            # Reviews table
+            reviews_df = pd.DataFrame(all_reviews)
+            if not reviews_df.empty:
+                reviews_df['Date'] = reviews_df['timestamp'].apply(
+                    lambda x: datetime.datetime.fromisoformat(x).strftime('%Y-%m-%d %I:%M %p') if x else '')
+                reviews_df['Rating'] = reviews_df['rating'].fillna(0).astype(int)
+                reviews_df['Ticket'] = reviews_df['ticket'].fillna('')
+                reviews_df['Staff'] = reviews_df.apply(
+                    lambda x: x.get('served_by_staff') or x.get('personnel') or 'Unknown', axis=1)
+                reviews_df['Lane'] = reviews_df['lane'].map(LANE_CODE_TO_NAME).fillna('N/A') if 'lane' in reviews_df.columns else 'N/A'
+                reviews_df['Comment'] = reviews_df['comment'].fillna('')
+                
+                display_cols = ['Date', 'Ticket', 'Rating', 'Staff', 'Lane', 'Comment']
+                available_cols = [c for c in display_cols if c in reviews_df.columns]
+                st.dataframe(reviews_df[available_cols], use_container_width=True, hide_index=True)
+                
+                # Export button
+                csv_export = reviews_df[available_cols].to_csv(index=False).encode('utf-8')
+                st.download_button("📥 Export Reviews (CSV)", csv_export, "reviews_export.csv", "text/csv")
+            
+            # Rating distribution chart
+            st.markdown("#### Rating Distribution")
+            rating_counts = [len([r for r in all_reviews if r.get('rating') == i]) for i in range(1, 6)]
+            rating_df = pd.DataFrame({
+                'Rating': ['1⭐', '2⭐', '3⭐', '4⭐', '5⭐'],
+                'Count': rating_counts
+            })
+            fig_rating = px.bar(rating_df, x='Rating', y='Count', title='Rating Distribution',
+                               color='Count', color_continuous_scale=['red', 'orange', 'yellow', 'lightgreen', 'green'])
+            st.plotly_chart(fig_rating, use_container_width=True)
+            
+            # Staff ratings
+            st.markdown("#### Staff Performance by Rating")
+            staff_ratings = calculate_staff_ratings(all_reviews)
+            if staff_ratings:
+                staff_df = pd.DataFrame(staff_ratings)
+                st.dataframe(staff_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No reviews available yet.")
 
     elif active == "Reports":
         st.subheader("📋 IOMS Report Generator")
@@ -1901,25 +2224,6 @@ def render_admin_panel(user):
                         save_db(local_db); log_audit("KIOSK_MENU_UPDATE", user.get('name', 'Unknown'), details=f"{label} -> {new_label}"); st.success("Updated!"); st.rerun()
                     if st.button("Delete", key=f"del_{i}"): 
                         local_db['menu'][sel_cat].pop(i); save_db(local_db); log_audit("KIOSK_MENU_DELETE", user.get('name', 'Unknown'), target=label); st.rerun()
-            
-            # FIX-v23.14-002: Add New Menu Item form
-            st.markdown("---")
-            st.write("**➕ Add New Item**")
-            with st.form("add_new_menu_item"):
-                new_label = st.text_input("Label (Display Name)")
-                new_code = st.text_input("Code (Internal ID)")
-                new_lane = st.selectbox("Route to Lane", ["C", "E", "F", "T", "A", "GATE"], 
-                                        help="GATE = Pre-qualification screening")
-                if st.form_submit_button("Add Item"):
-                    if new_label and new_code:
-                        local_db['menu'][sel_cat].append((new_label, new_code, new_lane))
-                        save_db(local_db)
-                        log_audit("KIOSK_MENU_ADD", user.get('name', 'Unknown'), 
-                                  details=f"Added '{new_label}' ({new_code}) to {sel_cat}", target=new_code)
-                        st.success(f"Added '{new_label}' to {sel_cat}!")
-                        st.rerun()
-                    else:
-                        st.error("Label and Code are required.")
 
     elif active == "Counters":
         for i, c in enumerate(local_db.get('config', {}).get('counter_map', [])): 
@@ -2043,27 +2347,19 @@ def render_admin_panel(user):
             st.success("No corrupt files detected.")
     
     elif active == "System Info":
-        st.subheader("⚙️ System Configuration - v23.14 PLATINUM Edition")
+        st.subheader("⚙️ System Configuration - v23.13 Data Fortress Edition")
         
         st.write("**Version Information**")
         st.code(f"""
-SSS G-ABAY Version: v23.14 (PLATINUM COMPLETE Edition)
-Build Date: 2026-02-04
+SSS G-ABAY Version: v23.13 (Data Fortress Edition)
+Build Date: 2026-02-03
 Timezone: UTC+{UTC_OFFSET_HOURS} (Philippine Standard Time)
 Display Grid: {DISPLAY_GRID_COLUMNS} columns (fixed)
 Script Directory: {SCRIPT_DIR}
 Data File: {DATA_FILE}
         """)
         
-        st.write("**v23.14 PLATINUM Fixes**")
-        v14_fixes = [
-            "FIX-v23.14-001: GATE Lane in LANE_CODES (enables Display/Reports visibility)",
-            "FIX-v23.14-002: Add Menu Item Form (Kiosk Menu admin can add items)"
-        ]
-        for fix in v14_fixes:
-            st.markdown(f"🆕 {fix}")
-        
-        st.write("**v23.13 Safe-Fail Data Protection (Inherited)**")
+        st.write("**v23.13 Safe-Fail Data Protection Fixes**")
         fixes = [
             "FIX-001: Absolute Path Resolution (prevents working directory issues)",
             "FIX-002: Fail-Safe Loading with Backup Cascade (no silent reset)",
@@ -2145,16 +2441,46 @@ elif mode == "staff":
         else: render_counter(user)
 elif mode == "display": render_display()
 else:
+    # ===========================================================================
+    # MOBILE CONSOLE WITH FIXED RATE US AND TRACKER (v23.14)
+    # ===========================================================================
     if db.get('config', {}).get("logo_url", "").startswith("http"): 
         st.image(db['config']["logo_url"], width=50)
     st.title("G-ABAY Mobile Tracker")
     t1, t2, t3 = st.tabs(["🎫 Tracker", "ℹ️ Info Hub", "⭐ Rate Us"])
+    
+    # ==========================================================================
+    # FIX-v23.14-002: TRACKER TAB WITH EXPLICIT TRACK BUTTON
+    # ==========================================================================
     with t1:
-        tn = st.text_input("Enter Ticket # (e.g. 001)")
-        if tn:
-            local_db = load_db()
-            t = next((x for x in local_db.get('tickets', []) if x.get("number") == tn or x.get('full_id') == tn), None)
-            t_hist = next((x for x in local_db.get('history', []) if x.get("number") == tn or x.get('full_id') == tn), None)
+        st.subheader("Track Your Ticket")
+        tn = st.text_input("Enter Ticket # (e.g. 001 or H07-C-001)", key="tracker_input")
+        
+        # FIX-v23.14-002: Explicit Track button
+        if st.button("🔍 Track Ticket", type="primary", use_container_width=True):
+            if tn:
+                local_db = load_db()
+                # FIX-v23.14-001: Search by BOTH number AND full_id
+                t = next((x for x in local_db.get('tickets', []) 
+                         if x.get("number") == tn or x.get('full_id') == tn or tn in x.get('full_id', '')), None)
+                t_hist = next((x for x in local_db.get('history', []) 
+                              if x.get("number") == tn or x.get('full_id') == tn or tn in x.get('full_id', '')), None)
+                
+                if t:
+                    st.session_state['tracked_ticket'] = t
+                    st.session_state['track_found'] = True
+                elif t_hist:
+                    st.session_state['tracked_ticket'] = t_hist
+                    st.session_state['track_found'] = 'completed'
+                else:
+                    st.session_state['track_found'] = False
+                st.rerun()
+            else:
+                st.warning("Please enter a ticket number")
+        
+        # Display tracking result
+        if st.session_state.get('track_found') == True:
+            t = st.session_state.get('tracked_ticket')
             if t:
                 if t.get('status') == "PARKED":
                     try:
@@ -2162,29 +2488,41 @@ else:
                         remaining = datetime.timedelta(minutes=PARK_GRACE_MINUTES) - (get_ph_time() - park_time)
                         if remaining.total_seconds() > 0:
                             mins, secs = divmod(remaining.total_seconds(), 60)
-                            st.markdown(f"""<div style="font-size:30px; font-weight:bold; color:#b91c1c; text-align:center;">PARKED: {int(mins):02d}:{int(secs):02d}</div>""", unsafe_allow_html=True)
+                            st.markdown(f"""<div style="font-size:30px; font-weight:bold; color:#b91c1c; text-align:center;">🅿️ PARKED: {int(mins):02d}:{int(secs):02d}</div>""", unsafe_allow_html=True)
                             st.error("⚠️ PLEASE APPROACH COUNTER IMMEDIATELY TO AVOID FORFEITURE.")
                         else: 
                             st.error("❌ TICKET EXPIRED")
                     except (ValueError, TypeError):
                         st.error("❌ TICKET STATUS ERROR")
                 elif t.get('status') == "SERVING": 
-                    st.success(f"🔊 NOW SERVING at {t.get('served_by', 'Counter')}. Please proceed immediately.")
+                    st.success(f"🔊 NOW SERVING at {t.get('served_by', 'Counter')}. Please proceed immediately!")
+                    st.balloons()
                 else:
-                    st.info(f"Status: {t.get('status', 'UNKNOWN')}")
+                    st.info(f"Status: **{t.get('status', 'WAITING')}**")
                     wait_str = calculate_specific_wait_time(t.get('id', ''), t.get('lane', 'C'))
                     people_ahead = calculate_people_ahead(t.get('id', ''), t.get('lane', 'C'))
                     c1, c2 = st.columns(2)
                     c1.metric("Est. Wait", wait_str)
-                    if people_ahead == 0: c2.success("You are Next!")
-                    else: c2.metric("People Ahead", people_ahead)
-                    st.write(f"Your Ticket: {t.get('number', '')}")
-                time.sleep(5)
+                    if people_ahead == 0: 
+                        c2.success("🎉 You are Next!")
+                    else: 
+                        c2.metric("People Ahead", people_ahead)
+                    st.write(f"**Ticket:** {t.get('full_id', t.get('number', ''))}")
+                    st.write(f"**Service:** {t.get('service', 'N/A')}")
+                
+                # Refresh button
+                if st.button("🔄 Refresh Status"):
+                    st.rerun()
+                    
+        elif st.session_state.get('track_found') == 'completed':
+            st.success("✅ TRANSACTION COMPLETE. Thank you for visiting SSS Gingoog!")
+            if st.button("⭐ Rate Your Experience"):
+                t = st.session_state.get('tracked_ticket', {})
+                st.session_state['rate_ticket'] = t.get('number', '')
                 st.rerun()
-            elif t_hist: 
-                st.success("✅ TRANSACTION COMPLETE. Thank you!")
-            else: 
-                st.error("Not Found (Check Ticket Number)")
+        elif st.session_state.get('track_found') == False:
+            st.error("❌ Ticket not found. Please check the ticket number and try again.")
+    
     with t2:
         st.subheader("Member Resources")
         for l in [r for r in db.get('resources', []) if r.get('type') == 'LINK']: 
@@ -2192,28 +2530,95 @@ else:
         for f in [r for r in db.get('resources', []) if r.get('type') == 'FAQ']: 
             with st.expander(sanitize_text(f.get('label', ''))): 
                 st.write(sanitize_text(f.get('value', '')))
+    
+    # ==========================================================================
+    # FIX-v23.14-001, 002, 003, 004: RATE US TAB WITH ALL FIXES
+    # ==========================================================================
     with t3:
         st.subheader("Rate Our Service")
-        verify_t = st.text_input("Enter your Ticket Number to rate:", key="rate_t")
-        if verify_t:
-            local_db = load_db()
-            active_t = next((x for x in local_db.get('history', []) if x.get('number') == verify_t), None)
+        
+        # Pre-fill from tracker if available
+        default_ticket = st.session_state.get('rate_ticket', '')
+        verify_t = st.text_input("Enter your Ticket Number to rate:", value=default_ticket, key="rate_t")
+        
+        # FIX-v23.14-002: Explicit Verify button
+        if st.button("🔍 Verify Ticket", type="primary", use_container_width=True, key="verify_btn"):
+            if verify_t:
+                local_db = load_db()
+                # FIX-v23.14-001: Search by BOTH number AND full_id
+                active_t = next((x for x in local_db.get('history', []) 
+                                if x.get('number') == verify_t 
+                                or x.get('full_id') == verify_t 
+                                or verify_t in x.get('full_id', '')), None)
+                if active_t:
+                    st.session_state['verified_ticket'] = active_t
+                    st.session_state['verify_success'] = True
+                else:
+                    st.session_state['verify_success'] = False
+                st.rerun()
+            else:
+                st.warning("Please enter a ticket number")
+        
+        # Display rating form if verified
+        if st.session_state.get('verify_success') == True:
+            active_t = st.session_state.get('verified_ticket')
             if active_t:
-                st.success(f"Verified! Served by: {active_t.get('served_by_staff') or active_t.get('served_by', 'Unknown')}")
-                with st.form("rev"):
+                staff_name = active_t.get('served_by_staff') or active_t.get('served_by', 'Unknown')
+                st.success(f"✅ Verified! Served by: **{staff_name}**")
+                st.write(f"**Service:** {active_t.get('service', 'N/A')}")
+                st.write(f"**Ticket:** {active_t.get('full_id', active_t.get('number', ''))}")
+                
+                st.markdown("---")
+                st.markdown("### How would you rate your experience?")
+                
+                with st.form("rating_form"):
+                    # FIX-v23.14-003: Rating selection
                     rate = st.feedback("stars")
-                    pers = st.text_input("Personnel Served You (Optional)")
-                    comm = st.text_area("Comments")
-                    if st.form_submit_button("Submit Rating"):
-                        review_entry = {"ticket": verify_t, "rating": (rate if rate else 0) + 1, "personnel": pers, "comment": comm, "timestamp": get_ph_time().isoformat()}
-                        local_db['reviews'].append(review_entry)
-                        save_db(local_db)
-                        st.success("Thank you!")
-                        time.sleep(2)
-                        st.rerun()
-            else: 
-                st.error("Ticket not found in completed transactions.")
+                    
+                    st.markdown("---")
+                    pers = st.text_input("Personnel who served you (Optional - auto-filled)", value=staff_name)
+                    comm = st.text_area("Comments / Suggestions (Optional)")
+                    
+                    submitted = st.form_submit_button("📤 Submit Rating", type="primary", use_container_width=True)
+                    
+                    if submitted:
+                        # FIX-v23.14-003: REQUIRE rating before submit
+                        if rate is None:
+                            st.error("⛔ Please select a star rating (1-5) before submitting.")
+                        else:
+                            local_db = load_db()
+                            
+                            # FIX-v23.14-004: Enhanced review structure with all tracking fields
+                            review_entry = {
+                                "ticket": verify_t,
+                                "ticket_full_id": active_t.get('full_id', verify_t),
+                                "lane": active_t.get('lane', 'C'),
+                                "served_by_staff": staff_name,
+                                "service": active_t.get('service', ''),
+                                "ticket_type": active_t.get('type', 'REGULAR'),
+                                "rating": rate + 1,  # st.feedback returns 0-4, we need 1-5
+                                "personnel": pers,
+                                "comment": comm,
+                                "timestamp": get_ph_time().isoformat()
+                            }
+                            
+                            local_db['reviews'].append(review_entry)
+                            save_db(local_db)
+                            
+                            # Clear session state
+                            st.session_state['verify_success'] = None
+                            st.session_state['verified_ticket'] = None
+                            st.session_state['rate_ticket'] = ''
+                            
+                            st.success("🎉 Thank you for your feedback! Your rating has been recorded.")
+                            st.balloons()
+                            time.sleep(2)
+                            st.rerun()
+        
+        elif st.session_state.get('verify_success') == False:
+            st.error("❌ Ticket not found in completed transactions. Please check the ticket number.")
+            st.info("💡 You can only rate after your transaction is completed.")
 
 # ==============================================================================
-# END OF SSS G-ABAY v23.14 - PLATINUM COMPLETE EDITION
+# END OF SSS G-ABAY v23.14 - ANALYTICS PRECISION EDITION
 # ==============================================================================
