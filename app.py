@@ -1,23 +1,40 @@
 # ==============================================================================
-# SSS G-ABAY v23.14 - BRANCH OPERATING SYSTEM (ANALYTICS PRECISION EDITION)
+# SSS G-ABAY v23.15 - BRANCH OPERATING SYSTEM (CLAIM & GO EDITION)
 # "Visuals: V23.4 | Backend: V23.5 | Security: V23.7 | Integrity: V23.8 | 
-#  Polish: V23.9 | Precision: V23.12 | Data Protection: V23.13 | Analytics: V23.14"
+#  Polish: V23.9 | Precision: V23.12 | Data Protection: V23.13 | Analytics: V23.14
+#  Appointments: V23.15"
 # COPYRIGHT: © 2026 rpt/sssgingoog
 # ==============================================================================
-# v23.14 SURGICAL FIXES (Analytics & UX Enhancements):
-#   FIX-v23.14-001: Rate Us - Search by full_id AND number
-#   FIX-v23.14-002: Tracker/Rate Us - Add explicit Track/Verify buttons
-#   FIX-v23.14-003: Rate Us - Require rating (1-5) before submit
-#   FIX-v23.14-004: Enhanced Review Structure (lane, staff, service tracking)
-#   FIX-v23.14-005: Dashboard CSAT - Calculate from actual reviews
-#   FIX-v23.14-006: Reality Log - Filter by staff role (IOMS categories)
-#   FIX-v23.14-007: CSV Export - Add Ticket Type, Lane, Category columns
-#   FIX-v23.14-008: Dashboard - Priority/Regular count metrics
-#   FIX-v23.14-009: Dashboard - Service Quality Analytics (Rating by Staff/Lane)
-#   FIX-v23.14-010: Dashboard - Efficiency Analytics (FCR, Referral Rate)
-#   FIX-v23.14-011: Dashboard - Queue Analytics (Park Rate, No-Show Rate)
-#   FIX-v23.14-012: Dashboard - Transaction Analytics (Multi-Txn, Peak Hour)
-#   FIX-v23.14-013: Separate Reviews CSV Export
+# v23.15 CRITICAL FIXES (Data Protection & Appointment System):
+#   BARRIER-001: Block ALL saves if _LOAD_FAILED flag present
+#   BARRIER-002: Block login if data load failed
+#   BARRIER-003: Staff count regression protection
+#   BARRIER-004: Counter map protection
+#   FIX-v23.15-001: Add BOOKED status for appointments
+#   FIX-v23.15-002: Case-insensitive role matching (Reality Log)
+#   FIX-v23.15-003: generate_ticket_manual: BOOKED status + lane derivation
+#   FIX-v23.15-004: Case-insensitive role (get_allowed_counters)
+#   FIX-v23.15-005: Kiosk Appointment Claim section ("Claim & Go")
+#   FIX-v23.15-006: TV Display shows activated appointments
+#   FIX-v23.15-007: Staff Counter - Remove booking form (Admin-only)
+#   FIX-v23.15-008: Staff Counter - "My Appointments Today" sidebar
+#   FIX-v23.15-009: Staff Queue includes assigned_to tickets
+#   FIX-v23.15-010: Admin - Today's Appointments list view
+# ==============================================================================
+# v23.15 SURGICAL FIXES (Analytics & UX Enhancements):
+#   FIX-v23.15-001: Rate Us - Search by full_id AND number
+#   FIX-v23.15-002: Tracker/Rate Us - Add explicit Track/Verify buttons
+#   FIX-v23.15-003: Rate Us - Require rating (1-5) before submit
+#   FIX-v23.15-004: Enhanced Review Structure (lane, staff, service tracking)
+#   FIX-v23.15-005: Dashboard CSAT - Calculate from actual reviews
+#   FIX-v23.15-006: Reality Log - Filter by staff role (IOMS categories)
+#   FIX-v23.15-007: CSV Export - Add Ticket Type, Lane, Category columns
+#   FIX-v23.15-008: Dashboard - Priority/Regular count metrics
+#   FIX-v23.15-009: Dashboard - Service Quality Analytics (Rating by Staff/Lane)
+#   FIX-v23.15-010: Dashboard - Efficiency Analytics (FCR, Referral Rate)
+#   FIX-v23.15-011: Dashboard - Queue Analytics (Park Rate, No-Show Rate)
+#   FIX-v23.15-012: Dashboard - Transaction Analytics (Multi-Txn, Peak Hour)
+#   FIX-v23.15-013: Separate Reviews CSV Export
 # ==============================================================================
 # INHERITED FROM v23.13 (Data Fortress):
 #   - Absolute Path Resolution, Fail-Safe Loading, Backup Cascade
@@ -56,7 +73,7 @@ except ImportError:
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v23.14", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY v23.15", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 # ==============================================================================
 # FIX-v23.13-001: ABSOLUTE PATH RESOLUTION
@@ -122,7 +139,7 @@ LANE_TO_CATEGORY = {
 }
 
 # ==============================================================================
-# FIX-v23.14-006: ROLE TO IOMS CATEGORY MAPPING
+# FIX-v23.15-006: ROLE TO IOMS CATEGORY MAPPING
 # Controls which transaction categories each role can see in Reality Log
 # ==============================================================================
 ROLE_TO_IOMS_CATEGORY = {
@@ -136,7 +153,11 @@ ROLE_TO_IOMS_CATEGORY = {
 }
 
 # --- STATUS DEFINITIONS ---
+# ==============================================================================
+# FIX-v23.15-001: STATUS DEFINITIONS - Added BOOKED for appointments
+# ==============================================================================
 TICKET_STATUSES = {
+    "BOOKED": {"label": "Booked", "color": "#9333EA", "desc": "Reserved appointment, awaiting client arrival"},
     "WAITING": {"label": "Waiting", "color": "#3B82F6", "desc": "In queue, awaiting service"},
     "SERVING": {"label": "Serving", "color": "#F59E0B", "desc": "Currently being served at counter"},
     "PARKED": {"label": "Parked", "color": "#EF4444", "desc": "Temporarily set aside, must return within grace period"},
@@ -414,15 +435,50 @@ def cascade_load_data():
 # ==============================================================================
 # FIX-v23.13-004: ATOMIC SAVE WITH VERIFICATION
 # ==============================================================================
+# ==============================================================================
+# FIX-v23.15 BARRIER-003 & 004: GET CURRENT DATA METRICS FOR COMPARISON
+# ==============================================================================
+def get_current_data_metrics():
+    """
+    Get staff count and counter count from current valid data file.
+    Used to prevent data regression during save.
+    """
+    try:
+        if os.path.exists(DATA_FILE):
+            file_size = os.path.getsize(DATA_FILE)
+            if file_size >= MIN_VALID_FILE_SIZE:
+                with open(DATA_FILE, "r", encoding="utf-8") as f:
+                    current_data = json.load(f)
+                staff_count = len(current_data.get('staff', {}))
+                counter_count = len(current_data.get('config', {}).get('counter_map', []))
+                return staff_count, counter_count
+    except:
+        pass
+    return 0, 0
+
+# ==============================================================================
+# FIX-v23.15 BARRIER-001 to 004: ATOMIC SAVE WITH DATA PROTECTION
+# ==============================================================================
 def save_db(data):
     """
-    Save data with atomic write and verification.
-    Prevents 0-byte files and corruption.
+    Save data with atomic write, verification, and DATA PROTECTION barriers.
+    Prevents 0-byte files, corruption, and data regression.
     """
+    # ===========================================================================
+    # BARRIER-001: ABSOLUTE BLOCK if data failed to load
+    # ===========================================================================
+    if data.get('_LOAD_FAILED'):
+        error_msg = "🚨 BLOCKED: Cannot save data that failed to load! Manual intervention required."
+        st.error(error_msg)
+        raise IOError(error_msg)
+    
     lock = acquire_file_lock()
     try:
         if lock: 
             lock.acquire()
+        
+        # Get current metrics BEFORE any changes
+        current_staff_count, current_counter_count = get_current_data_metrics()
         
         # Step 1: Create hourly backup BEFORE any changes
         create_hourly_backup()
@@ -451,6 +507,26 @@ def save_db(data):
             os.remove(temp_file)
             raise IOError(f"Save verification failed: JSON invalid after write: {e}")
         
+        # ===========================================================================
+        # BARRIER-003: Staff count regression protection
+        # ===========================================================================
+        new_staff_count = len(verify_data.get('staff', {}))
+        if current_staff_count > 1 and new_staff_count < current_staff_count:
+            os.remove(temp_file)
+            error_msg = f"🚨 BLOCKED: Staff count regression ({current_staff_count} → {new_staff_count}). Data NOT saved."
+            st.error(error_msg)
+            raise IOError(error_msg)
+        
+        # ===========================================================================
+        # BARRIER-004: Counter map protection
+        # ===========================================================================
+        new_counter_count = len(verify_data.get('config', {}).get('counter_map', []))
+        if current_counter_count > 0 and new_counter_count == 0:
+            os.remove(temp_file)
+            error_msg = f"🚨 BLOCKED: Counter map would be deleted ({current_counter_count} → 0). Data NOT saved."
+            st.error(error_msg)
+            raise IOError(error_msg)
+        
         # Step 5: Backup current file ONLY if it's valid
         if os.path.exists(DATA_FILE):
             current_size = os.path.getsize(DATA_FILE)
@@ -475,6 +551,8 @@ def save_db(data):
 def log_audit(action, user_name, details=None, target=None):
     try:
         local_db = load_db()
+        if local_db.get('_LOAD_FAILED'):
+            return  # Don't log if data failed to load
         if 'audit_log' not in local_db: 
             local_db['audit_log'] = []
         entry = {
@@ -578,8 +656,8 @@ def load_db():
                 ticket['auto_close_reason'] = 'MIDNIGHT_ROLLOVER'
                 data['history'].append(ticket)
             
-            # 2. Expire Waiting/Parked Tickets
-            pending_tickets = [t for t in data.get('tickets', []) if t.get('status') in ['WAITING', 'PARKED']]
+            # 2. Expire Waiting/Parked/Booked Tickets (v23.15: include BOOKED)
+            pending_tickets = [t for t in data.get('tickets', []) if t.get('status') in ['WAITING', 'PARKED', 'BOOKED']]
             for ticket in pending_tickets:
                 ticket['status'] = 'EXPIRED'
                 ticket['end_time'] = get_ph_time().isoformat()
@@ -948,15 +1026,20 @@ def get_lane_color(lane_code):
     return LANE_CODES.get(lane_code, {}).get('color', '#2563EB')
 
 # ==============================================================================
-# FIX-v23.14-006: GET FILTERED TRANSACTIONS BY ROLE
+# FIX-v23.15-006: GET FILTERED TRANSACTIONS BY ROLE
+# ==============================================================================
+# ==============================================================================
+# FIX-v23.15-002: Case-insensitive role matching for Reality Log
 # ==============================================================================
 def get_filtered_transactions_for_role(role, transaction_master):
     """
     Returns filtered transaction list based on staff role.
     TELLER sees PAYMENTS only, AO sees EMPLOYERS only, MSR sees MEMBER SERVICES only.
     ADMIN/BRANCH_HEAD/SECTION_HEAD/DIV_HEAD see ALL categories.
+    FIX-v23.15-002: Case-insensitive matching
     """
-    allowed_categories = ROLE_TO_IOMS_CATEGORY.get(role, ["MEMBER SERVICES"])
+    role_upper = role.upper() if role else "MSR"
+    allowed_categories = ROLE_TO_IOMS_CATEGORY.get(role_upper, ["MEMBER SERVICES"])
     filtered_txns = []
     for cat in allowed_categories:
         items = transaction_master.get(cat, [])
@@ -965,7 +1048,7 @@ def get_filtered_transactions_for_role(role, transaction_master):
     return filtered_txns
 
 # ==============================================================================
-# FIX-v23.14-005 & 009: CALCULATE ACTUAL CSAT FROM REVIEWS
+# FIX-v23.15-005 & 009: CALCULATE ACTUAL CSAT FROM REVIEWS
 # ==============================================================================
 def calculate_csat(reviews_list):
     """Calculate Customer Satisfaction score from reviews."""
@@ -1019,7 +1102,7 @@ def calculate_lane_ratings(reviews_list):
     return result
 
 # ==============================================================================
-# FIX-v23.14-010: EFFICIENCY ANALYTICS
+# FIX-v23.15-010: EFFICIENCY ANALYTICS
 # ==============================================================================
 def calculate_efficiency_metrics(history_list):
     """Calculate First Call Resolution and Referral Rate."""
@@ -1035,7 +1118,7 @@ def calculate_efficiency_metrics(history_list):
     return fcr_rate, referral_rate
 
 # ==============================================================================
-# FIX-v23.14-011: QUEUE ANALYTICS
+# FIX-v23.15-011: QUEUE ANALYTICS
 # ==============================================================================
 def calculate_queue_metrics(history_list):
     """Calculate Park Rate and No-Show Rate."""
@@ -1054,7 +1137,7 @@ def calculate_queue_metrics(history_list):
     return park_rate, no_show_rate, park_recovery
 
 # ==============================================================================
-# FIX-v23.14-012: TRANSACTION ANALYTICS
+# FIX-v23.15-012: TRANSACTION ANALYTICS
 # ==============================================================================
 def calculate_transaction_metrics(history_list):
     """Calculate Multi-Transaction Rate and Peak Hours."""
@@ -1080,7 +1163,7 @@ def calculate_transaction_metrics(history_list):
     return multi_txn_rate, peak_hours
 
 # ==============================================================================
-# FIX-v23.14-008: TICKET TYPE COUNTS
+# FIX-v23.15-008: TICKET TYPE COUNTS
 # ==============================================================================
 def calculate_ticket_type_counts(history_list):
     """Count tickets by type (PRIORITY, REGULAR, APPOINTMENT)."""
@@ -1160,23 +1243,50 @@ def generate_ticket_callback(service, lane_code, is_priority):
     st.session_state['last_ticket'] = new_t
     st.session_state['kiosk_step'] = 'ticket'
 
+# ==============================================================================
+# FIX-v23.15-003: APPOINTMENT TICKET GENERATION WITH BOOKED STATUS + LANE DERIVATION
+# ==============================================================================
 def generate_ticket_manual(service, lane_code, is_priority, is_appt=False, appt_name=None, appt_time=None, assign_counter=None):
+    """
+    Generate ticket manually (for staff/admin appointments).
+    FIX-v23.15-003: 
+    - Appointments start with status="BOOKED" (not WAITING)
+    - Lane is derived from assigned counter's type
+    """
     local_db = load_db()
+    if local_db.get('_LOAD_FAILED'):
+        st.error("Cannot generate ticket: Data load failed")
+        return None
+    
+    # FIX-v23.15-003: Derive lane from assigned counter if appointment
+    actual_lane = lane_code
+    if is_appt and assign_counter:
+        counter_obj = next((c for c in local_db.get('config', {}).get('counter_map', []) 
+                           if c['name'] == assign_counter), None)
+        if counter_obj:
+            station_type = counter_obj['type']
+            station_lanes = local_db.get('config', {}).get('assignments', {}).get(station_type, [])
+            if station_lanes:
+                actual_lane = station_lanes[0]  # Use first lane of assigned counter's type
+    
     global_count = len(local_db.get('tickets', [])) + len(local_db.get('history', [])) + 1
     branch_code = local_db.get('config', {}).get('branch_code', 'H07')
     simple_num = f"{global_count:03d}"
     display_num = f"APT-{simple_num}" if is_appt else simple_num
-    full_id = f"{branch_code}-{lane_code}-{display_num}"
+    full_id = f"{branch_code}-{actual_lane}-{display_num}"
     
     new_t = {
-        "id": str(uuid.uuid4()), "number": display_num, "full_id": full_id, "lane": lane_code, "service": service, 
+        "id": str(uuid.uuid4()), "number": display_num, "full_id": full_id, "lane": actual_lane, "service": service, 
         "type": "APPOINTMENT" if is_appt else ("PRIORITY" if is_priority else "REGULAR"),
-        "status": "WAITING", "timestamp": get_ph_time().isoformat(),
+        "status": "BOOKED" if is_appt else "WAITING",  # FIX-v23.15-003: BOOKED for appointments
+        "timestamp": get_ph_time().isoformat(),
         "start_time": None, "end_time": None, "park_timestamp": None,
         "history": [], "served_by": None, "served_by_staff": None,
         "ref_from": None, "referral_reason": None,
         "appt_name": appt_name, "appt_time": str(appt_time) if appt_time else None,
-        "assigned_to": assign_counter, "actual_transactions": []
+        "assigned_to": assign_counter if assign_counter else None,
+        "actual_transactions": [],
+        "activated_at": None  # Will be set when claimed at kiosk
     }
     local_db['tickets'].append(new_t)
     save_db(local_db)
@@ -1184,6 +1294,8 @@ def generate_ticket_manual(service, lane_code, is_priority, is_appt=False, appt_
 
 def log_incident(user_name, status_type):
     local_db = load_db()
+    if local_db.get('_LOAD_FAILED'):
+        return
     local_db['branch_status'] = status_type
     entry = {"timestamp": get_ph_time().isoformat(), "staff": user_name, "type": status_type, "action": "Reported Issue" if status_type != "NORMAL" else "Restored System"}
     if 'incident_log' not in local_db: local_db['incident_log'] = []
@@ -1302,13 +1414,17 @@ def get_staff_efficiency(staff_name):
             return len(my_txns), f"{avg_mins}m"
     return len(my_txns), "N/A"
 
+# ==============================================================================
+# FIX-v23.15-004: Case-insensitive role in get_allowed_counters
+# ==============================================================================
 def get_allowed_counters(role):
     all_counters = db.get('config', {}).get('counter_map', [])
+    role_upper = role.upper() if role else "MSR"
     target_types = []
-    if role == "TELLER": target_types = ["Teller"]
-    elif role == "AO": target_types = ["Employer"]
-    elif role == "MSR": target_types = ["Counter", "eCenter", "Help"]
-    elif role in COUNTER_ROLES: return [c['name'] for c in all_counters] 
+    if role_upper == "TELLER": target_types = ["Teller"]
+    elif role_upper == "AO": target_types = ["Employer"]
+    elif role_upper == "MSR": target_types = ["Counter", "eCenter", "Help"]
+    elif role_upper in [r.upper() for r in COUNTER_ROLES]: return [c['name'] for c in all_counters] 
     return [c['name'] for c in all_counters if c.get('type') in target_types]
 
 def clear_ticket_modal_states():
@@ -1337,6 +1453,16 @@ def render_kiosk():
                 st.session_state['is_prio'] = True; st.session_state['kiosk_step'] = 'menu'; st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
             st.warning("⚠ NOTICE: Non-priority users will be transferred to end of line.")
+        
+        # ===========================================================================
+        # FIX-v23.15-005: Hidden Appointment Claim Button (for PAD/Guard)
+        # ===========================================================================
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        with st.expander("📅 Check Appointments (Staff Only)", expanded=False):
+            st.caption("For PAD/Guard use: Claim booked appointments")
+            if st.button("📅 View Today's Appointments", use_container_width=True):
+                st.session_state['kiosk_step'] = 'appt_claim'
+                st.rerun()
     
     elif st.session_state['kiosk_step'] == 'menu':
         st.markdown("### Select Service Category")
@@ -1414,23 +1540,97 @@ def render_kiosk():
                 generate_ticket_callback(f"{label} (Online)", "E", st.session_state['is_prio']); st.rerun()
         if st.button("⬅ CANCEL"): st.session_state['kiosk_step'] = 'mss'; st.rerun()
     
+    # ===========================================================================
+    # FIX-v23.15-005: APPOINTMENT CLAIM SECTION ("Claim & Go")
+    # ===========================================================================
+    elif st.session_state['kiosk_step'] == 'appt_claim':
+        st.markdown("### 📅 Today's Appointments")
+        st.caption("PAD/Guard: Find the client's appointment and click ISSUE to activate")
+        
+        local_db = load_db()
+        today = get_ph_time().strftime("%Y-%m-%d")
+        
+        # Get all BOOKED appointments for today
+        booked_appts = [t for t in local_db.get('tickets', []) 
+                       if t.get('type') == 'APPOINTMENT' 
+                       and t.get('status') == 'BOOKED'
+                       and t.get('timestamp', '').startswith(today)]
+        
+        if not booked_appts:
+            st.info("✅ No pending appointments for today. All appointments have been claimed or none were booked.")
+        else:
+            # Sort by appointment time
+            booked_appts.sort(key=lambda x: x.get('appt_time', ''))
+            
+            st.markdown("---")
+            for appt in booked_appts:
+                # Privacy-safe display: LASTNAME, F.
+                full_name = appt.get('appt_name', 'Unknown')
+                parts = full_name.upper().split()
+                if len(parts) >= 2:
+                    privacy_name = f"{parts[-1]}, {parts[0][0]}."
+                else:
+                    privacy_name = f"{parts[0][0]}." if parts else "?"
+                
+                col1, col2, col3, col4 = st.columns([1.5, 2.5, 2, 1.5])
+                col1.markdown(f"**{appt.get('appt_time', 'N/A')}**")
+                col2.markdown(f"**{privacy_name}**")
+                col3.markdown(f"`{appt.get('number', 'N/A')}`")
+                
+                if col4.button("🖨️ ISSUE", key=f"issue_{appt['id']}", type="primary"):
+                    # ACTIVATION: BOOKED → WAITING
+                    for t in local_db['tickets']:
+                        if t['id'] == appt['id']:
+                            t['status'] = 'WAITING'
+                            t['activated_at'] = get_ph_time().isoformat()
+                            break
+                    save_db(local_db)
+                    log_audit("APPOINTMENT_CLAIMED", "PAD/Kiosk", details=f"Activated {appt.get('number', '')}", target=appt.get('appt_name', ''))
+                    
+                    # Set up for ticket print screen
+                    st.session_state['last_ticket'] = {**appt, 'status': 'WAITING'}
+                    st.session_state['kiosk_step'] = 'ticket'
+                    st.rerun()
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("⬅ GO BACK", type="secondary", use_container_width=True): 
+            del st.session_state['kiosk_step']
+            st.rerun()
+    
     elif st.session_state['kiosk_step'] == 'ticket':
         t = st.session_state['last_ticket']
-        bg = "#FFC107" if t['type'] == 'PRIORITY' else "#2563EB"
-        col = "#0038A8" if t['type'] == 'PRIORITY' else "white"
+        
+        # Different styling for appointments vs regular
+        if t.get('type') == 'APPOINTMENT':
+            bg = "#9333EA"  # Purple for appointments
+            col = "white"
+        elif t['type'] == 'PRIORITY':
+            bg = "#FFC107"
+            col = "#0038A8"
+        else:
+            bg = "#2563EB"
+            col = "white"
+        
         print_dt = get_ph_time().strftime("%B %d, %Y - %I:%M %p")
         
         waiting, wait_min, counters = calculate_lane_wait_estimate(t['lane'])
         
         c_left, c_right = st.columns([2, 1])
         with c_left:
-            st.markdown(f"""<div class="ticket-card no-print" style='background:{bg}; color:{col}; padding:40px; border-radius:20px; text-align:center; margin:20px 0;'><h1>{t['number']}</h1><h3>{t['service']}</h3><p style="font-size:18px;">{print_dt}</p></div>""", unsafe_allow_html=True)
-            st.markdown(f"<div class='wait-estimate'><h3>Estimated Wait: ~{wait_min} min</h3><p>{waiting} people ahead • {counters} counter(s) active</p></div>", unsafe_allow_html=True)
+            st.markdown(f"""<div class="ticket-card no-print" style='background:{bg}; color:{col}; padding:40px; border-radius:20px; text-align:center; margin:20px 0;'><h1>{t['number']}</h1><h3>{t.get('service', t.get('appt_name', 'Service'))}</h3><p style="font-size:18px;">{print_dt}</p></div>""", unsafe_allow_html=True)
+            
+            if t.get('type') == 'APPOINTMENT':
+                st.success(f"✅ Appointment confirmed for **{t.get('appt_name', 'Client')}** at **{t.get('appt_time', 'N/A')}**")
+                if t.get('assigned_to'):
+                    st.info(f"📍 Please proceed to **{t.get('assigned_to')}** when called")
+            else:
+                st.markdown(f"<div class='wait-estimate'><h3>Estimated Wait: ~{wait_min} min</h3><p>{waiting} people ahead • {counters} counter(s) active</p></div>", unsafe_allow_html=True)
         with c_right:
             base_url = st.query_params.get("base_url", "http://192.168.1.X:8501")
             if isinstance(base_url, list): base_url = base_url[0]
             st.markdown(f"<div style='text-align:center; margin-top:30px; font-weight:bold;'>TRACK YOUR TICKET<br><br>Scan or Go To:<br><span style='color:blue;'>{base_url}</span><br>Enter: {t['number']}</div>", unsafe_allow_html=True)
         if t['type'] == 'PRIORITY': st.error("**⚠ PRIORITY LANE:** For Seniors, PWDs, Pregnant ONLY.")
+        if t['type'] == 'APPOINTMENT': st.warning("**📅 APPOINTMENT:** Please wait for your name/number to be called at your scheduled time.")
         st.markdown(f"<h4 style='color:red; text-align:center;'>⚠ POLICY: Ticket forfeited if parked for {PARK_GRACE_MINUTES} MINUTES.</h4>", unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         with c1: 
@@ -1568,28 +1768,32 @@ def render_display():
         st.markdown("---")
         
         # Queue display section
+        # FIX-v23.15-006: Show WAITING tickets (BOOKED are excluded, activated appointments included)
         c_queue, c_park = st.columns([3, 1])
         with c_queue:
             q1, q2, q3 = st.columns(3)
-            waiting = [t for t in local_db.get('tickets', []) if t.get("status") == "WAITING" and not t.get('appt_time')] 
+            waiting = [t for t in local_db.get('tickets', []) if t.get("status") == "WAITING"]
             waiting.sort(key=get_queue_sort_key)
             
             with q1:
                 st.markdown(f"<div class='swim-col' style='border-top-color:{get_lane_color('T')};'><h3>{LANE_CODES['T']['icon']} {LANE_CODES['T']['desc'].upper()}</h3>", unsafe_allow_html=True)
                 for t in [x for x in waiting if x.get('lane') == 'T'][:5]: 
-                    st.markdown(f"<div class='queue-item'><span>{sanitize_text(t.get('number', ''))}</span></div>", unsafe_allow_html=True)
+                    display_num = t.get('appt_name') if t.get('appt_name') else t.get('number', '')
+                    st.markdown(f"<div class='queue-item'><span>{sanitize_text(display_num)}</span></div>", unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
             
             with q2:
                 st.markdown(f"<div class='swim-col' style='border-top-color:{get_lane_color('A')};'><h3>{LANE_CODES['A']['icon']} {LANE_CODES['A']['desc'].upper()}</h3>", unsafe_allow_html=True)
                 for t in [x for x in waiting if x.get('lane') == 'A'][:5]: 
-                    st.markdown(f"<div class='queue-item'><span>{sanitize_text(t.get('number', ''))}</span></div>", unsafe_allow_html=True)
+                    display_num = t.get('appt_name') if t.get('appt_name') else t.get('number', '')
+                    st.markdown(f"<div class='queue-item'><span>{sanitize_text(display_num)}</span></div>", unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
             
             with q3:
                 st.markdown(f"<div class='swim-col' style='border-top-color:{get_lane_color('C')};'><h3>👤 SERVICES</h3>", unsafe_allow_html=True)
                 for t in [x for x in waiting if x.get('lane') in ['C','E','F']][:5]: 
-                    st.markdown(f"<div class='queue-item'><span>{sanitize_text(t.get('number', ''))}</span></div>", unsafe_allow_html=True)
+                    display_num = t.get('appt_name') if t.get('appt_name') else t.get('number', '')
+                    st.markdown(f"<div class='queue-item'><span>{sanitize_text(display_num)}</span></div>", unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
         
         with c_park:
@@ -1682,16 +1886,43 @@ def render_counter(user):
     if st.sidebar.button("🟢 System Restored"): log_incident(user.get('name', 'Unknown'), "NORMAL"); st.toast("System Restored")
     st.sidebar.markdown("---")
     
-    with st.sidebar.expander("📅 Book Appointment"):
-        with st.form("staff_appt"):
-            nm = st.text_input("Client Name")
-            tm = st.time_input("Time Slot")
-            svc = st.text_input("Transaction")
-            ctr = st.selectbox("Assign to Counter (Optional)", [""] + [c['name'] for c in local_db.get('config', {}).get('counter_map', [])])
-            if st.form_submit_button("Book"):
-                generate_ticket_manual(svc, "C", True, is_appt=True, appt_name=nm, appt_time=tm, assign_counter=ctr)
-                log_audit("APPOINTMENT_CREATE", user.get('name', 'Unknown'), details=f"{nm} at {tm}", target=svc)
-                st.success("Booked!")
+    # ===========================================================================
+    # FIX-v23.15-007: REMOVED - Booking form (Admin-only now)
+    # FIX-v23.15-008: ADDED - "My Appointments Today" sidebar
+    # ===========================================================================
+    with st.sidebar.expander("📅 My Appointments Today", expanded=True):
+        today = get_ph_time().strftime("%Y-%m-%d")
+        my_station = st.session_state.get('my_station', current_user_state.get('default_station', 'Counter 1'))
+        
+        my_appts = [t for t in local_db.get('tickets', []) 
+                   if t.get('type') == 'APPOINTMENT'
+                   and t.get('assigned_to') == my_station
+                   and t.get('timestamp', '').startswith(today)]
+        
+        if not my_appts:
+            st.info("No appointments assigned to your counter today.")
+        else:
+            my_appts.sort(key=lambda x: x.get('appt_time', ''))
+            for appt in my_appts:
+                status = appt.get('status', 'BOOKED')
+                if status == 'BOOKED':
+                    indicator = "🔴"  # Not arrived
+                    status_text = "Not Here"
+                elif status == 'WAITING':
+                    indicator = "🟢"  # Arrived, waiting
+                    status_text = "Waiting"
+                elif status == 'SERVING':
+                    indicator = "🟡"  # Being served
+                    status_text = "Serving"
+                elif status == 'COMPLETED':
+                    indicator = "✅"
+                    status_text = "Done"
+                else:
+                    indicator = "⚪"
+                    status_text = status
+                
+                st.markdown(f"{indicator} **{appt.get('appt_time', 'N/A')}** - {appt.get('appt_name', 'Client')}")
+                st.caption(f"   `{appt.get('number', '')}` [{status_text}]")
 
     if current_user_state.get('status') == "ON_BREAK":
         st.warning(f"⛔ YOU ARE CURRENTLY ON BREAK ({current_user_state.get('break_reason', 'Break')})")
@@ -1723,7 +1954,13 @@ def render_counter(user):
     current_counter_obj = next((c for c in local_db.get('config', {}).get('counter_map', []) if c['name'] == st.session_state['my_station']), None)
     station_type = current_counter_obj['type'] if current_counter_obj else "Counter"
     my_lanes = local_db.get('config', {}).get("assignments", {}).get(station_type, ["C"])
-    queue = [t for t in local_db.get('tickets', []) if t.get("status") == "WAITING" and t.get("lane") in my_lanes]
+    
+    # ===========================================================================
+    # FIX-v23.15-009: Queue includes assigned_to tickets regardless of lane
+    # ===========================================================================
+    queue = [t for t in local_db.get('tickets', []) 
+             if t.get("status") == "WAITING" 
+             and (t.get("lane") in my_lanes or t.get("assigned_to") == st.session_state['my_station'])]
     queue.sort(key=get_queue_sort_key)
     
     # Two-phase matching
@@ -1740,7 +1977,16 @@ def render_counter(user):
         if current:
             display_num = current.get('appt_name') if current.get('appt_name') else current.get('number', '')
             lane_color = get_lane_color(current.get('lane', 'C'))
+            
+            # Special styling for appointments
+            if current.get('type') == 'APPOINTMENT':
+                lane_color = "#9333EA"  # Purple
+            
             st.markdown(f"""<div style='padding:30px; background:#e0f2fe; border-radius:15px; border-left:10px solid {lane_color};'><h1 style='margin:0; color:{lane_color}; font-size: 60px;'>{sanitize_text(display_num)}</h1><h3>{sanitize_text(current.get('service', ''))}</h3></div>""", unsafe_allow_html=True)
+            
+            if current.get('type') == 'APPOINTMENT':
+                st.info(f"📅 **APPOINTMENT** - Scheduled: {current.get('appt_time', 'N/A')}")
+            
             if current.get("ref_from"): 
                 st.markdown(f"""<div style='background:#fee2e2; border-left:5px solid #ef4444; padding:10px; margin-top:10px;'><span style='color:#b91c1c; font-weight:bold;'>↩ REFERRED FROM: {sanitize_text(current.get("ref_from", ''))}</span><br><span style='color:#b91c1c; font-weight:bold;'>📝 REASON: {sanitize_text(current.get("referral_reason", "No reason provided"))}</span></div>""", unsafe_allow_html=True)
             
@@ -1768,7 +2014,7 @@ def render_counter(user):
                         st.rerun()
 
             # ==============================================================
-            # FIX-v23.14-006: ROLE-FILTERED REALITY LOG
+            # FIX-v23.15-006: ROLE-FILTERED REALITY LOG
             # ==============================================================
             with st.expander("📝 Reality Log (IOMS - Verify & Edit)", expanded=True):
                 user_role = user.get('role', 'MSR')
@@ -1875,7 +2121,7 @@ def render_admin_panel(user):
     st.divider()
     
     # ==========================================================================
-    # FIX-v23.14-005 to 012: DASHBOARD WITH COMPREHENSIVE ANALYTICS
+    # FIX-v23.15-005 to 012: DASHBOARD WITH COMPREHENSIVE ANALYTICS
     # ==========================================================================
     if active == "Dashboard":
         st.subheader("📊 G-ABAY Precision Analytics Dashboard")
@@ -1979,7 +2225,7 @@ def render_admin_panel(user):
             df['Total Handle Time (Mins)'] = df.apply(lambda x: calc_diff_mins(x.get('end_time'), x.get('start_time')), axis=1)
             df['Served By'] = df.apply(lambda x: x.get('served_by_staff') or x.get('served_by', 'Unknown'), axis=1)
             
-            # FIX-v23.14-007: Add new columns
+            # FIX-v23.15-007: Add new columns
             df['Ticket Type'] = df['type'].fillna('REGULAR')
             df['Lane Code'] = df['lane'].fillna('C')
             df['Lane Name'] = df['lane'].map(LANE_CODE_TO_NAME).fillna('Unknown')
@@ -1997,20 +2243,20 @@ def render_admin_panel(user):
             avg_wait = round(df_valid['Total Waiting Time (Mins)'].mean()) if not df_valid.empty else 0
             avg_handle = round(df_valid['Total Handle Time (Mins)'].mean()) if not df_valid.empty else 0
             
-            # FIX-v23.14-005: Calculate actual CSAT
+            # FIX-v23.15-005: Calculate actual CSAT
             csat_score, review_count = calculate_csat(filtered_reviews)
             csat_display = f"{csat_score}⭐" if review_count > 0 else "N/A"
             
-            # FIX-v23.14-008: Ticket type counts
+            # FIX-v23.15-008: Ticket type counts
             type_counts = calculate_ticket_type_counts(filtered_txns)
             
-            # FIX-v23.14-010: Efficiency metrics
+            # FIX-v23.15-010: Efficiency metrics
             fcr_rate, referral_rate = calculate_efficiency_metrics(filtered_txns)
             
-            # FIX-v23.14-011: Queue metrics
+            # FIX-v23.15-011: Queue metrics
             park_rate, no_show_rate, park_recovery = calculate_queue_metrics(filtered_txns)
             
-            # FIX-v23.14-012: Transaction metrics
+            # FIX-v23.15-012: Transaction metrics
             multi_txn_rate, peak_hours = calculate_transaction_metrics(filtered_txns)
             
             # ROW 1: Volume Metrics
@@ -2089,7 +2335,7 @@ def render_admin_panel(user):
             st.info("No data available for the selected time range.")
 
     # ==========================================================================
-    # FIX-v23.14-013: REVIEWS MODULE (Separate Export)
+    # FIX-v23.15-013: REVIEWS MODULE (Separate Export)
     # ==========================================================================
     elif active == "Reviews":
         st.subheader("⭐ Customer Reviews & Ratings")
@@ -2199,13 +2445,64 @@ def render_admin_panel(user):
                 st.download_button("📥 Download IOMS CSV", df_rep.to_csv(index=False).encode('utf-8'), "ioms_report.csv", "text/csv")
             else: st.info("No records found.")
 
+    # ===========================================================================
+    # FIX-v23.15-010: Admin Appointment Booking with Today's List
+    # ===========================================================================
     elif active == "Book Appt":
         st.subheader("📅 Book Appointment")
         with st.form("admin_appt"):
-            nm = st.text_input("Client Name"); tm = st.time_input("Time Slot"); svc = st.text_input("Transaction"); ctr = st.selectbox("Assign to Counter (Optional)", [""] + [c['name'] for c in local_db.get('config', {}).get('counter_map', [])])
-            if st.form_submit_button("Book Slot"):
-                generate_ticket_manual(svc, "C", True, is_appt=True, appt_name=nm, appt_time=tm, assign_counter=ctr)
-                log_audit("APPOINTMENT_CREATE", user.get('name', 'Unknown'), details=f"{nm} at {tm}", target=svc); st.success(f"Booked for {nm} at {tm}")
+            nm = st.text_input("Client Name")
+            tm = st.time_input("Time Slot")
+            svc = st.text_input("Transaction/Service")
+            ctr = st.selectbox("Assign to Counter (Optional)", [""] + [c['name'] for c in local_db.get('config', {}).get('counter_map', [])])
+            
+            if st.form_submit_button("Book Slot", type="primary"):
+                if not nm:
+                    st.error("Please enter client name")
+                else:
+                    result = generate_ticket_manual(svc, "C", True, is_appt=True, appt_name=nm, appt_time=tm, assign_counter=ctr if ctr else None)
+                    if result:
+                        log_audit("APPOINTMENT_CREATE", user.get('name', 'Unknown'), details=f"{nm} at {tm}", target=svc)
+                        st.success(f"✅ Booked **{nm}** for **{tm}** → Ticket: **{result.get('number', '')}**")
+                        if ctr:
+                            st.info(f"📍 Assigned to **{ctr}** (Lane: {result.get('lane', 'C')})")
+        
+        # FIX-v23.15-010: Today's Appointments List
+        st.markdown("---")
+        st.subheader("📋 Today's Appointments")
+        today = get_ph_time().strftime("%Y-%m-%d")
+        all_appts = [t for t in local_db.get('tickets', []) 
+                     if t.get('type') == 'APPOINTMENT'
+                     and t.get('timestamp', '').startswith(today)]
+        
+        if all_appts:
+            appts_df_data = []
+            for a in sorted(all_appts, key=lambda x: x.get('appt_time', '')):
+                status = a.get('status', 'BOOKED')
+                if status == 'BOOKED':
+                    status_display = "🔴 Not Here"
+                elif status == 'WAITING':
+                    status_display = "🟢 Waiting"
+                elif status == 'SERVING':
+                    status_display = "🟡 Serving"
+                elif status == 'COMPLETED':
+                    status_display = "✅ Done"
+                else:
+                    status_display = f"⚪ {status}"
+                
+                appts_df_data.append({
+                    'Time': a.get('appt_time', 'N/A'),
+                    'Client': a.get('appt_name', 'Unknown'),
+                    'Service': a.get('service', 'N/A'),
+                    'Assigned To': a.get('assigned_to', 'Unassigned'),
+                    'Lane': a.get('lane', ''),
+                    'Ticket': a.get('number', 'N/A'),
+                    'Status': status_display
+                })
+            
+            st.dataframe(pd.DataFrame(appts_df_data), use_container_width=True, hide_index=True)
+        else:
+            st.info("No appointments booked for today.")
 
     elif active == "Kiosk Menu":
         st.subheader("Manage Kiosk Buttons")
@@ -2410,18 +2707,32 @@ if mode == "staff" and 'user' in st.session_state:
 
 if mode == "kiosk": render_kiosk()
 elif mode == "staff":
+    # ===========================================================================
+    # FIX-v23.15 BARRIER-002: Block login if data load failed
+    # ===========================================================================
+    if db.get('_LOAD_FAILED'):
+        st.error("🚨 DATA LOAD FAILED - Login blocked to protect your data")
+        render_data_failure_screen()
+        st.stop()
+    
     if 'user' not in st.session_state:
         st.title("Staff Login")
         u = st.text_input("Username"); p = st.text_input("Password", type="password")
         if st.button("Login"):
             local_db = load_db()
+            
+            # BARRIER-002: Double-check load status
+            if local_db.get('_LOAD_FAILED'):
+                st.error("🚨 Cannot login: Data load failed. Please contact IT support.")
+                st.stop()
+            
             acct = next((v for k,v in local_db.get('staff', {}).items() if v.get("name") == u or k == u), None)
             acct_key = next((k for k,v in local_db.get('staff', {}).items() if v.get("name") == u or k == u), None)
-            if u == "admin" and not acct: 
-                local_db['staff']['admin'] = DEFAULT_DATA['staff']['admin']
-                save_db(local_db)
-                st.warning("Admin reset.")
-                st.rerun()
+            
+            # REMOVED: Admin auto-reset that was causing data loss
+            # The old code would create a new admin if none found, which would
+            # overwrite the data file when staff dict was empty due to load failure
+            
             if acct and acct.get('pass') == p: 
                 st.session_state['user'] = acct
                 st.session_state['last_activity'] = get_ph_time()
@@ -2430,7 +2741,8 @@ elif mode == "staff":
                 save_db(local_db)
                 log_audit("LOGIN", acct.get('name', 'Unknown'), target=acct.get('default_station', 'N/A'))
                 st.rerun()
-            else: st.error("Invalid")
+            else: 
+                st.error("Invalid credentials. If this is a new installation, please ensure data file exists.")
     else:
         user = st.session_state['user']
         if user.get('role') in ["ADMIN", "DIV_HEAD"]: render_admin_panel(user)
@@ -2442,7 +2754,7 @@ elif mode == "staff":
 elif mode == "display": render_display()
 else:
     # ===========================================================================
-    # MOBILE CONSOLE WITH FIXED RATE US AND TRACKER (v23.14)
+    # MOBILE CONSOLE WITH FIXED RATE US AND TRACKER (v23.15)
     # ===========================================================================
     if db.get('config', {}).get("logo_url", "").startswith("http"): 
         st.image(db['config']["logo_url"], width=50)
@@ -2450,17 +2762,17 @@ else:
     t1, t2, t3 = st.tabs(["🎫 Tracker", "ℹ️ Info Hub", "⭐ Rate Us"])
     
     # ==========================================================================
-    # FIX-v23.14-002: TRACKER TAB WITH EXPLICIT TRACK BUTTON
+    # FIX-v23.15-002: TRACKER TAB WITH EXPLICIT TRACK BUTTON
     # ==========================================================================
     with t1:
         st.subheader("Track Your Ticket")
         tn = st.text_input("Enter Ticket # (e.g. 001 or H07-C-001)", key="tracker_input")
         
-        # FIX-v23.14-002: Explicit Track button
+        # FIX-v23.15-002: Explicit Track button
         if st.button("🔍 Track Ticket", type="primary", use_container_width=True):
             if tn:
                 local_db = load_db()
-                # FIX-v23.14-001: Search by BOTH number AND full_id
+                # FIX-v23.15-001: Search by BOTH number AND full_id
                 t = next((x for x in local_db.get('tickets', []) 
                          if x.get("number") == tn or x.get('full_id') == tn or tn in x.get('full_id', '')), None)
                 t_hist = next((x for x in local_db.get('history', []) 
@@ -2532,7 +2844,7 @@ else:
                 st.write(sanitize_text(f.get('value', '')))
     
     # ==========================================================================
-    # FIX-v23.14-001, 002, 003, 004: RATE US TAB WITH ALL FIXES
+    # FIX-v23.15-001, 002, 003, 004: RATE US TAB WITH ALL FIXES
     # ==========================================================================
     with t3:
         st.subheader("Rate Our Service")
@@ -2541,11 +2853,11 @@ else:
         default_ticket = st.session_state.get('rate_ticket', '')
         verify_t = st.text_input("Enter your Ticket Number to rate:", value=default_ticket, key="rate_t")
         
-        # FIX-v23.14-002: Explicit Verify button
+        # FIX-v23.15-002: Explicit Verify button
         if st.button("🔍 Verify Ticket", type="primary", use_container_width=True, key="verify_btn"):
             if verify_t:
                 local_db = load_db()
-                # FIX-v23.14-001: Search by BOTH number AND full_id
+                # FIX-v23.15-001: Search by BOTH number AND full_id
                 active_t = next((x for x in local_db.get('history', []) 
                                 if x.get('number') == verify_t 
                                 or x.get('full_id') == verify_t 
@@ -2572,7 +2884,7 @@ else:
                 st.markdown("### How would you rate your experience?")
                 
                 with st.form("rating_form"):
-                    # FIX-v23.14-003: Rating selection
+                    # FIX-v23.15-003: Rating selection
                     rate = st.feedback("stars")
                     
                     st.markdown("---")
@@ -2582,13 +2894,13 @@ else:
                     submitted = st.form_submit_button("📤 Submit Rating", type="primary", use_container_width=True)
                     
                     if submitted:
-                        # FIX-v23.14-003: REQUIRE rating before submit
+                        # FIX-v23.15-003: REQUIRE rating before submit
                         if rate is None:
                             st.error("⛔ Please select a star rating (1-5) before submitting.")
                         else:
                             local_db = load_db()
                             
-                            # FIX-v23.14-004: Enhanced review structure with all tracking fields
+                            # FIX-v23.15-004: Enhanced review structure with all tracking fields
                             review_entry = {
                                 "ticket": verify_t,
                                 "ticket_full_id": active_t.get('full_id', verify_t),
@@ -2620,5 +2932,5 @@ else:
             st.info("💡 You can only rate after your transaction is completed.")
 
 # ==============================================================================
-# END OF SSS G-ABAY v23.14 - ANALYTICS PRECISION EDITION
+# END OF SSS G-ABAY v23.15 - ANALYTICS PRECISION EDITION
 # ==============================================================================
