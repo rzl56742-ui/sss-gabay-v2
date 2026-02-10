@@ -1,45 +1,41 @@
 # ==============================================================================
-# SSS G-ABAY v23.15 - BRANCH OPERATING SYSTEM (CLAIM & GO EDITION)
-# "Visuals: V23.4 | Backend: V23.5 | Security: V23.7 | Integrity: V23.8 | 
-#  Polish: V23.9 | Precision: V23.12 | Data Protection: V23.13 | Analytics: V23.14
-#  Appointments: V23.15"
-# COPYRIGHT: © 2026 rpt/sssgingoog
+# SSS G-ABAY V1.0.0 — DIVISION READY EDITION
+# Gabay sa bawat miyembro | Guide for every member
+# System developed by RPT/SSSGingoog © 2026
 # ==============================================================================
-# v23.15 CRITICAL FIXES (Data Protection & Appointment System):
-#   BARRIER-001: Block ALL saves if _LOAD_FAILED flag present
-#   BARRIER-002: Block login if data load failed
-#   BARRIER-003: Staff count regression protection
-#   BARRIER-004: Counter map protection
-#   FIX-v23.15-001: Add BOOKED status for appointments
-#   FIX-v23.15-002: Case-insensitive role matching (Reality Log)
-#   FIX-v23.15-003: generate_ticket_manual: BOOKED status + lane derivation
-#   FIX-v23.15-004: Case-insensitive role (get_allowed_counters)
-#   FIX-v23.15-005: Kiosk Appointment Claim section ("Claim & Go")
-#   FIX-v23.15-006: TV Display shows activated appointments
-#   FIX-v23.15-007: Staff Counter - Remove booking form (Admin-only)
-#   FIX-v23.15-008: Staff Counter - "My Appointments Today" sidebar
-#   FIX-v23.15-009: Staff Queue includes assigned_to tickets
-#   FIX-v23.15-010: Admin - Today's Appointments list view
-# ==============================================================================
-# v23.15 SURGICAL FIXES (Analytics & UX Enhancements):
-#   FIX-v23.15-001: Rate Us - Search by full_id AND number
-#   FIX-v23.15-002: Tracker/Rate Us - Add explicit Track/Verify buttons
-#   FIX-v23.15-003: Rate Us - Require rating (1-5) before submit
-#   FIX-v23.15-004: Enhanced Review Structure (lane, staff, service tracking)
-#   FIX-v23.15-005: Dashboard CSAT - Calculate from actual reviews
-#   FIX-v23.15-006: Reality Log - Filter by staff role (IOMS categories)
-#   FIX-v23.15-007: CSV Export - Add Ticket Type, Lane, Category columns
-#   FIX-v23.15-008: Dashboard - Priority/Regular count metrics
-#   FIX-v23.15-009: Dashboard - Service Quality Analytics (Rating by Staff/Lane)
-#   FIX-v23.15-010: Dashboard - Efficiency Analytics (FCR, Referral Rate)
-#   FIX-v23.15-011: Dashboard - Queue Analytics (Park Rate, No-Show Rate)
-#   FIX-v23.15-012: Dashboard - Transaction Analytics (Multi-Txn, Peak Hour)
-#   FIX-v23.15-013: Separate Reviews CSV Export
-# ==============================================================================
-# INHERITED FROM v23.13 (Data Fortress):
+#
+# VERSION HISTORY:
+#   Prototype Era (v23.x): 23 iterations of rapid development at SSS Gingoog
+#     v23.4  Visuals    | v23.5  Backend      | v23.7  Security
+#     v23.8  Integrity  | v23.9  Polish       | v23.12 Precision
+#     v23.13 Data Fortress | v23.14 Analytics | v23.15 Appointments
+#
+#   Platform Era (V1.x.x): Division-wide deployment standard
+#     V1.0.0 Division Ready — First official release
+#
+# V1.0.0 CHANGES (from v23.15 baseline):
+#   ROLE-001: Role hierarchy redesign (TH=SH, ABH=BH, DH observer-only)
+#   ROLE-002: Section affiliation field for SECTION_HEAD users
+#   ROLE-003: Dynamic admin tab builder (role-based tab visibility)
+#   ROLE-004: get_allowed_counters() with section-aware SH filtering
+#   ROLE-005: DH restricted to Dashboard/Reports/Reviews/IOMS (4 tabs)
+#   ROLE-006: COUNTER_ROLES excludes ADMIN and DIV_HEAD
+#   SEC-001:  Password hashing (bcrypt) with auto-migration
+#   SEC-002:  Password validation (8+ chars, complexity rules)
+#   PRIV-001: TV display shows ticket numbers only (no member names)
+#   CFG-001:  Branch Identity admin panel (config editor)
+#   CFG-002:  Configurable TV grid columns (admin setting)
+#   CFG-003:  System trademark constant (non-editable)
+#   FIX-001:  Completed appointments visible in sidebar (history query)
+#   FIX-002:  Counter rename cascades to appointment assignments
+#   META-001: Version strings updated to V1.0.0
+#   META-002: Trademark footer on all public displays
+#
+# INHERITED PROTECTIONS (from v23.13-v23.15):
 #   - Absolute Path Resolution, Fail-Safe Loading, Backup Cascade
 #   - Rollover Persistence, Atomic Save, Startup Health Check
-#   - Specific Exception Handling, Corrupt File Forensics
+#   - Data Barriers (BARRIER-001 through 004)
+#   - Appointment lifecycle (BOOKED → CLAIMED → SERVING → COMPLETED)
 # ==============================================================================
 
 import streamlit as st
@@ -62,6 +58,60 @@ import glob
 import traceback
 
 # ==============================================================================
+# SEC-001: Password hashing with bcrypt
+# ==============================================================================
+try:
+    import bcrypt
+    _BCRYPT_AVAILABLE = True
+except ImportError:
+    _BCRYPT_AVAILABLE = False
+
+def hash_password(plain_text):
+    """Hash a plaintext password using bcrypt. Returns hash string."""
+    if _BCRYPT_AVAILABLE:
+        return bcrypt.hashpw(plain_text.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    return plain_text  # Fallback: store as-is if bcrypt unavailable
+
+def verify_password(plain_text, stored):
+    """Verify plaintext against stored hash. Handles both hashed and legacy plaintext."""
+    if stored and stored.startswith('$2b$'):
+        if _BCRYPT_AVAILABLE:
+            return bcrypt.checkpw(plain_text.encode('utf-8'), stored.encode('utf-8'))
+        return False  # Can't verify hash without bcrypt
+    return plain_text == stored  # Legacy plaintext comparison
+
+def validate_password(password):
+    """Check password meets complexity requirements. Returns (valid, message)."""
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters."
+    if not re.search(r'[A-Z]', password):
+        return False, "Password must contain at least 1 uppercase letter."
+    if not re.search(r'[a-z]', password):
+        return False, "Password must contain at least 1 lowercase letter."
+    if not re.search(r'[0-9]', password):
+        return False, "Password must contain at least 1 digit."
+    return True, "Password meets requirements."
+
+def migrate_password_if_needed(staff_dict):
+    """Auto-hash any plaintext passwords on first load. Returns True if any migrated."""
+    if not _BCRYPT_AVAILABLE:
+        return False
+    migrated = False
+    for uid, user in staff_dict.items():
+        pwd = user.get('pass', '')
+        if pwd and not pwd.startswith('$2b$'):
+            user['pass'] = hash_password(pwd)
+            migrated = True
+    return migrated
+
+# ==============================================================================
+# CFG-003: System trademark constant (non-editable by any admin)
+# ==============================================================================
+SYSTEM_TRADEMARK = "System developed by RPT/SSSGingoog © 2026"
+SYSTEM_VERSION = "V1.0.0"
+SYSTEM_CODENAME = "Division Ready Edition"
+
+# ==============================================================================
 # FIX-v23.7-001: FILE LOCKING IMPORTS
 # ==============================================================================
 try:
@@ -73,7 +123,7 @@ except ImportError:
 # ==========================================
 # 1. SYSTEM CONFIGURATION & PERSISTENCE
 # ==========================================
-st.set_page_config(page_title="SSS G-ABAY v23.15", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="SSS G-ABAY V1.0.0", page_icon="🇵🇭", layout="wide", initial_sidebar_state="collapsed")
 
 # ==============================================================================
 # FIX-v23.13-001: ABSOLUTE PATH RESOLUTION
@@ -139,23 +189,81 @@ LANE_TO_CATEGORY = {
 }
 
 # ==============================================================================
-# FIX-v23.15-006: ROLE TO IOMS CATEGORY MAPPING
-# Controls which transaction categories each role can see in Reality Log
+# ROLE-001: ROLE HIERARCHY (V1.0.0 Division Ready)
+# TH = SH (same role: SECTION_HEAD), ABH = BH (same role: BRANCH_HEAD)
+# DH = Observer only (no counter, limited admin tabs)
 # ==============================================================================
-ROLE_TO_IOMS_CATEGORY = {
+
+# --- ROLE DEFINITIONS ---
+STAFF_ROLES = ["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "DIV_HEAD", "ADMIN"]
+
+# --- ROLE DISPLAY NAMES (for dropdowns and UI) ---
+ROLE_DISPLAY_NAMES = {
+    "MSR": "MSR (Member Service Representative)",
+    "TELLER": "Teller",
+    "AO": "AO (Account Officer)",
+    "SECTION_HEAD": "Section Head / Team Head",
+    "BRANCH_HEAD": "Branch Head / Asst. Branch Head",
+    "DIV_HEAD": "Division Head",
+    "ADMIN": "System Admin"
+}
+
+# --- ACCESS GROUP DEFINITIONS ---
+# ROLE-006: COUNTER_ROLES - only roles that can man a counter
+ADMIN_ROLES = ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]
+COUNTER_ROLES = ["BRANCH_HEAD", "SECTION_HEAD"]  # V1.0.0: ADMIN & DIV_HEAD removed
+OBSERVER_ROLES = ["DIV_HEAD", "ADMIN"]  # V1.0.0: Admin-only, never man counters
+SUPERVISOR_ROLES = ("BRANCH_HEAD", "SECTION_HEAD")  # V1.0.0: DH removed (not branch supervisor)
+
+# ==============================================================================
+# ROLE-002: SECTION AFFILIATION
+# Maps SECTION_HEAD users to their operational jurisdiction
+# ==============================================================================
+SECTION_AFFILIATION = {
+    "PAYMENT":    {"counter_types": ["Teller"],                    "lanes": ["T"], "ioms": ["PAYMENTS"]},
+    "EMPLOYER":   {"counter_types": ["Employer"],                  "lanes": ["A"], "ioms": ["EMPLOYERS"]},
+    "MEMBER_SVC": {"counter_types": ["Counter", "eCenter", "Help"], "lanes": ["C", "E", "F"], "ioms": ["MEMBER SERVICES"]},
+}
+
+# --- BASE IOMS CATEGORY MAPPING (for non-SH roles) ---
+_BASE_IOMS_MAP = {
     "TELLER": ["PAYMENTS"],
     "AO": ["EMPLOYERS"],
     "MSR": ["MEMBER SERVICES"],
     "ADMIN": ["PAYMENTS", "EMPLOYERS", "MEMBER SERVICES"],
     "BRANCH_HEAD": ["PAYMENTS", "EMPLOYERS", "MEMBER SERVICES"],
-    "SECTION_HEAD": ["PAYMENTS", "EMPLOYERS", "MEMBER SERVICES"],
-    "DIV_HEAD": ["PAYMENTS", "EMPLOYERS", "MEMBER SERVICES"]
+    "DIV_HEAD": ["PAYMENTS", "EMPLOYERS", "MEMBER SERVICES"],
 }
 
+def get_ioms_categories(role, section=None):
+    """Get IOMS categories for a user based on role and section affiliation.
+    SECTION_HEAD uses section field; all other roles use base mapping."""
+    role_upper = role.upper() if role else "MSR"
+    if role_upper == "SECTION_HEAD" and section:
+        aff = SECTION_AFFILIATION.get(section)
+        if aff:
+            return aff["ioms"]
+    return _BASE_IOMS_MAP.get(role_upper, ["MEMBER SERVICES"])
+
+# ==============================================================================
+# ROLE-003: ADMIN TAB DEFINITIONS (role-based visibility)
+# ==============================================================================
+_ALL_ADMIN_TABS = ["Dashboard", "Reports", "Reviews", "Book Appt", "Kiosk Menu", "IOMS Master", "Counters", "Users", "Resources", "Exemptions", "Announcements", "Audit Log", "Backup", "System Info"]
+_DH_ADMIN_TABS = ["Dashboard", "Reports", "Reviews", "IOMS Master"]
+_SH_ADMIN_TABS = ["Dashboard", "Reports", "Reviews", "Book Appt", "IOMS Master", "Resources", "Exemptions"]
+
+def get_admin_tabs(role):
+    """Return the list of admin tabs visible to a given role."""
+    role_upper = role.upper() if role else "MSR"
+    if role_upper == "DIV_HEAD":
+        return _DH_ADMIN_TABS
+    elif role_upper == "SECTION_HEAD":
+        return _SH_ADMIN_TABS
+    elif role_upper in ("BRANCH_HEAD", "ADMIN"):
+        return _ALL_ADMIN_TABS
+    return []
+
 # --- STATUS DEFINITIONS ---
-# ==============================================================================
-# FIX-v23.15-001: STATUS DEFINITIONS - Added BOOKED for appointments
-# ==============================================================================
 TICKET_STATUSES = {
     "BOOKED": {"label": "Booked", "color": "#9333EA", "desc": "Reserved appointment, awaiting client arrival"},
     "WAITING": {"label": "Waiting", "color": "#3B82F6", "desc": "In queue, awaiting service"},
@@ -166,14 +274,6 @@ TICKET_STATUSES = {
     "EXPIRED": {"label": "Expired", "color": "#6B7280", "desc": "Ticket expired at midnight rollover"},
     "SYSTEM_CLOSED": {"label": "System Closed", "color": "#6B7280", "desc": "Auto-completed at midnight rollover"}
 }
-
-# --- ROLE DEFINITIONS ---
-STAFF_ROLES = ["MSR", "TELLER", "AO", "SECTION_HEAD", "BRANCH_HEAD", "DIV_HEAD", "ADMIN"]
-ADMIN_ROLES = ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]
-COUNTER_ROLES = ["ADMIN", "BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD"]
-
-# --- SUPERVISOR ROLES (Global Scope) ---
-SUPERVISOR_ROLES = ("BRANCH_HEAD", "SECTION_HEAD", "DIV_HEAD")
 
 # --- ROLE COLORS (Global Scope) ---
 ROLE_COLORS = {
@@ -186,6 +286,7 @@ ROLE_COLORS = {
     "DIV_HEAD": {"ready_color": "#6B7280", "border_color": "#6B7280", "lane": None}
 }
 DEFAULT_ROLE_COLORS = {"ready_color": "#22c55e", "border_color": "#ccc", "lane": None}
+
 
 # ==============================================================================
 # FIX-v23.9-001: PHILIPPINE TIME STANDARD
@@ -1031,15 +1132,15 @@ def get_lane_color(lane_code):
 # ==============================================================================
 # FIX-v23.15-002: Case-insensitive role matching for Reality Log
 # ==============================================================================
-def get_filtered_transactions_for_role(role, transaction_master):
+def get_filtered_transactions_for_role(role, transaction_master, section=None):
     """
-    Returns filtered transaction list based on staff role.
+    Returns filtered transaction list based on staff role and section affiliation.
+    V1.0.0: SECTION_HEAD now filtered by section field (PAYMENT/EMPLOYER/MEMBER_SVC).
     TELLER sees PAYMENTS only, AO sees EMPLOYERS only, MSR sees MEMBER SERVICES only.
-    ADMIN/BRANCH_HEAD/SECTION_HEAD/DIV_HEAD see ALL categories.
-    FIX-v23.15-002: Case-insensitive matching
+    BRANCH_HEAD/ADMIN/DIV_HEAD see ALL categories.
     """
     role_upper = role.upper() if role else "MSR"
-    allowed_categories = ROLE_TO_IOMS_CATEGORY.get(role_upper, ["MEMBER SERVICES"])
+    allowed_categories = get_ioms_categories(role_upper, section)
     filtered_txns = []
     for cat in allowed_categories:
         items = transaction_master.get(cat, [])
@@ -1417,14 +1518,40 @@ def get_staff_efficiency(staff_name):
 # ==============================================================================
 # FIX-v23.15-004: Case-insensitive role in get_allowed_counters
 # ==============================================================================
-def get_allowed_counters(role):
+def get_allowed_counters(role, section=None):
+    """
+    V1.0.0 ROLE-004: Section-aware counter filtering.
+    - TELLER → Teller counters only
+    - AO → Employer counters only  
+    - MSR → Counter, eCenter, Help types
+    - SECTION_HEAD → Filtered by section affiliation (PAYMENT/EMPLOYER/MEMBER_SVC)
+    - BRANCH_HEAD → ALL counters (power user, grouped by category)
+    - DIV_HEAD, ADMIN → Empty list (they don't man counters)
+    """
     all_counters = db.get('config', {}).get('counter_map', [])
     role_upper = role.upper() if role else "MSR"
-    target_types = []
+    
+    # Frontline staff: fixed counter types
     if role_upper == "TELLER": target_types = ["Teller"]
     elif role_upper == "AO": target_types = ["Employer"]
     elif role_upper == "MSR": target_types = ["Counter", "eCenter", "Help"]
-    elif role_upper in [r.upper() for r in COUNTER_ROLES]: return [c['name'] for c in all_counters] 
+    # SECTION_HEAD: filtered by section affiliation
+    elif role_upper == "SECTION_HEAD":
+        if section and section in SECTION_AFFILIATION:
+            target_types = SECTION_AFFILIATION[section]["counter_types"]
+        else:
+            # No section assigned yet — show nothing (admin must assign section first)
+            return []
+        return [c['name'] for c in all_counters if c.get('type') in target_types]
+    # BRANCH_HEAD: power user — ALL counters
+    elif role_upper == "BRANCH_HEAD":
+        return [c['name'] for c in all_counters]
+    # DIV_HEAD, ADMIN: observer roles — no counter access
+    elif role_upper in OBSERVER_ROLES:
+        return []
+    else:
+        target_types = ["Counter", "eCenter", "Help"]  # Default fallback
+    
     return [c['name'] for c in all_counters if c.get('type') in target_types]
 
 def clear_ticket_modal_states():
@@ -1646,7 +1773,7 @@ def render_kiosk():
         with c3:
             if st.button("🖨️ PRINT", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True); time.sleep(1); del st.session_state['last_ticket']; del st.session_state['kiosk_step']; st.rerun()
     
-    st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.13</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='brand-footer'>{SYSTEM_TRADEMARK} | {SYSTEM_VERSION}</div>", unsafe_allow_html=True)
 
 # ==============================================================================
 # DISPLAY MODULE (TV Display)
@@ -1822,7 +1949,7 @@ def render_display():
         if status != "NORMAL": 
             txt = f"⚠ NOTICE: We are currently experiencing {status} connection. Please bear with us. {txt}"
         st.markdown(f"<div style='background: {bg_color}; color: {text_color}; padding: 10px; font-weight: bold; position: fixed; bottom: 0; width: 100%; font-size:20px;'><marquee>{txt}</marquee></div>", unsafe_allow_html=True)
-        st.markdown("<div class='brand-footer'>System developed by RPT/SSSGingoog © 2026 | v23.13</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='brand-footer'>{SYSTEM_TRADEMARK} | {SYSTEM_VERSION}</div>", unsafe_allow_html=True)
     
     time.sleep(3)
     st.rerun()
@@ -1871,13 +1998,20 @@ def render_counter(user):
 
     with st.sidebar.expander("🔒 Change Password"):
         with st.form("pwd_chg"):
-            n_pass = st.text_input("New Password", type="password")
+            n_pass = st.text_input("New Password", type="password", help="Min 8 chars, 1 uppercase, 1 lowercase, 1 digit.")
+            n_pass_confirm = st.text_input("Confirm Password", type="password")
             if st.form_submit_button("Update"):
-                if user_key: 
-                    local_db['staff'][user_key]['pass'] = n_pass
-                    save_db(local_db)
-                    log_audit("PASSWORD_CHANGE", user.get('name', 'Unknown'), target=user_key)
-                    st.success("Updated!")
+                if n_pass != n_pass_confirm:
+                    st.error("Passwords do not match.")
+                else:
+                    pw_valid, pw_msg = validate_password(n_pass)
+                    if not pw_valid:
+                        st.error(f"⛔ {pw_msg}")
+                    elif user_key:
+                        local_db['staff'][user_key]['pass'] = hash_password(n_pass)
+                        save_db(local_db)
+                        log_audit("PASSWORD_CHANGE", user.get('name', 'Unknown'), target=user_key)
+                        st.success("✅ Password updated!")
 
     st.sidebar.markdown("---")
     st.sidebar.write("**⚠ Report Issue**")
@@ -1938,7 +2072,7 @@ def render_counter(user):
         st.session_state['my_station'] = current_user_state.get('default_station', 'Counter 1')
     
     st.markdown(f"### Station: {st.session_state['my_station']}")
-    allowed_counters = get_allowed_counters(user.get('role', 'MSR'))
+    allowed_counters = get_allowed_counters(user.get('role', 'MSR'), section=user.get('section'))
     if st.session_state['my_station'] not in allowed_counters and allowed_counters: 
         st.session_state['my_station'] = allowed_counters[0]
     
@@ -2018,7 +2152,7 @@ def render_counter(user):
             # ==============================================================
             with st.expander("📝 Reality Log (IOMS - Verify & Edit)", expanded=True):
                 user_role = user.get('role', 'MSR')
-                filtered_txns = get_filtered_transactions_for_role(user_role, local_db.get('transaction_master', {}))
+                filtered_txns = get_filtered_transactions_for_role(user_role, local_db.get('transaction_master', {}), section=user.get('section'))
                 
                 if not filtered_txns:
                     st.warning("No transactions available for your role.")
@@ -2110,12 +2244,19 @@ def render_counter(user):
 def render_admin_panel(user):
     update_activity()
     local_db = load_db()
-    st.title("🛠 Admin & IOMS Center")
     if st.sidebar.button("⬅ LOGOUT"): handle_safe_logout(reason="MANUAL"); st.rerun()
     
-    if user.get('role') in ADMIN_ROLES:
-        tabs = ["Dashboard", "Reports", "Reviews", "Book Appt", "Kiosk Menu", "IOMS Master", "Counters", "Users", "Resources", "Exemptions", "Announcements", "Audit Log", "Backup", "System Info"]
-    else: st.error("Access Denied"); return
+    # ROLE-003: Dynamic admin tabs based on user role
+    tabs = get_admin_tabs(user.get('role', ''))
+    if not tabs: st.error("Access Denied"); return
+    
+    # Show role-appropriate title
+    role_upper = user.get('role', '').upper()
+    if role_upper == "DIV_HEAD":
+        st.title("📊 Division Oversight Dashboard")
+        st.caption(f"{SYSTEM_TRADEMARK}")
+    else:
+        st.title("🛠 Admin & IOMS Center")
     
     active = st.radio("Module", tabs, horizontal=True)
     st.divider()
@@ -2551,38 +2692,115 @@ def render_admin_panel(user):
         if st.button("Save Master List"): local_db['transaction_master'] = current_master; save_db(local_db); log_audit("IOMS_MASTER_UPDATE", user.get('name', 'Unknown')); st.success("Updated!")
 
     elif active == "Users":
-        st.subheader("Manage Users"); h1, h2, h3, h4, h5 = st.columns([1.5, 3, 2, 1, 0.5]); h1.markdown("**ID**"); h2.markdown("**Name**"); h3.markdown("**Station**")
+        st.subheader("👥 Manage Users")
+        
+        # --- Section options for SECTION_HEAD ---
+        section_options = ["— Not Applicable —", "PAYMENT (Tellering)", "EMPLOYER (AMS)", "MEMBER_SVC (Member Services)"]
+        section_values = [None, "PAYMENT", "EMPLOYER", "MEMBER_SVC"]
+        
+        # --- User list with role display names ---
+        h1, h2, h3, h4, h5 = st.columns([1.5, 3, 2, 1, 0.5])
+        h1.markdown("**ID**"); h2.markdown("**Name / Role**"); h3.markdown("**Station / Section**")
+        
         for uid, u in list(local_db.get('staff', {}).items()):
-            c1, c2, c3, c4, c5 = st.columns([1.5, 3, 2, 0.5, 0.5]); c1.text(uid); c2.text(f"{u.get('name', '')} ({u.get('role', '')})"); c3.text(u.get('default_station', '-'))
+            c1, c2, c3, c4, c5 = st.columns([1.5, 3, 2, 0.5, 0.5])
+            c1.text(uid)
+            role_display = ROLE_DISPLAY_NAMES.get(u.get('role', 'MSR'), u.get('role', 'MSR'))
+            c2.text(f"{u.get('name', '')} ({role_display})")
+            station_text = u.get('default_station', '-')
+            if u.get('role') == 'SECTION_HEAD' and u.get('section'):
+                station_text += f" | 📂 {u.get('section')}"
+            c3.text(station_text)
+            
             with c4:
                 with st.popover("✏️"):
                     with st.form(f"edit_{uid}"):
                         en = st.text_input("Name", u.get('name', ''))
                         enick = st.text_input("Nickname", u.get('nickname', ''))
-                        er = st.selectbox("Role", STAFF_ROLES, index=STAFF_ROLES.index(u.get('role', 'MSR')) if u.get('role') in STAFF_ROLES else 0)
-                        counter_names = [c['name'] for c in local_db.get('config', {}).get('counter_map', [])]
-                        est = st.selectbox("Station", counter_names, index=counter_names.index(u.get('default_station', '')) if u.get('default_station') in counter_names else 0)
-                        if st.form_submit_button("Save"): local_db['staff'][uid].update({'name': en, 'nickname': enick, 'role': er, 'default_station': est}); save_db(local_db); log_audit("USER_UPDATE", user.get('name', 'Unknown'), target=uid); st.rerun()
-                    if st.button("🔑 RESET", key=f"rst_{uid}"): local_db['staff'][uid]['pass'] = "sss2026"; save_db(local_db); log_audit("PASSWORD_RESET", user.get('name', 'Unknown'), target=uid); st.toast("Reset to 'sss2026'")
-            if c5.button("🗑", key=f"del_{uid}"): del local_db['staff'][uid]; save_db(local_db); log_audit("USER_DELETE", user.get('name', 'Unknown'), target=uid); st.rerun()
+                        er = st.selectbox("Role", STAFF_ROLES, index=STAFF_ROLES.index(u.get('role', 'MSR')) if u.get('role') in STAFF_ROLES else 0,
+                                         format_func=lambda x: ROLE_DISPLAY_NAMES.get(x, x))
+                        
+                        # ROLE-002: Section dropdown (relevant for SECTION_HEAD)
+                        current_section = u.get('section')
+                        current_idx = section_values.index(current_section) if current_section in section_values else 0
+                        e_section = st.selectbox("Section (for SH/TH only)", section_options, index=current_idx, 
+                                                help="Only applies to Section Head / Team Head role. Determines which counters and categories this user can access.")
+                        e_section_val = section_values[section_options.index(e_section)]
+                        
+                        # Station dropdown — context-aware
+                        all_counter_names = [c['name'] for c in local_db.get('config', {}).get('counter_map', [])]
+                        est = st.selectbox("Station", all_counter_names, 
+                                          index=all_counter_names.index(u.get('default_station', '')) if u.get('default_station') in all_counter_names else 0)
+                        
+                        if st.form_submit_button("💾 Save Changes"):
+                            update_data = {'name': en, 'nickname': enick, 'role': er, 'default_station': est}
+                            # Only store section for SECTION_HEAD
+                            if er == "SECTION_HEAD":
+                                update_data['section'] = e_section_val
+                            else:
+                                update_data['section'] = None  # Clear section for non-SH roles
+                            local_db['staff'][uid].update(update_data)
+                            save_db(local_db)
+                            log_audit("USER_UPDATE", user.get('name', 'Unknown'), target=f"{uid} (role={er}, section={e_section_val})")
+                            st.rerun()
+                    
+                    if st.button("🔑 RESET PW", key=f"rst_{uid}"):
+                        # SEC-001: Reset to hashed default password
+                        local_db['staff'][uid]['pass'] = hash_password("sss2026")
+                        save_db(local_db)
+                        log_audit("PASSWORD_RESET", user.get('name', 'Unknown'), target=uid)
+                        st.toast("Password reset to default.")
+            
+            if c5.button("🗑", key=f"del_{uid}"):
+                del local_db['staff'][uid]; save_db(local_db)
+                log_audit("USER_DELETE", user.get('name', 'Unknown'), target=uid); st.rerun()
+        
         st.markdown("---")
-        st.write("**Add New User**")
+        st.write("**➕ Add New User**")
         with st.form("add_user_form"):
             new_id = st.text_input("User ID (Login)")
             new_name = st.text_input("Full Name")
             new_nick = st.text_input("Nickname (Display)")
-            new_role = st.selectbox("Role", STAFF_ROLES)
+            new_role = st.selectbox("Role", STAFF_ROLES, format_func=lambda x: ROLE_DISPLAY_NAMES.get(x, x))
+            
+            # ROLE-002: Section dropdown for new users
+            new_section_sel = st.selectbox("Section (for SH/TH only)", section_options,
+                                          help="Required for Section Head / Team Head. Ignored for other roles.")
+            new_section_val = section_values[section_options.index(new_section_sel)]
+            
             new_station = st.selectbox("Assign Default Station", [c['name'] for c in local_db.get('config', {}).get('counter_map', [])])
-            if st.form_submit_button("Create User"):
-                valid, msg = validate_user_id(new_id)
-                if not valid: st.error(f"⛔ {msg}")
+            
+            # SEC-002: Password with validation
+            new_pass = st.text_input("Initial Password", value="sss2026", type="password",
+                                    help="Min 8 chars, 1 uppercase, 1 lowercase, 1 digit.")
+            
+            if st.form_submit_button("✅ Create User"):
+                valid_id, id_msg = validate_user_id(new_id)
+                valid_pw, pw_msg = validate_password(new_pass)
+                if not valid_id: st.error(f"⛔ {id_msg}")
+                elif not valid_pw: st.error(f"⛔ {pw_msg}")
                 elif new_id in local_db.get('staff', {}): st.error("User ID already exists!")
-                else: 
-                    local_db['staff'][new_id] = {"pass": "123", "role": new_role, "name": new_name, "nickname": new_nick if new_nick else new_name.split()[0], "default_station": new_station, "status": "ACTIVE", "online": False}
-                    save_db(local_db); log_audit("USER_CREATE", user.get('name', 'Unknown'), target=new_id); st.success("Created!"); st.rerun()
+                elif new_role == "SECTION_HEAD" and not new_section_val:
+                    st.error("⛔ Section Head / Team Head must have a Section assigned.")
+                else:
+                    new_user = {
+                        "pass": hash_password(new_pass),
+                        "role": new_role,
+                        "name": new_name,
+                        "nickname": new_nick if new_nick else new_name.split()[0],
+                        "default_station": new_station,
+                        "section": new_section_val if new_role == "SECTION_HEAD" else None,
+                        "status": "ACTIVE",
+                        "online": False
+                    }
+                    local_db['staff'][new_id] = new_user
+                    save_db(local_db)
+                    log_audit("USER_CREATE", user.get('name', 'Unknown'), target=f"{new_id} (role={new_role}, section={new_section_val})")
+                    st.success(f"✅ Created user '{new_id}' as {ROLE_DISPLAY_NAMES.get(new_role, new_role)}")
+                    st.rerun()
     
     elif active == "Resources":
-        st.subheader("Manage Info Hub Content")
+        st.subheader("📚 Manage Info Hub Content")
         for i, res in enumerate(local_db.get('resources', [])):
             with st.expander(f"{'🔗' if res.get('type') == 'LINK' else '❓'} {res.get('label', '')}"):
                 st.write(f"**Value:** {res.get('value', '')}")
@@ -2644,27 +2862,43 @@ def render_admin_panel(user):
             st.success("No corrupt files detected.")
     
     elif active == "System Info":
-        st.subheader("⚙️ System Configuration - v23.13 Data Fortress Edition")
+        st.subheader(f"⚙️ System Configuration — {SYSTEM_VERSION} {SYSTEM_CODENAME}")
         
         st.write("**Version Information**")
         st.code(f"""
-SSS G-ABAY Version: v23.13 (Data Fortress Edition)
-Build Date: 2026-02-03
+SSS G-ABAY {SYSTEM_VERSION} ({SYSTEM_CODENAME})
+{SYSTEM_TRADEMARK}
+Build Date: 2026-02-10
+Lineage: v23.15 (Prototype Era) → V1.0.0 (Platform Era)
 Timezone: UTC+{UTC_OFFSET_HOURS} (Philippine Standard Time)
 Display Grid: {DISPLAY_GRID_COLUMNS} columns (fixed)
 Script Directory: {SCRIPT_DIR}
 Data File: {DATA_FILE}
+Bcrypt Available: {_BCRYPT_AVAILABLE}
         """)
         
-        st.write("**v23.13 Safe-Fail Data Protection Fixes**")
+        st.write("**V1.0.0 New Features**")
+        v1_features = [
+            "ROLE-001: Division-ready role hierarchy (TH=SH, ABH=BH, DH observer)",
+            "ROLE-002: Section affiliation for Section Head / Team Head",
+            "ROLE-003: Dynamic admin tab visibility by role",
+            "ROLE-004: Section-aware counter filtering",
+            "SEC-001:  Password hashing (bcrypt) with auto-migration",
+            "SEC-002:  Password complexity validation",
+            "CFG-003:  Non-editable system trademark"
+        ]
+        for feat in v1_features:
+            st.markdown(f"🆕 {feat}")
+        
+        st.write("**Inherited Protections (v23.13-v23.15)**")
         fixes = [
-            "FIX-001: Absolute Path Resolution (prevents working directory issues)",
-            "FIX-002: Fail-Safe Loading with Backup Cascade (no silent reset)",
-            "FIX-003: Rollover Persistence (force save after midnight sweeper)",
-            "FIX-004: Atomic Save with Verification (0-byte protection)",
-            "FIX-005: Startup Health Check (staff count validation)",
-            "FIX-006: Specific Exception Handling (no bare except)",
-            "FIX-007: Corrupt File Forensics (quarantine, don't delete)"
+            "Absolute Path Resolution (prevents working directory issues)",
+            "Fail-Safe Loading with Backup Cascade (no silent reset)",
+            "Rollover Persistence (force save after midnight sweeper)",
+            "Atomic Save with Verification (0-byte protection)",
+            "Startup Health Check (staff count validation)",
+            "Specific Exception Handling (no bare except)",
+            "Corrupt File Forensics (quarantine, don't delete)"
         ]
         for fix in fixes:
             st.markdown(f"✅ {fix}")
@@ -2733,8 +2967,12 @@ elif mode == "staff":
             # The old code would create a new admin if none found, which would
             # overwrite the data file when staff dict was empty due to load failure
             
-            if acct and acct.get('pass') == p: 
-                st.session_state['user'] = acct
+            if acct and verify_password(p, acct.get('pass', '')):
+                # SEC-001: Auto-migrate plaintext password to hash on first successful login
+                if _BCRYPT_AVAILABLE and acct.get('pass') and not acct.get('pass', '').startswith('$2b$'):
+                    local_db['staff'][acct_key]['pass'] = hash_password(p)
+                
+                st.session_state['user'] = {**acct, '_key': acct_key}  # Store key for session use
                 st.session_state['last_activity'] = get_ph_time()
                 st.session_state['login_date'] = get_ph_time().strftime("%Y-%m-%d")
                 local_db['staff'][acct_key]['online'] = True
@@ -2932,5 +3170,6 @@ else:
             st.info("💡 You can only rate after your transaction is completed.")
 
 # ==============================================================================
-# END OF SSS G-ABAY v23.15 - ANALYTICS PRECISION EDITION
+# END OF SSS G-ABAY V1.0.0 — DIVISION READY EDITION
+# System developed by RPT/SSSGingoog © 2026
 # ==============================================================================
